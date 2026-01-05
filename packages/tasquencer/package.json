@@ -1,0 +1,52 @@
+{
+  "name": "@repo/tasquencer",
+  "private": true,
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "vitest",
+    "test:once": "vitest run",
+    "test:debug": "vitest --inspect-brk --no-file-parallelism",
+    "test:coverage": "vitest run --coverage --coverage.reporter=text",
+    "typecheck": "tsc --noEmit"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./authorization/helpers": "./src/authorization/helpers.ts",
+    "./components/audit/convex.config": "./convex/components/audit/src/component/convex.config.ts",
+    "./components/audit/_generated/component": "./convex/components/audit/src/component/_generated/component.ts",
+    "./components/audit/test": "./convex/components/audit/src/setup.test.ts",
+    "./components/authorization/convex.config": "./convex/components/authorization/src/component/convex.config.ts",
+    "./components/authorization/_generated/component": "./convex/components/authorization/src/component/_generated/component.ts",
+    "./components/authorization/helpers": "./convex/components/authorization/src/client/helpers.ts",
+    "./components/authorization/test": "./convex/components/authorization/src/setup.test.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "commander": "^14.0.2",
+    "convex": "^1.31.2",
+    "convex-helpers": "^0.1.108",
+    "nanoid": "^5.1.6",
+    "tiny-invariant": "^1.3.3",
+    "tsx": "^4.21.0",
+    "type-fest": "^4.41.0",
+    "use-stick-to-bottom": "^1.1.1",
+    "uuid": "^13.0.0",
+    "vaul": "^1.1.2",
+    "zod": "^4.1.5"
+  },
+  "devDependencies": {
+    "@edge-runtime/vm": "^5.0.0",
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "^24.6.2",
+    "convex-test": "^0.0.41",
+    "prettier": "^3.6.1",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.9",
+    "vite-tsconfig-paths": "^5.1.4",
+    "vitest": "^3.2.4"
+  }
+}
