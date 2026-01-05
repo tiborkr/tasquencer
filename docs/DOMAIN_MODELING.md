@@ -1007,36 +1007,40 @@ export const getDocumentForDisplay = query({
 
 **When working with nested workflows, you often need to filter domain data by the root workflow, not the current subworkflow.**
 
-Every workflow and work item has a `realizedPath` field that contains the complete ancestry chain. The **first element** (`realizedPath[0]`) is always the root workflow ID.
+Tasquencer provides built-in helpers for this common pattern. Export them from your tasquencer setup file:
 
 ```typescript
-// Domain function: Get root workflow ID
-export async function getRootWorkflowId(
-  db: DatabaseReader,
-  workflowId: Id<'tasquencerWorkflows'>,
-): Promise<Id<'tasquencerWorkflows'>> {
-  const workflow = await db.get(workflowId)
-  if (!workflow) {
-    throw new Error('Workflow not found')
-  }
+// convex/tasquencer.ts
+import type { DataModel } from "./_generated/dataModel";
+import { Tasquencer } from "@repo/tasquencer";
+import { components } from "./_generated/api";
 
-  // realizedPath[0] is always the root workflow ID
-  // For root workflows without a parent, realizedPath[0] is the workflow itself
-  return (workflow.realizedPath[0] as Id<'tasquencerWorkflows'>) || workflowId
-}
+export const { Builder, Authorization, versionManagerFor, helpers } =
+  Tasquencer.initialize<DataModel>(
+    components.tasquencerAudit,
+    components.tasquencerAuthorization
+  ).build();
+```
 
+**Available helpers:**
+
+- `helpers.getRootWorkflowId(db, workflowId)` - Get root workflow ID from a workflow
+- `helpers.getRootWorkflowIdForWorkItem(db, workItemId)` - Get root workflow ID from a work item
+- `helpers.getWorkflowIdForWorkItem(db, workItemId)` - Get direct parent workflow ID for a work item
+
+```typescript
 // Usage: Query aggregate root from nested workflow
+import { helpers } from "../../../tasquencer";
+
 export async function getPatientByWorkflowId(
   db: DatabaseReader,
-  workflowId: Id<'tasquencerWorkflows'>,
-): Promise<Doc<'patients'> | null> {
-  // Get root workflow ID (works for both root and nested workflows)
-  const rootWorkflowId = await getRootWorkflowId(db, workflowId)
-
+  workflowId: Id<"tasquencerWorkflows">
+): Promise<Doc<"patients"> | null> {
+  const rootWorkflowId = await helpers.getRootWorkflowId(db, workflowId);
   return await db
-    .query('patients')
-    .withIndex('by_workflow_id', (q) => q.eq('workflowId', rootWorkflowId))
-    .unique()
+    .query("patients")
+    .withIndex("by_workflow_id", (q) => q.eq("workflowId", rootWorkflowId))
+    .unique();
 }
 ```
 
@@ -1076,16 +1080,15 @@ const bloodTestTask = Builder.task(collectSampleWorkItem).withActivities({
 **Solution with root workflow pattern:**
 
 ```typescript
-// ✅ Correct: Use root workflow ID
+// ✅ Correct: Use built-in helper
 const bloodTestTask = Builder.task(collectSampleWorkItem).withActivities({
   onEnabled: async ({ mutationCtx, workItem, parent }) => {
-    // Get patient using root workflow ID
+    // Get patient using helper (works for both root and nested workflows)
     const patient = await getPatientByWorkflowId(
       mutationCtx.db,
       parent.workflow.id,
     )
-    // getPatientByWorkflowId extracts realizedPath[0] internally
-    // Works for both root (wf_root) and nested (wf_sub1) workflows! ✅
+    // getPatientByWorkflowId uses helpers.getRootWorkflowId() internally ✅
 
     await workItem.initialize({ patientId: patient._id })
   },
@@ -1095,32 +1098,32 @@ const bloodTestTask = Builder.task(collectSampleWorkItem).withActivities({
 **Best practice: Bake root workflow lookup into domain functions**
 
 ```typescript
-// ✅ Domain functions handle root workflow extraction internally
-export const PatientDomain = {
-  async getByWorkflowId(
-    ctx: { db: DatabaseReader },
-    workflowId: Id<'tasquencerWorkflows'>,
-  ) {
-    const rootWorkflowId = await getRootWorkflowId(ctx.db, workflowId)
-    const patient = await ctx.db
-      .query('patients')
-      .withIndex('by_workflow_id', (q) => q.eq('workflowId', rootWorkflowId))
-      .unique()
+import { helpers } from "../../../tasquencer";
 
-    if (!patient) {
-      throw new Error('Patient not found')
-    }
+// ✅ Domain functions use built-in helpers internally
+export async function getPatientByWorkflowId(
+  db: DatabaseReader,
+  workflowId: Id<"tasquencerWorkflows">
+): Promise<Doc<"patients">> {
+  const rootWorkflowId = await helpers.getRootWorkflowId(db, workflowId);
+  const patient = await db
+    .query("patients")
+    .withIndex("by_workflow_id", (q) => q.eq("workflowId", rootWorkflowId))
+    .unique();
 
-    return patient
-  },
+  if (!patient) {
+    throw new Error("Patient not found");
+  }
+
+  return patient;
 }
 
 // Usage: No need to think about root vs nested
 const myTask = Builder.task(myWorkItem).withActivities({
   onEnabled: async ({ mutationCtx, parent }) => {
     // Works for any workflow depth!
-    const patient = await PatientDomain.getByWorkflowId(
-      mutationCtx,
+    const patient = await getPatientByWorkflowId(
+      mutationCtx.db,
       parent.workflow.id,
     )
   },

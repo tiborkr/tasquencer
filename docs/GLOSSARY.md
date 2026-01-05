@@ -342,17 +342,21 @@ A mechanism for canceling tasks when another task reaches a specific state. Used
 
 ### Root Workflow ID
 
-The ID of the top-level workflow in a nested workflow hierarchy. Found at `workflow.realizedPath[0]`.
+The ID of the top-level workflow in a nested workflow hierarchy.
 
 **Use case**: Querying aggregate roots from nested workflows (subworkflows need to access patient/order/RFP data)
 
-**Pattern**:
+**Built-in helpers** (from `Tasquencer.build().helpers`):
 
 ```typescript
-const rootWorkflowId = workflow.realizedPath[0] as Id<'tasquencerWorkflows'>
+// From workflow ID
+const rootWorkflowId = await helpers.getRootWorkflowId(db, workflowId)
+
+// From work item ID
+const rootWorkflowId = await helpers.getRootWorkflowIdForWorkItem(db, workItemId)
 ```
 
-**Related**: [Domain Modeling - Root Workflow ID Pattern](./DOMAIN_MODELING.md#8-root-workflow-id-pattern)
+**Related**: [Domain Modeling - Root Workflow ID Pattern](./DOMAIN_MODELING.md#8-root-workflow-id-pattern) | [Root Workflow ID Recipe](./recipes/root-workflow-id.md)
 
 ---
 

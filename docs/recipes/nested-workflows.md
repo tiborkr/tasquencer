@@ -219,13 +219,18 @@ confirmOrder enabled (waiting for handleShipping too)
 
 ## Accessing Root Workflow Data
 
-Sub-workflows can access data from the root workflow using `realizedPath`:
+Sub-workflows can access data from the root workflow using the built-in `helpers`:
 
 ```typescript
+import { helpers } from "../../../tasquencer";
+
 const chargePaymentWorkItem = Builder.workItem('chargePayment').withActivities({
   onStarted: async ({ workItem, mutationCtx, parent }) => {
-    // Get the root workflow ID (useful for accessing order-level data)
-    const rootWorkflowId = parent.workflow.realizedPath[0]
+    // Get the root workflow ID using the built-in helper
+    const rootWorkflowId = await helpers.getRootWorkflowId(
+      mutationCtx.db,
+      parent.workflow.id
+    )
 
     // Get order details from the root
     const order = await OrderDomain.getByWorkflowId(mutationCtx, rootWorkflowId)
