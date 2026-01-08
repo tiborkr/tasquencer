@@ -598,7 +598,7 @@ Now define your work items - the atomic units of work. **You'll primarily intera
 ```typescript
 // convex/workflows/orderProcessing/workItems/reviewItem.workItem.ts
 import { Builder } from '../../../tasquencer'
-import { z } from 'zod/v3'
+import { z } from 'zod'
 import { authService } from '../../../authorization'
 import { updateReviewByWorkItemId } from '../db'
 import { initializeOrderWorkItemAuth } from './authHelpers'
@@ -938,7 +938,7 @@ See [Authorization](./AUTHORIZATION.md) and [Work Item Patterns](./WORK_ITEM_PAT
 ```typescript
 // convex/workflows/orderProcessing/workflows/order.workflow.ts
 import { Builder } from '../../../tasquencer'
-import { z } from 'zod/v3'
+import { z } from 'zod'
 import { insertOrder } from '../db'
 import { reviewItemTask } from '../workItems/reviewItem.workItem'
 import { approveTask } from '../workItems/approve.workItem'
@@ -1407,7 +1407,7 @@ Work items are the atomic units of work. Define what they can do via **actions w
 ```typescript
 // convex/workflows/documentApproval/workItems/reviewDocument.workItem.ts
 import { Builder } from '../../../tasquencer'
-import { z } from 'zod/v3'
+import { z } from 'zod'
 import { authService } from '../../../authorization'
 import { updateDocumentStatus, getDocumentByWorkflowId } from '../db'
 import { initializeDocumentWorkItemAuth } from './authHelpers'
@@ -1479,7 +1479,7 @@ Workflows connect tasks via conditions.
 ```typescript
 // convex/workflows/documentApproval/workflows/documentApproval.workflow.ts
 import { Builder } from '../../../tasquencer'
-import { z } from 'zod/v3'
+import { z } from 'zod'
 import { insertDocument } from '../db'
 import { reviewDocumentTask } from '../workItems/reviewDocument.workItem'
 

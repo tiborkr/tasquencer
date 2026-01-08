@@ -166,10 +166,10 @@ For forms that call workflow/work item actions, share schemas between frontend a
 
 ```typescript
 // convex/workflows/rfp/schemas.ts
-import { z } from 'zod/v3'
+import { z } from 'zod'
 
 export const completeSectionReviewSchema = z.object({
-  comments: z.string().min(1, 'Comments are required'),
+  comments: z.string().min(1, { error: 'Comments are required' }),
   approved: z.boolean(),
 })
 
