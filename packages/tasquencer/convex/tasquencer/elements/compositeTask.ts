@@ -386,9 +386,11 @@ export class CompositeTask extends BaseTask {
   ) {
     const policyResult = await this.policy({
       mutationCtx: executionContext.mutationCtx,
-      parentWorkflow: {
-        id: parentWorkflowId,
-        name: this.parentWorkflow.name,
+      parent: {
+        workflow: {
+          id: parentWorkflowId,
+          name: this.parentWorkflow.name,
+        },
       },
       task: {
         name: this.name,
@@ -683,9 +685,11 @@ export class CompositeTask extends BaseTask {
     ) {
       const policyResult = await this.policy({
         mutationCtx: executionContext.mutationCtx,
-        parentWorkflow: {
-          id: parentWorkflowId,
-          name: this.parentWorkflow.name,
+        parent: {
+          workflow: {
+            id: parentWorkflowId,
+            name: this.parentWorkflow.name,
+          },
         },
         task: {
           name: this.name,

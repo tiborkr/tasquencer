@@ -17,7 +17,7 @@ import { type Id } from "../../_generated/dataModel";
 import { type GetSchemaForWorkItemAction } from "./workItem/actions";
 import { DEFAULT_STATS_SHARD_COUNT } from "../util/statsShards";
 import type { AnyMigration } from "../versionManager/migration";
-import { type SharedActivityTaskContext } from "./types";
+import type { WorkflowInfo, SharedActivityTaskContext } from "./types";
 import type { GenericMutationCtx } from "convex/server";
 
 export type TaskSharedContext = SharedActivityTaskContext;
@@ -126,9 +126,8 @@ export type GetTaskSplitType<TTaskBuilder> =
 
 export type TaskStateTransitionPolicy = (props: {
   mutationCtx: MutationCtx;
-  parentWorkflow: {
-    id: Id<"tasquencerWorkflows">;
-    name: string;
+  parent: {
+    workflow: WorkflowInfo;
   };
   task: {
     name: string;

@@ -416,7 +416,12 @@ export class Task extends BaseTask {
   ) {
     const policyResult = await this.policy({
       mutationCtx: executionContext.mutationCtx,
-      parentWorkflow: { id: workflowId, name: this.parentWorkflow.name },
+      parent: {
+        workflow: {
+          id: workflowId,
+          name: this.parentWorkflow.name,
+        },
+      },
       task: {
         name: this.name,
         generation: task.generation,
@@ -672,9 +677,11 @@ export class Task extends BaseTask {
     ) {
       const policyResult = await this.policy({
         mutationCtx: executionContext.mutationCtx,
-        parentWorkflow: {
-          id: parentWorkflowId,
-          name: this.parentWorkflow.name,
+        parent: {
+          workflow: {
+            id: parentWorkflowId,
+            name: this.parentWorkflow.name,
+          },
         },
         task: {
           name: this.name,

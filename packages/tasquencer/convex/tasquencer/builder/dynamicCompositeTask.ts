@@ -19,7 +19,7 @@ import { type GetTypeForWorkflowAction } from "./workflow/actions";
 import { type Get } from "type-fest";
 import { DEFAULT_STATS_SHARD_COUNT } from "../util/statsShards";
 import type { AnyMigration } from "../versionManager/migration";
-import { type SharedActivityTaskContext } from "./types";
+import type { WorkflowInfo, SharedActivityTaskContext } from "./types";
 import { type UnionToIntersection } from "type-fest";
 import type { GenericMutationCtx } from "convex/server";
 
@@ -194,9 +194,8 @@ export type AnyDynamicCompositeTaskBuilder = DynamicCompositeTaskBuilder<
 
 export type DynamicCompositeTaskStateTransitionPolicy = (props: {
   mutationCtx: MutationCtx;
-  parentWorkflow: {
-    id: Id<"tasquencerWorkflows">;
-    name: string;
+  parent: {
+    workflow: WorkflowInfo;
   };
   task: {
     name: string;

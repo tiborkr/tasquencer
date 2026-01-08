@@ -166,12 +166,12 @@ const paymentTask = Builder.task(paymentWorkItem)
       await OrderDomain.markAsCompensating(mutationCtx, parent.workflow.id)
     },
   })
-  .withPolicy(async ({ transition, task, mutationCtx, parentWorkflow }) => {
+  .withPolicy(async ({ transition, task, mutationCtx, parent }) => {
     if (transition.nextState === 'failed') {
       // Check if compensation is needed
       const needsCompensation = await OrderDomain.needsCompensation(
         mutationCtx,
-        parentWorkflow.id,
+        parent.workflow.id,
       )
 
       if (needsCompensation) {
@@ -430,11 +430,11 @@ const processOrderTask = Builder.task(processOrderWorkItem)
       }
     },
   })
-  .withPolicy(async ({ transition, mutationCtx, parentWorkflow }) => {
+  .withPolicy(async ({ transition, mutationCtx, parent }) => {
     if (transition.nextState === 'failed') {
       const needsCompensation = await OrderDomain.needsCompensation(
         mutationCtx,
-        parentWorkflow.id,
+        parent.workflow.id,
       )
 
       // Route to compensation workflow section for complex rollback
@@ -522,10 +522,10 @@ const orderWorkflow = Builder.workflow('order')
   .task(
     'chargePayment',
     paymentTask.withPolicy(
-      async ({ transition, mutationCtx, parentWorkflow }) => {
+      async ({ transition, mutationCtx, parent }) => {
         if (transition.nextState === 'failed') {
           // Mark for multi-step compensation
-          await OrderDomain.markAsCompensating(mutationCtx, parentWorkflow.id)
+          await OrderDomain.markAsCompensating(mutationCtx, parent.workflow.id)
           return 'complete' // Route to compensation instead of failing
         }
         // ... normal policy

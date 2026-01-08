@@ -465,7 +465,7 @@ Instead of separate policies for completion, failure, and cancellation, Tasquenc
 ```typescript
 type TaskStateTransitionPolicy = (ctx: {
   mutationCtx: MutationCtx
-  parentWorkflow: { id: Id<'tasquencerWorkflows'>, name: string }
+  parent: { workflow: { id: Id<'tasquencerWorkflows'>, name: string } }
   task: {
     name: string
     generation: number
@@ -592,12 +592,12 @@ type TaskStateTransitionPolicy = (ctx: {
 **Example 3: Conditional completion based on domain state**
 
 ```typescript
-.withPolicy(async ({ mutationCtx, parentWorkflow, task, transition }) => {
+.withPolicy(async ({ mutationCtx, parent, task, transition }) => {
   if (transition.nextState === 'completed') {
     const stats = await task.getStats()
 
     // Use domain function to check business rules
-    const order = await OrderDomain.getByWorkflowId(mutationCtx, parentWorkflow.id)
+    const order = await OrderDomain.getByWorkflowId(mutationCtx, parent.workflow.id)
 
     // Only complete task if all work items done AND domain requirements met
     if (stats.total === stats.completed && order.qualityScore >= 80) {

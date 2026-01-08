@@ -42,7 +42,10 @@ import type { DynamicCompositeTaskOnMigrate } from "../versionManager/migration"
 
 function isDynamicCompositeTaskOnMigrate(
   migrator: unknown
-): migrator is DynamicCompositeTaskOnMigrate<{ name: string; payload?: unknown }> {
+): migrator is DynamicCompositeTaskOnMigrate<{
+  name: string;
+  payload?: unknown;
+}> {
   return typeof migrator === "function";
 }
 
@@ -404,9 +407,11 @@ export class DynamicCompositeTask extends BaseTask {
   ) {
     const policyResult = await this.policy({
       mutationCtx: executionContext.mutationCtx,
-      parentWorkflow: {
-        id: parentWorkflowId,
-        name: this.parentWorkflow.name,
+      parent: {
+        workflow: {
+          id: parentWorkflowId,
+          name: this.parentWorkflow.name,
+        },
       },
       task: {
         name: this.name,
@@ -683,9 +688,11 @@ export class DynamicCompositeTask extends BaseTask {
     ) {
       const policyResult = await this.policy({
         mutationCtx: executionContext.mutationCtx,
-        parentWorkflow: {
-          id: parentWorkflowId,
-          name: this.parentWorkflow.name,
+        parent: {
+          workflow: {
+            id: parentWorkflowId,
+            name: this.parentWorkflow.name,
+          },
         },
         task: {
           name: this.name,

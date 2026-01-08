@@ -131,7 +131,7 @@ See [Activities Reference](#activities-reference) for detailed context objects.
 Define custom completion/failure logic.
 
 ```typescript
-.withPolicy(async ({ task, workflows, transition, mutationCtx, parentWorkflow }) => {
+.withPolicy(async ({ task, workflows, transition, mutationCtx, parent }) => {
   const stats = await task.getStats()
 
   // Return 'complete', 'fail', or 'continue'
@@ -559,9 +559,11 @@ The policy function receives:
     nextState: WorkflowState,
   },
   mutationCtx: MutationCtx,
-  parentWorkflow: {
-    id: Id<'tasquencerWorkflows'>,
-    name: string,
+  parent: {
+    workflow: {
+      id: Id<'tasquencerWorkflows'>,
+      name: string,
+    }
   }
 }
 ```
