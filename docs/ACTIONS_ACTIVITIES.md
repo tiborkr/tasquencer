@@ -16,6 +16,20 @@ This guide explains the critical distinction between actions (external boundary)
 
 ---
 
+> **All Actions and Activities Are Optional**
+>
+> You don't need to define custom actions or activities. Tasquencer provides defaults:
+> - **Default actions** call the corresponding transition method with no additional logic
+> - **Default activities** are no-ops
+>
+> Only define custom actions when you need:
+> - User-facing APIs with authorization
+> - Custom business logic before/after transitions
+>
+> Only define activities when you need:
+> - Side effects on state transitions
+> - Auto-trigger patterns (e.g., auto-start on initialize)
+
 ## Actions vs Activities
 
 ### Actions (Boundary Layer)

@@ -580,20 +580,64 @@ npm run test:once
 
 ### Step 4: Design Work Items
 
+> **Actions and Activities Are Optional**
+>
+> Tasquencer provides sensible defaults when you omit actions or activities:
+> - **No `.withActions()`** = Default internal-only actions (called by activities/scheduled functions)
+> - **No `.withActivities()`** = No-op callbacks (work item still functions normally)
+>
+> Only add custom actions when users need to interact with work items externally.
+
+Now define your work items - the atomic units of work. **First, decide: Does this work item need user interaction?**
+
+**Use Default Actions (No Code) when:**
+
+- Work item is triggered ONLY by activities
+- No user interaction needed
+- System/background processing only
+- Example: Sending notifications, logging events, cleanup tasks
+
+**Use Custom Actions (Your Code) when:**
+
+- Work item can be started/completed by users
+- Users can claim work items from queues
+- Example: User approvals, manual data entry, reviews
+
 > **⚠️ SECURITY CRITICAL: Custom Actions Expose Public APIs**
 >
-> Before implementing work items, understand that custom actions create publicly-accessible
-> mutations. You MUST implement authentication and authorization for any actions that can
-> be called by users. Use authorization policies to protect actions.
+> Custom actions create **public API mutations**. Any action you define with `.withActions()` becomes callable.
+> You MUST implement authentication and authorization for any actions that can be called by users.
 
-Now define your work items - the atomic units of work. **You'll primarily interact with data through work item actions and activities.**
+**For each work item, you can optionally define:**
 
-**For each work item, define:**
-
-1. **Actions** - External API (start, complete, fail) with authorization policies
-2. **Activities** - Internal callbacks (onEnabled, onCompleted, onCanceled, etc.)
+1. **Actions** - Custom external API (omit for internal-only work items)
+2. **Activities** - Internal callbacks (omit for no-op behavior)
 
 **Note:** Work item initialization happens in the task's `onEnabled` activity, NOT in work item actions.
+
+#### Example: Default Actions (System Only)
+
+```typescript
+// Minimal work item: No custom actions, auto-processes via activities
+export const sendNotificationWorkItem = Builder.workItem('sendNotification')
+// No .withActions() = internal-only defaults
+
+export const sendNotificationTask = Builder.task(sendNotificationWorkItem)
+  .withActivities({
+    onEnabled: async ({ workItem }) => {
+      await workItem.initialize()
+    },
+    onInitialized: async ({ workItem, mutationCtx }) => {
+      await sendEmail(mutationCtx, /* ... */)
+      await workItem.start({})
+    },
+    onStarted: async ({ workItem }) => {
+      await workItem.complete({})
+    },
+  })
+```
+
+#### Example: Custom Actions (User-Facing)
 
 ```typescript
 // convex/workflows/orderProcessing/workItems/reviewItem.workItem.ts
@@ -685,82 +729,9 @@ export const reviewItemTask = Builder.task(
 
 **Key pattern:** Authorization is handled by policies (`reviewWritePolicy`) passed to each action. The policy is checked before the handler executes.
 
-### Step 4.5: Choose Action Type (Default vs Custom)
-
-**Before implementing work items, understand the security implications of custom actions:**
-
-Custom actions create **public API mutations**. Any action you define with `.withActions()` becomes callable - authorization is enforced by policies.
-
-**Use Default Actions (No Code) when:**
-
-- Work item is triggered ONLY by activities
-- No user interaction needed
-- System/background processing only
-- Example: Sending notifications, logging events, cleanup tasks
-
-**Use Custom Actions (Your Code) when:**
-
-- Work item can be started/completed by users
-- Users can claim work items from queues
-- Example: User approvals, manual data entry, reviews
-
-**Example: Default Action (System Only)**
-
-```typescript
-// No custom actions needed - activities trigger everything
-const notificationWorkItem = Builder.workItem(
-  'sendNotification',
-).withActivities({
-  onInitialized: async ({ workItem }) => {
-    // Auto-trigger start
-    await workItem.start({})
-  },
-  onStarted: async ({ workItem, mutationCtx }) => {
-    await sendNotification(mutationCtx)
-    // Auto-trigger complete
-    await workItem.complete({})
-  },
-})
-// No .withActions() = uses default actions (internal only)
-```
-
-**Example: Custom Action (User-Facing)**
-
-```typescript
-// Custom actions with authorization policies
-const approvalWritePolicy = authService.policies.requireScope('order:approve:write')
-
-const approvalActions = authService.builders.workItemActions
-  .start(z.never(), approvalWritePolicy, async ({ mutationCtx, workItem }) => {
-    const authUser = await authComponent.getAuthUser(mutationCtx)
-    invariant(authUser.userId, 'USER_NOT_AUTHENTICATED')
-
-    // Claim work item for user
-    await OrderWorkItemHelpers.claimWorkItem(
-      mutationCtx,
-      workItem.id,
-      authUser.userId,
-    )
-    await workItem.start()
-  })
-  .complete(
-    z.object({ approved: z.boolean(), reason: z.string().optional() }),
-    approvalWritePolicy,
-    async ({ mutationCtx, workItem }, payload) => {
-      await updateApprovalByWorkItemId(mutationCtx.db, workItem.id, payload)
-    },
-  )
-
-const approvalWorkItem = Builder.workItem('approval').withActions(
-  approvalActions.build(),
-)
-```
-
-**Key difference:** Authorization policies (`approvalWritePolicy`) are passed as the second argument to each action. The policy is checked before the handler executes.
-
 See [Authorization → Authentication Architecture](./AUTHORIZATION.md#authentication-architecture) for detailed patterns.
 
-### Step 4.6: Set Up Authorization (Optional)
+### Step 4.5: Set Up Authorization (Optional)
 
 If your workflow requires role-based access control (RBAC), set up roles, groups, and work item assignments.
 
