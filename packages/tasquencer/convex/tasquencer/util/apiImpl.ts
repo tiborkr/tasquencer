@@ -177,6 +177,28 @@ export async function initializeRootWorkflow(
           newContext
         );
 
+        // Child workflows can be initialized during root initialization (e.g. composite/dynamic composite
+        // task `onEnabled` activities). Those contexts get saved with the temporary traceId; update them
+        // to point at the real root traceId so subsequent mutations flush into the canonical trace.
+        const childWorkflowIds = new Set<string>();
+        for (const span of spans) {
+          for (const event of span.events ?? []) {
+            if (event.name !== "workflowIdAssigned") continue;
+            const assigned = (event.data as any)?.workflowId;
+            if (typeof assigned === "string" && assigned !== workflowId) {
+              childWorkflowIds.add(assigned);
+            }
+          }
+        }
+        for (const childWorkflowId of childWorkflowIds) {
+          await saveAuditContext(
+            ctx,
+            auditFunctionHandles,
+            childWorkflowId as Id<"tasquencerWorkflows">,
+            newContext
+          );
+        }
+
         await scheduleTraceFlush(ctx, auditFunctionHandles, workflowId);
       }
     }
