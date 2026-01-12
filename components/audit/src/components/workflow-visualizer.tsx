@@ -250,6 +250,11 @@ type NavigationHistoryItem = {
   taskName?: string;
 };
 
+type DynamicCompositeTask = Extract<
+  ExtractedWorkflowStructure["tasks"][number],
+  { type: "dynamicCompositeTask" }
+>;
+
 /**
  * StandaloneWorkflowVisualizer - Wrapper with internal navigation
  *
@@ -268,6 +273,10 @@ function StandaloneWorkflowVisualizer({
     NavigationHistoryItem[]
   >([{ structure }]);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [pendingDynamicTask, setPendingDynamicTask] =
+    useState<DynamicCompositeTask | null>(null);
+  const [pendingDynamicChildWorkflowName, setPendingDynamicChildWorkflowName] =
+    useState<string | null>(null);
   const scheduleFitView = useCallback(() => {
     requestAnimationFrame(() => {
       reactFlow.fitView({
@@ -281,29 +290,19 @@ function StandaloneWorkflowVisualizer({
   useEffect(() => {
     setNavigationHistory([{ structure }]);
     setCurrentIndex(0);
+    setPendingDynamicTask(null);
+    setPendingDynamicChildWorkflowName(null);
     scheduleFitView();
   }, [structure, scheduleFitView]);
 
   const currentStructure = navigationHistory[currentIndex]!;
 
-  const handleTaskClick = useCallback(
-    (task: ExtractedWorkflowStructure["tasks"][number]) => {
-      if (
-        task.type !== "compositeTask" &&
-        task.type !== "dynamicCompositeTask"
-      ) {
-        return;
-      }
-      const childWorkflow =
-        task.type === "compositeTask"
-          ? task.childWorkflow
-          : task.childWorkflows[0];
-      if (!childWorkflow) {
-        return;
-      }
-      // Add to navigation history
+  const navigateToChildWorkflow = useCallback(
+    (childWorkflow: ExtractedWorkflowStructure, taskName: string) => {
+      setPendingDynamicTask(null);
+      setPendingDynamicChildWorkflowName(null);
       const newHistory = navigationHistory.slice(0, currentIndex + 1);
-      newHistory.push({ structure: childWorkflow, taskName: task.name });
+      newHistory.push({ structure: childWorkflow, taskName });
       setNavigationHistory(newHistory);
       setCurrentIndex(newHistory.length - 1);
       scheduleFitView();
@@ -311,26 +310,115 @@ function StandaloneWorkflowVisualizer({
     [navigationHistory, currentIndex, scheduleFitView]
   );
 
+  const handleTaskClick = useCallback(
+    (task: ExtractedWorkflowStructure["tasks"][number]) => {
+      if (task.type === "compositeTask") {
+        navigateToChildWorkflow(task.childWorkflow, task.name);
+        return;
+      }
+
+      if (task.type === "dynamicCompositeTask") {
+        if (task.childWorkflows.length === 0) {
+          return;
+        }
+        if (task.childWorkflows.length === 1) {
+          navigateToChildWorkflow(task.childWorkflows[0]!, task.name);
+          return;
+        }
+
+        setPendingDynamicTask(task);
+        setPendingDynamicChildWorkflowName(task.childWorkflows[0]?.name ?? null);
+      }
+    },
+    [navigateToChildWorkflow]
+  );
+
   const handleBack = useCallback(() => {
     if (currentIndex > 0) {
       setCurrentIndex(currentIndex - 1);
+      setPendingDynamicTask(null);
+      setPendingDynamicChildWorkflowName(null);
       scheduleFitView();
     }
   }, [currentIndex, scheduleFitView]);
 
+  const handleOpenDynamicChildWorkflow = useCallback(() => {
+    if (!pendingDynamicTask) return;
+
+    const selectedChild =
+      pendingDynamicTask.childWorkflows.find(
+        (workflow) => workflow.name === pendingDynamicChildWorkflowName
+      ) ?? pendingDynamicTask.childWorkflows[0];
+
+    if (!selectedChild) return;
+
+    setPendingDynamicTask(null);
+    setPendingDynamicChildWorkflowName(null);
+    navigateToChildWorkflow(selectedChild, pendingDynamicTask.name);
+  }, [
+    pendingDynamicTask,
+    pendingDynamicChildWorkflowName,
+    navigateToChildWorkflow,
+  ]);
+
+  const handleCancelDynamicPicker = useCallback(() => {
+    setPendingDynamicTask(null);
+    setPendingDynamicChildWorkflowName(null);
+  }, []);
+
   const canGoBack = currentIndex > 0;
   const currentTaskName = currentStructure.taskName;
 
-  const breadcrumb = canGoBack ? (
-    <div className="flex items-center gap-2">
-      <Button variant="outline" size="sm" onClick={handleBack}>
-        ← Back
-      </Button>
-      {currentTaskName && (
-        <span className="text-sm text-muted-foreground">
-          Inside: {currentTaskName}
-        </span>
-      )}
+  const breadcrumb = canGoBack || pendingDynamicTask ? (
+    <div className="flex flex-col gap-2">
+      {canGoBack ? (
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={handleBack}>
+            ← Back
+          </Button>
+          {currentTaskName && (
+            <span className="text-sm text-muted-foreground">
+              Inside: {currentTaskName}
+            </span>
+          )}
+        </div>
+      ) : null}
+      {pendingDynamicTask ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border bg-background/80 px-2 py-1.5 backdrop-blur">
+          <span className="text-sm text-muted-foreground">
+            Select workflow for{" "}
+            <span className="font-medium text-foreground">
+              {pendingDynamicTask.name}
+            </span>
+            :
+          </span>
+          <select
+            className="border rounded px-1.5 py-1 text-sm bg-background"
+            value={
+              pendingDynamicChildWorkflowName ??
+              pendingDynamicTask.childWorkflows[0]?.name ??
+              ""
+            }
+            onChange={(e) => setPendingDynamicChildWorkflowName(e.target.value)}
+          >
+            {pendingDynamicTask.childWorkflows.map((workflow) => (
+              <option key={workflow.name} value={workflow.name}>
+                {workflow.name}
+              </option>
+            ))}
+          </select>
+          <Button size="sm" onClick={handleOpenDynamicChildWorkflow}>
+            Open
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleCancelDynamicPicker}
+          >
+            Cancel
+          </Button>
+        </div>
+      ) : null}
     </div>
   ) : null;
 

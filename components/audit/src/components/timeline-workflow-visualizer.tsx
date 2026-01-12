@@ -699,19 +699,113 @@ export function TimelineWorkflowVisualizer({
     (task: ExtractedWorkflowStructure["tasks"][number]) => {
       dispatch({ type: "SET_SELECTED_TASK", task });
       setInspectorOpen(true);
-      const children = getChildWorkflowsForTask(task);
-      dispatch({
-        type: "SET_SELECTED_CHILD_WORKFLOW",
-        workflowName: children[0]?.name,
-      });
     },
-    [getChildWorkflowsForTask, setInspectorOpen]
+    [setInspectorOpen]
   );
 
   const selectedTask = navState.selectedTask ?? null;
   const childWorkflowOptions = useMemo(() => {
     return selectedTask ? getChildWorkflowsForTask(selectedTask) : [];
   }, [selectedTask, getChildWorkflowsForTask]);
+
+  const childWorkflowSelectionCacheRef = useRef<Record<string, string>>({});
+
+  // Fetch task inspector instances (all child workflow types for the selected task)
+  const [workflowInstancesAll, setWorkflowInstancesAll] = useState<
+    WorkflowInstance[] | undefined
+  >();
+
+  const shouldFetchTaskInstances =
+    selectedTask &&
+    (selectedTask.type === "compositeTask" ||
+      selectedTask.type === "dynamicCompositeTask");
+
+  useEffect(() => {
+    if (shouldFetchTaskInstances && selectedTask) {
+      onFetchChildInstances({
+        taskName: selectedTask.name,
+        timestamp: currentTimestamp,
+      }).then(setWorkflowInstancesAll);
+    } else {
+      setWorkflowInstancesAll(undefined);
+    }
+  }, [
+    shouldFetchTaskInstances,
+    selectedTask?.name,
+    currentTimestamp,
+    onFetchChildInstances,
+  ]);
+
+  const uniqueObservedChildWorkflowNames = useMemo(() => {
+    if (!workflowInstancesAll) return [];
+    return Array.from(new Set(workflowInstancesAll.map((w) => w.workflowName)));
+  }, [workflowInstancesAll]);
+
+  // Auto-select the "actual" child workflow for dynamic composite tasks when unambiguous.
+  useEffect(() => {
+    if (!selectedTask) return;
+    if (childWorkflowOptions.length === 0) return;
+    if (
+      selectedTask.type !== "compositeTask" &&
+      selectedTask.type !== "dynamicCompositeTask"
+    ) {
+      return;
+    }
+
+    const isKnownChildWorkflowName = (name: string | undefined | null) => {
+      if (!name) return false;
+      return childWorkflowOptions.some((wf) => wf.name === name);
+    };
+
+    // Cache any explicit user selection.
+    if (isKnownChildWorkflowName(navState.selectedChildWorkflowName)) {
+      childWorkflowSelectionCacheRef.current[selectedTask.name] =
+        navState.selectedChildWorkflowName!;
+      return;
+    }
+
+    // 1) If the trace shows exactly one child workflow name for this task (up to this timestamp),
+    // pick it automatically.
+    const observed = uniqueObservedChildWorkflowNames.filter((name) =>
+      childWorkflowOptions.some((wf) => wf.name === name)
+    );
+    if (observed.length === 1) {
+      const resolved = observed[0]!;
+      childWorkflowSelectionCacheRef.current[selectedTask.name] = resolved;
+      dispatch({
+        type: "SET_SELECTED_CHILD_WORKFLOW",
+        workflowName: resolved,
+      });
+      return;
+    }
+
+    // 2) Reuse cached resolution for this task (stable across timestamps when instances are absent).
+    const cached = childWorkflowSelectionCacheRef.current[selectedTask.name];
+    if (isKnownChildWorkflowName(cached)) {
+      dispatch({
+        type: "SET_SELECTED_CHILD_WORKFLOW",
+        workflowName: cached,
+      });
+      return;
+    }
+
+    // 3) Non-dynamic composite tasks always have exactly one child.
+    if (selectedTask.type === "compositeTask" && childWorkflowOptions.length === 1) {
+      const resolved = childWorkflowOptions[0]!.name;
+      childWorkflowSelectionCacheRef.current[selectedTask.name] = resolved;
+      dispatch({
+        type: "SET_SELECTED_CHILD_WORKFLOW",
+        workflowName: resolved,
+      });
+    }
+  }, [
+    selectedTask,
+    childWorkflowOptions,
+    navState.selectedChildWorkflowName,
+    uniqueObservedChildWorkflowNames,
+    dispatch,
+  ]);
+
   const selectedChildWorkflow = useMemo(() => {
     if (!selectedTask) return null;
     if (childWorkflowOptions.length === 0) return null;
@@ -725,34 +819,12 @@ export function TimelineWorkflowVisualizer({
     );
   }, [childWorkflowOptions, navState.selectedChildWorkflowName, selectedTask]);
 
-  // Fetch task inspector instances
-  const [workflowInstances, setWorkflowInstances] = useState<
-    WorkflowInstance[] | undefined
-  >();
-
-  const shouldFetchTaskInstances =
-    selectedTask &&
-    (selectedTask.type === "compositeTask" ||
-      selectedTask.type === "dynamicCompositeTask") &&
-    selectedChildWorkflow;
-
-  useEffect(() => {
-    if (shouldFetchTaskInstances && selectedTask && selectedChildWorkflow) {
-      onFetchChildInstances({
-        taskName: selectedTask.name,
-        workflowName: selectedChildWorkflow.name,
-        timestamp: currentTimestamp,
-      }).then(setWorkflowInstances);
-    } else {
-      setWorkflowInstances(undefined);
-    }
-  }, [
-    shouldFetchTaskInstances,
-    selectedTask?.name,
-    selectedChildWorkflow?.name,
-    currentTimestamp,
-    onFetchChildInstances,
-  ]);
+  const workflowInstances = useMemo(() => {
+    if (!workflowInstancesAll || !selectedChildWorkflow) return undefined;
+    return workflowInstancesAll.filter(
+      (instance) => instance.workflowName === selectedChildWorkflow.name
+    );
+  }, [workflowInstancesAll, selectedChildWorkflow]);
 
   const handleInstanceSelect = useCallback(
     (workflowId: string) => {
