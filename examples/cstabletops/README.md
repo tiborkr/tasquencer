@@ -2,7 +2,13 @@
 
 An example Tasquencer + Convex app for running cybersecurity tabletop exercises.
 
-This example models tabletop exercises as a **sequence of cards** (scenario, prompt, discussion), and supports **multiple exercise types** (from the CIS “Six Scenarios” pack). It demonstrates a generalized “platform layer” (sessions, participants, cards, responses/notes) plus **one workflow per exercise**, selected at runtime via a **dynamic composite task**.
+This example now ships as a small “platform”:
+- **Exercise library** with metadata (difficulty, duration, threat actor, impacted assets, CIS controls) for all six CIS scenarios.
+- **Sessions** (create, list, dashboard, reporting, live presentation).
+- **Participants** (join via code; roles: facilitator, player with role assignment, note‑taker, observer).
+- **Work queue** with Pending vs Claimed sections and role-based filtering.
+- **Execution** flows per exercise (cards → work items), optional injects, and live presentation mode.
+- **Authorization**: facilitators can create/manage; others can join and see only what they’re allowed to.
 
 ## Source Material
 
@@ -25,17 +31,24 @@ The “Financial Break-in” workflow includes an **optional inject** via a faci
 
 ## Roles & Work Queue
 
-When a session is created, the app creates **per-session auth groups** and assigns the creator to:
-- Facilitator (can present cards / make choices)
+When a session is created, per-session auth groups are created and the creator is a **facilitator**.
 
-Other participants join the session with a **join code**:
-- Player (selects exactly one player role for the session, e.g. IT Lead)
-- Note-taker (records discussion notes)
-- Observer (read-only)
+Participants join via **join code**:
+- **Player** (must choose one player role, e.g., IT Lead, Comms, Legal, Finance, Exec)
+- **Note-taker** (records discussion notes)
+- **Observer** (read-only)
+- Facilitators can also join/log in later.
 
-Work items are offered with both `requiredScope` and `requiredGroupId`, so the work queue is automatically session-scoped.
+Work items are offered with `requiredScope` + `requiredGroupId`; prompt cards assigned to a specific player role are only visible to that role’s group. Claimed tasks stay visible in the queue until completed.
 
-Prompt cards can optionally be assigned to a specific player role. Those work items are offered to a **per-session, per-player-role group**, so only the matching role sees them in their queue.
+### Exercise library (6 scenarios, CIS “Six Scenarios” pack)
+Each exercise has metadata: difficulty, duration, threat actor, impacted assets, and CIS controls touched.
+- Quick Fix (beginner, 30m, Insider (unintentional), CIS 4/7)
+- Malware Infection (beginner, 30m, External (malware), CIS 8/10)
+- Unplanned Attack (intermediate, 45m, Hacktivist, CIS 7/17)
+- Cloud Compromise (intermediate, 45m, External (third-party breach), CIS 15/3)
+- Financial Break-in (advanced, 60m, External (financial crime), CIS 5/6; optional inject)
+- Flood Zone (advanced, 60m, External (ransomware), CIS 11/17)
 
 ## Convex Layout
 
@@ -93,9 +106,27 @@ npx convex run scaffold:scaffoldSuperadmin
 npx convex run workflows/cstabletops/authSetup:setupAuthCstabletopsAuthorization
 ```
 
+## Key Features (UI)
+
+- **Sessions list** (`/simple`): Shows sessions the user participates in. Facilitators see “New Session”; others get a “Join Session” CTA.
+- **New session** (`/simple/new`): Exercise browser with metadata cards and a details panel. Facilitators only.
+- **Join session** (`/simple/join`): Enter join code, pick role; players pick a specific player role.
+- **Work queue** (`/simple/queue`): Pending vs Claimed sections; role-filtered tasks; claimed tasks stay visible.
+- **Task detail** (`/simple/tasks/store/$workItemId`): Present, respond, note-take, optional inject; better error handling for conflicts/network.
+- **Dashboard** (`/simple/session/$sessionId`): Facilitators see roster, join code, bottlenecks, and progress; players see their role/progress; completed sessions add Summary + export.
+- **Reporting**: Summary tab + “Export Report” (Markdown) after completion.
+- **Live presentation** (`/simple/presentation/$sessionId`): Facilitator-led synchronous mode; participants stay in sync; responses collected live; pause/resume/show responses/end.
+
+## Implementation Notes
+
+- **Authorization**: `getUserCapabilities` gates creation; API queries return empty for non-authorized viewers instead of throwing.
+- **Work items**: Offered with scope + group; per-role groups for player prompts. Claimed items are returned in the queue to allow resuming.
+- **Live presentation state**: Stored in `ttxPresentationState`; one active presentation per session.
+- **Backwards compatibility**: Legacy `respondToInject` kept; v1/v2 workflow versioning for structural changes.
+
 ## What to Extend Next
 
-- Multi-player collection (fan-out/gather per prompt card; see `docs/recipes/multiple-work-items.md`)
-- Facilitator “override” actions (reassign/skip when someone is blocked)
-- After-action review workflow + exports
-- Patterns and inspiration: `docs/RECIPES.md` and `docs/recipes/*`
+- Draft persistence for long responses.
+- Presentation history / timeline view.
+- Optional modal to preview full scenario text from the exercise cards.
+- “Leave session” / reassign roles; facilitator overrides for stuck tasks.
