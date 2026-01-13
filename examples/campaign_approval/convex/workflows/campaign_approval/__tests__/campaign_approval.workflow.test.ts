@@ -1664,6 +1664,448 @@ describe('Campaign Approval Workflow', () => {
     })
   })
 
+  describe('Phase 6: Launch - Happy Path', () => {
+    it('completes launch phase from preLaunchReview through internalComms', async () => {
+      const t = setup()
+
+      await setupCampaignApprovalAuthorization(t)
+      const { userId } = await setupAuthenticatedCampaignUser(t)
+
+      // Initialize with low budget
+      await t.mutation(initializeRootWorkflowMutation, {
+        payload: createTestCampaignPayload(userId, { estimatedBudget: 30000 }),
+      })
+      await waitForFlush(t)
+
+      const campaigns = await t.query(
+        api.workflows.campaign_approval.api.getCampaigns,
+        {},
+      )
+      const workflowId = campaigns[0].workflowId
+
+      // Complete Phases 1-5
+      await completePhase1And2(t, userId)
+      await completePhase3(t)
+      await completePhase4(t)
+      await completePhase5(t)
+
+      // Verify Phase 6 starts with preLaunchReview
+      let taskStates = await t.query(
+        api.workflows.campaign_approval.api.campaignWorkflowTaskStates,
+        { workflowId },
+      )
+      expect(taskStates.preLaunchReview).toBe('enabled')
+      expect(taskStates.addressConcerns).toBe('disabled')
+      expect(taskStates.launchApproval).toBe('disabled')
+      expect(taskStates.internalComms).toBe('disabled')
+
+      // preLaunchReview - ready for approval
+      let workQueue = await t.query(
+        api.workflows.campaign_approval.api.getCampaignWorkQueue,
+        {},
+      )
+      expect(workQueue.length).toBe(1)
+      expect(workQueue[0].taskType).toBe('preLaunchReview')
+      let workItemId = workQueue[0].workItemId
+
+      await t.mutation(api.workflows.campaign_approval.api.startWorkItem, {
+        workItemId,
+        args: { name: 'preLaunchReview' },
+      })
+      await waitForFlush(t)
+      await t.mutation(api.workflows.campaign_approval.api.completeWorkItem, {
+        workItemId,
+        args: {
+          name: 'preLaunchReview',
+          payload: {
+            readyForApproval: true,
+            meetingNotes: 'All stakeholders aligned',
+          },
+        },
+      })
+      await waitForFlush(t)
+
+      // Verify launchApproval is enabled
+      taskStates = await t.query(
+        api.workflows.campaign_approval.api.campaignWorkflowTaskStates,
+        { workflowId },
+      )
+      expect(taskStates.preLaunchReview).toBe('completed')
+      expect(taskStates.launchApproval).toBe('enabled')
+      expect(taskStates.addressConcerns).toBe('disabled')
+
+      // launchApproval - approved
+      workQueue = await t.query(
+        api.workflows.campaign_approval.api.getCampaignWorkQueue,
+        {},
+      )
+      expect(workQueue[0].taskType).toBe('launchApproval')
+      workItemId = workQueue[0].workItemId
+
+      await t.mutation(api.workflows.campaign_approval.api.startWorkItem, {
+        workItemId,
+        args: { name: 'launchApproval' },
+      })
+      await waitForFlush(t)
+      await t.mutation(api.workflows.campaign_approval.api.completeWorkItem, {
+        workItemId,
+        args: {
+          name: 'launchApproval',
+          payload: {
+            decision: 'approved',
+            approverNotes: 'Launch authorized',
+            launchDate: Date.now() + 7 * 24 * 60 * 60 * 1000,
+          },
+        },
+      })
+      await waitForFlush(t)
+
+      // Verify internalComms is enabled
+      taskStates = await t.query(
+        api.workflows.campaign_approval.api.campaignWorkflowTaskStates,
+        { workflowId },
+      )
+      expect(taskStates.launchApproval).toBe('completed')
+      expect(taskStates.internalComms).toBe('enabled')
+
+      // internalComms
+      workQueue = await t.query(
+        api.workflows.campaign_approval.api.getCampaignWorkQueue,
+        {},
+      )
+      expect(workQueue[0].taskType).toBe('internalComms')
+      workItemId = workQueue[0].workItemId
+
+      await t.mutation(api.workflows.campaign_approval.api.startWorkItem, {
+        workItemId,
+        args: { name: 'internalComms' },
+      })
+      await waitForFlush(t)
+      await t.mutation(api.workflows.campaign_approval.api.completeWorkItem, {
+        workItemId,
+        args: {
+          name: 'internalComms',
+          payload: {
+            notifiedTeams: [
+              { team: 'sales', notified: true },
+              { team: 'customer_service', notified: true },
+            ],
+            communicationsSent: true,
+          },
+        },
+      })
+      await waitForFlush(t)
+
+      // Verify Phase 6 complete and campaign status is active
+      const finalCampaigns = await t.query(
+        api.workflows.campaign_approval.api.getCampaigns,
+        {},
+      )
+      expect(finalCampaigns[0].status).toBe('active')
+
+      taskStates = await t.query(
+        api.workflows.campaign_approval.api.campaignWorkflowTaskStates,
+        { workflowId },
+      )
+      expect(taskStates.internalComms).toBe('completed')
+    })
+  })
+
+  describe('Phase 6: Launch - Pre-Launch Review Concerns Loop', () => {
+    it('loops to addressConcerns when preLaunchReview is not ready for approval', async () => {
+      const t = setup()
+
+      await setupCampaignApprovalAuthorization(t)
+      const { userId } = await setupAuthenticatedCampaignUser(t)
+
+      await t.mutation(initializeRootWorkflowMutation, {
+        payload: createTestCampaignPayload(userId, { estimatedBudget: 30000 }),
+      })
+      await waitForFlush(t)
+
+      const campaigns = await t.query(
+        api.workflows.campaign_approval.api.getCampaigns,
+        {},
+      )
+      const workflowId = campaigns[0].workflowId
+
+      // Complete Phases 1-5
+      await completePhase1And2(t, userId)
+      await completePhase3(t)
+      await completePhase4(t)
+      await completePhase5(t)
+
+      // preLaunchReview - not ready for approval
+      let workQueue = await t.query(
+        api.workflows.campaign_approval.api.getCampaignWorkQueue,
+        {},
+      )
+      let workItemId = workQueue[0].workItemId
+
+      await t.mutation(api.workflows.campaign_approval.api.startWorkItem, {
+        workItemId,
+        args: { name: 'preLaunchReview' },
+      })
+      await waitForFlush(t)
+      await t.mutation(api.workflows.campaign_approval.api.completeWorkItem, {
+        workItemId,
+        args: {
+          name: 'preLaunchReview',
+          payload: {
+            readyForApproval: false,
+            meetingNotes: 'Open concerns need resolution',
+            concerns: [{ concern: 'Budget needs finalization', owner: 'Finance' }],
+          },
+        },
+      })
+      await waitForFlush(t)
+
+      // Verify addressConcerns is enabled (loop path)
+      let taskStates = await t.query(
+        api.workflows.campaign_approval.api.campaignWorkflowTaskStates,
+        { workflowId },
+      )
+      expect(taskStates.preLaunchReview).toBe('completed')
+      expect(taskStates.addressConcerns).toBe('enabled')
+      expect(taskStates.launchApproval).toBe('disabled')
+
+      // addressConcerns
+      workQueue = await t.query(
+        api.workflows.campaign_approval.api.getCampaignWorkQueue,
+        {},
+      )
+      expect(workQueue[0].taskType).toBe('addressConcerns')
+      workItemId = workQueue[0].workItemId
+
+      await t.mutation(api.workflows.campaign_approval.api.startWorkItem, {
+        workItemId,
+        args: { name: 'addressConcerns' },
+      })
+      await waitForFlush(t)
+      await t.mutation(api.workflows.campaign_approval.api.completeWorkItem, {
+        workItemId,
+        args: {
+          name: 'addressConcerns',
+          payload: {
+            resolutions: [
+              { concern: 'Budget needs finalization', resolution: 'Finance confirmed budget' },
+            ],
+          },
+        },
+      })
+      await waitForFlush(t)
+
+      // Verify preLaunchReview is enabled again (loop back)
+      taskStates = await t.query(
+        api.workflows.campaign_approval.api.campaignWorkflowTaskStates,
+        { workflowId },
+      )
+      expect(taskStates.addressConcerns).toBe('completed')
+      expect(taskStates.preLaunchReview).toBe('enabled')
+    })
+  })
+
+  describe('Phase 6: Launch - Launch Approval Concerns Loop', () => {
+    it('loops to addressConcerns when launchApproval has concerns', async () => {
+      const t = setup()
+
+      await setupCampaignApprovalAuthorization(t)
+      const { userId } = await setupAuthenticatedCampaignUser(t)
+
+      await t.mutation(initializeRootWorkflowMutation, {
+        payload: createTestCampaignPayload(userId, { estimatedBudget: 30000 }),
+      })
+      await waitForFlush(t)
+
+      const campaigns = await t.query(
+        api.workflows.campaign_approval.api.getCampaigns,
+        {},
+      )
+      const workflowId = campaigns[0].workflowId
+
+      // Complete Phases 1-5
+      await completePhase1And2(t, userId)
+      await completePhase3(t)
+      await completePhase4(t)
+      await completePhase5(t)
+
+      // preLaunchReview - ready for approval
+      let workQueue = await t.query(
+        api.workflows.campaign_approval.api.getCampaignWorkQueue,
+        {},
+      )
+      let workItemId = workQueue[0].workItemId
+
+      await t.mutation(api.workflows.campaign_approval.api.startWorkItem, {
+        workItemId,
+        args: { name: 'preLaunchReview' },
+      })
+      await waitForFlush(t)
+      await t.mutation(api.workflows.campaign_approval.api.completeWorkItem, {
+        workItemId,
+        args: {
+          name: 'preLaunchReview',
+          payload: { readyForApproval: true },
+        },
+      })
+      await waitForFlush(t)
+
+      // launchApproval - concerns (not rejected, not approved)
+      workQueue = await t.query(
+        api.workflows.campaign_approval.api.getCampaignWorkQueue,
+        {},
+      )
+      workItemId = workQueue[0].workItemId
+
+      await t.mutation(api.workflows.campaign_approval.api.startWorkItem, {
+        workItemId,
+        args: { name: 'launchApproval' },
+      })
+      await waitForFlush(t)
+      await t.mutation(api.workflows.campaign_approval.api.completeWorkItem, {
+        workItemId,
+        args: {
+          name: 'launchApproval',
+          payload: {
+            decision: 'concerns',
+            approverNotes: 'Need to resolve timing conflict with other campaign',
+          },
+        },
+      })
+      await waitForFlush(t)
+
+      // Verify addressConcerns is enabled (concerns path)
+      let taskStates = await t.query(
+        api.workflows.campaign_approval.api.campaignWorkflowTaskStates,
+        { workflowId },
+      )
+      expect(taskStates.launchApproval).toBe('completed')
+      expect(taskStates.addressConcerns).toBe('enabled')
+      expect(taskStates.internalComms).toBe('disabled')
+
+      // addressConcerns
+      workQueue = await t.query(
+        api.workflows.campaign_approval.api.getCampaignWorkQueue,
+        {},
+      )
+      expect(workQueue[0].taskType).toBe('addressConcerns')
+      workItemId = workQueue[0].workItemId
+
+      await t.mutation(api.workflows.campaign_approval.api.startWorkItem, {
+        workItemId,
+        args: { name: 'addressConcerns' },
+      })
+      await waitForFlush(t)
+      await t.mutation(api.workflows.campaign_approval.api.completeWorkItem, {
+        workItemId,
+        args: {
+          name: 'addressConcerns',
+          payload: {
+            resolutions: [
+              { concern: 'Timing conflict', resolution: 'Adjusted launch date' },
+            ],
+          },
+        },
+      })
+      await waitForFlush(t)
+
+      // Verify preLaunchReview is enabled again (loop back to re-review)
+      taskStates = await t.query(
+        api.workflows.campaign_approval.api.campaignWorkflowTaskStates,
+        { workflowId },
+      )
+      expect(taskStates.addressConcerns).toBe('completed')
+      expect(taskStates.preLaunchReview).toBe('enabled')
+    })
+  })
+
+  describe('Phase 6: Launch - Rejection Path', () => {
+    it('ends workflow when launch is rejected', async () => {
+      const t = setup()
+
+      await setupCampaignApprovalAuthorization(t)
+      const { userId } = await setupAuthenticatedCampaignUser(t)
+
+      await t.mutation(initializeRootWorkflowMutation, {
+        payload: createTestCampaignPayload(userId, { estimatedBudget: 30000 }),
+      })
+      await waitForFlush(t)
+
+      const campaigns = await t.query(
+        api.workflows.campaign_approval.api.getCampaigns,
+        {},
+      )
+      const workflowId = campaigns[0].workflowId
+
+      // Complete Phases 1-5
+      await completePhase1And2(t, userId)
+      await completePhase3(t)
+      await completePhase4(t)
+      await completePhase5(t)
+
+      // preLaunchReview - ready for approval
+      let workQueue = await t.query(
+        api.workflows.campaign_approval.api.getCampaignWorkQueue,
+        {},
+      )
+      let workItemId = workQueue[0].workItemId
+
+      await t.mutation(api.workflows.campaign_approval.api.startWorkItem, {
+        workItemId,
+        args: { name: 'preLaunchReview' },
+      })
+      await waitForFlush(t)
+      await t.mutation(api.workflows.campaign_approval.api.completeWorkItem, {
+        workItemId,
+        args: {
+          name: 'preLaunchReview',
+          payload: { readyForApproval: true },
+        },
+      })
+      await waitForFlush(t)
+
+      // launchApproval - rejected
+      workQueue = await t.query(
+        api.workflows.campaign_approval.api.getCampaignWorkQueue,
+        {},
+      )
+      workItemId = workQueue[0].workItemId
+
+      await t.mutation(api.workflows.campaign_approval.api.startWorkItem, {
+        workItemId,
+        args: { name: 'launchApproval' },
+      })
+      await waitForFlush(t)
+      await t.mutation(api.workflows.campaign_approval.api.completeWorkItem, {
+        workItemId,
+        args: {
+          name: 'launchApproval',
+          payload: {
+            decision: 'rejected',
+            approverNotes: 'Market conditions have changed, campaign no longer viable',
+          },
+        },
+      })
+      await waitForFlush(t)
+
+      // Verify campaign status is cancelled
+      const finalCampaigns = await t.query(
+        api.workflows.campaign_approval.api.getCampaigns,
+        {},
+      )
+      expect(finalCampaigns[0].status).toBe('cancelled')
+
+      // Verify workflow ended via rejection path
+      const taskStates = await t.query(
+        api.workflows.campaign_approval.api.campaignWorkflowTaskStates,
+        { workflowId },
+      )
+      expect(taskStates.launchApproval).toBe('completed')
+      expect(taskStates.internalComms).toBe('disabled') // Should not be enabled on rejection
+      expect(taskStates.addressConcerns).toBe('disabled')
+    })
+  })
+
   describe('Phase 4: Creative Development - Legal Review Revision Loop', () => {
     it('loops back to legalRevise when legal review requests changes', async () => {
       const t = setup()
@@ -2209,6 +2651,81 @@ async function completePhase4(t: ReturnType<typeof setup>) {
       name: 'finalApproval',
       payload: { approved: true, signoffNotes: 'Approved' },
     },
+  })
+  await waitForFlush(t)
+}
+
+/**
+ * Helper function to complete Phase 5 (Technical Setup)
+ * Completes all parallel tasks, passes QA, and moves to Phase 6
+ */
+async function completePhase5(t: ReturnType<typeof setup>) {
+  // Get all 3 parallel tasks
+  let workQueue = await t.query(
+    api.workflows.campaign_approval.api.getCampaignWorkQueue,
+    {},
+  )
+
+  // Complete buildInfra
+  const buildInfraItem = workQueue.find((w: any) => w.taskType === 'buildInfra')
+  await t.mutation(api.workflows.campaign_approval.api.startWorkItem, {
+    workItemId: buildInfraItem!.workItemId,
+    args: { name: 'buildInfra' },
+  })
+  await waitForFlush(t)
+  await t.mutation(api.workflows.campaign_approval.api.completeWorkItem, {
+    workItemId: buildInfraItem!.workItemId,
+    args: { name: 'buildInfra', payload: { infraReady: true } },
+  })
+  await waitForFlush(t)
+
+  // Complete configAnalytics
+  workQueue = await t.query(
+    api.workflows.campaign_approval.api.getCampaignWorkQueue,
+    {},
+  )
+  const configAnalyticsItem = workQueue.find((w: any) => w.taskType === 'configAnalytics')
+  await t.mutation(api.workflows.campaign_approval.api.startWorkItem, {
+    workItemId: configAnalyticsItem!.workItemId,
+    args: { name: 'configAnalytics' },
+  })
+  await waitForFlush(t)
+  await t.mutation(api.workflows.campaign_approval.api.completeWorkItem, {
+    workItemId: configAnalyticsItem!.workItemId,
+    args: { name: 'configAnalytics', payload: { analyticsConfigured: true } },
+  })
+  await waitForFlush(t)
+
+  // Complete setupMedia
+  workQueue = await t.query(
+    api.workflows.campaign_approval.api.getCampaignWorkQueue,
+    {},
+  )
+  const setupMediaItem = workQueue.find((w: any) => w.taskType === 'setupMedia')
+  await t.mutation(api.workflows.campaign_approval.api.startWorkItem, {
+    workItemId: setupMediaItem!.workItemId,
+    args: { name: 'setupMedia' },
+  })
+  await waitForFlush(t)
+  await t.mutation(api.workflows.campaign_approval.api.completeWorkItem, {
+    workItemId: setupMediaItem!.workItemId,
+    args: { name: 'setupMedia', payload: { mediaReady: true } },
+  })
+  await waitForFlush(t)
+
+  // qaTest - pass
+  workQueue = await t.query(
+    api.workflows.campaign_approval.api.getCampaignWorkQueue,
+    {},
+  )
+  await t.mutation(api.workflows.campaign_approval.api.startWorkItem, {
+    workItemId: workQueue[0].workItemId,
+    args: { name: 'qaTest' },
+  })
+  await waitForFlush(t)
+  await t.mutation(api.workflows.campaign_approval.api.completeWorkItem, {
+    workItemId: workQueue[0].workItemId,
+    args: { name: 'qaTest', payload: { result: 'passed' } },
   })
   await waitForFlush(t)
 }
