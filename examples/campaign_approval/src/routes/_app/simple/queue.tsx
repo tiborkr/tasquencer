@@ -219,7 +219,7 @@ function QueuePageInner() {
                         className="group/btn gap-1.5 transition-all"
                       >
                         <Link
-                          to="/simple/tasks/store/$workItemId"
+                          to="/simple/tasks/$workItemId"
                           params={{ workItemId: item.workItemId }}
                         >
                           <span>
