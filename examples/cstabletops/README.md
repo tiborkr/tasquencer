@@ -12,8 +12,11 @@ This example now ships as a small “platform”:
 
 ## Source Material
 
-- `examples/cstabletops/docs/Cybersecurity-Tabletop-Exercise-Tips_508c.pdf`
-- `examples/cstabletops/docs/Six-tabletop-exercises-FINAL.pdf`
+This example was built using the following reference documents:
+
+- [Cybersecurity Tabletop Exercise Tips](https://www.cisa.gov/sites/default/files/publications/Cybersecurity-Tabletop-Exercise-Tips_508c.pdf) (CISA)
+- [Six Tabletop Exercises to Help Prepare Your Cybersecurity Team](https://www.cisecurity.org/insights/white-papers/six-tabletop-exercises-prepare-cybersecurity-team) (CIS)
+
 
 ## Workflow Architecture
 
