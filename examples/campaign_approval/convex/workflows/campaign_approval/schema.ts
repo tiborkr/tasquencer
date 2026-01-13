@@ -3,26 +3,26 @@ import { v } from 'convex/values'
 import { defineWorkItemMetadataTable } from '@repo/tasquencer'
 
 /**
- * UcampaignUapprovals - Aggregate root table linking workflow to domain data
+ * campaigns - Aggregate root table linking workflow to domain data
  */
-const LUcampaignUapprovals = defineTable({
+const campaigns = defineTable({
   workflowId: v.id('tasquencerWorkflows'),
   message: v.string(),
   createdAt: v.number(),
 }).index('by_workflow_id', ['workflowId'])
 
 /**
- * Work item metadata table for LUcampaignUapproval workflow
+ * Work item metadata table for campaign_approval workflow
  * Uses auth scope-based authorization
  */
-const LUcampaignUapprovalWorkItems = defineWorkItemMetadataTable('LUcampaignUapprovals').withPayload(
+const campaignWorkItems = defineWorkItemMetadataTable('campaigns').withPayload(
   v.object({
-    type: v.literal('storeUcampaignUapproval'),
+    type: v.literal('storeCampaign'),
     taskName: v.string(),
   }),
 )
 
 export default {
-  LUcampaignUapprovals,
-  LUcampaignUapprovalWorkItems,
+  campaigns,
+  campaignWorkItems,
 }

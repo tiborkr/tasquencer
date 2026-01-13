@@ -1,9 +1,9 @@
 import { v } from 'convex/values'
 import { mutation, query } from '../../_generated/server'
 import type { Doc, Id } from '../../_generated/dataModel'
-import { LUcampaignUapprovalVersionManager } from './definition'
-import { getUcampaignUapprovalByWorkflowId, listUcampaignUapprovals } from './db'
-import { UcampaignUapprovalWorkItemHelpers } from './helpers'
+import { campaignApprovalVersionManager } from './definition'
+import { getCampaignByWorkflowId, listCampaigns } from './db'
+import { CampaignWorkItemHelpers } from './helpers'
 import { authComponent } from '../../auth'
 import { type HumanWorkItemOffer, isHumanOffer } from '@repo/tasquencer'
 import { assertUserHasScope } from '../../authorization'
@@ -15,20 +15,20 @@ export const {
   startWorkItem,
   completeWorkItem,
   helpers: { getWorkflowTaskStates },
-} = LUcampaignUapprovalVersionManager.apiForVersion('v1')
+} = campaignApprovalVersionManager.apiForVersion('v1')
 
 function requireHumanOffer(
-  metadata: Doc<'LUcampaignUapprovalWorkItems'>,
+  metadata: Doc<'campaignWorkItems'>,
 ): HumanWorkItemOffer {
   if (!isHumanOffer(metadata.offer)) {
-    throw new Error('UcampaignUapproval work items must be offered to humans')
+    throw new Error('Campaign work items must be offered to humans')
   }
   return metadata.offer
 }
 
 function deriveWorkItemStatus(
   workItem: Doc<'tasquencerWorkItems'> | null,
-  metadata: Doc<'LUcampaignUapprovalWorkItems'>,
+  metadata: Doc<'campaignWorkItems'>,
 ): 'pending' | 'claimed' | 'completed' {
   if (workItem?.state === 'completed') return 'completed'
   if (metadata.claim) return 'claimed'
@@ -36,38 +36,38 @@ function deriveWorkItemStatus(
 }
 
 /**
- * Get LUcampaignUapproval by workflow ID
+ * Get campaign by workflow ID
  */
-export const getUcampaignUapproval = query({
+export const getCampaign = query({
   args: {
     workflowId: v.id('tasquencerWorkflows'),
   },
   handler: async (ctx, args) => {
-    await assertUserHasScope(ctx, 'LUcampaignUapproval:staff')
-    return await getUcampaignUapprovalByWorkflowId(ctx.db, args.workflowId)
+    await assertUserHasScope(ctx, 'campaign_approval:staff')
+    return await getCampaignByWorkflowId(ctx.db, args.workflowId)
   },
 })
 
 /**
- * List all LUcampaignUapprovals
+ * List all campaigns
  */
-export const getUcampaignUapprovals = query({
+export const getCampaigns = query({
   args: {},
   handler: async (ctx) => {
-    await assertUserHasScope(ctx, 'LUcampaignUapproval:staff')
-    return await listUcampaignUapprovals(ctx.db)
+    await assertUserHasScope(ctx, 'campaign_approval:staff')
+    return await listCampaigns(ctx.db)
   },
 })
 
 /**
- * Claim a LUcampaignUapproval work item
+ * Claim a campaign work item
  */
-export const claimUcampaignUapprovalWorkItem = mutation({
+export const claimCampaignWorkItem = mutation({
   args: {
     workItemId: v.id('tasquencerWorkItems'),
   },
   handler: async (ctx, args) => {
-    await assertUserHasScope(ctx, 'LUcampaignUapproval:write')
+    await assertUserHasScope(ctx, 'campaign_approval:write')
     const authUser = await authComponent.getAuthUser(ctx)
 
     if (!authUser.userId) {
@@ -76,27 +76,27 @@ export const claimUcampaignUapprovalWorkItem = mutation({
 
     const userId = authUser.userId
 
-    const canClaim = await UcampaignUapprovalWorkItemHelpers.canUserClaimWorkItem(
+    const canClaim = await CampaignWorkItemHelpers.canUserClaimWorkItem(
       ctx,
       userId,
       args.workItemId,
     )
 
     if (!canClaim) {
-      throw new Error('GREETING_WORK_ITEM_CLAIM_NOT_ALLOWED')
+      throw new Error('CAMPAIGN_WORK_ITEM_CLAIM_NOT_ALLOWED')
     }
 
-    await UcampaignUapprovalWorkItemHelpers.claimWorkItem(ctx, args.workItemId, userId)
+    await CampaignWorkItemHelpers.claimWorkItem(ctx, args.workItemId, userId)
   },
 })
 
 /**
- * Get the LUcampaignUapproval work queue for the authenticated user
+ * Get the campaign work queue for the authenticated user
  */
-export const getUcampaignUapprovalWorkQueue = query({
+export const getCampaignWorkQueue = query({
   args: {},
   handler: async (ctx) => {
-    await assertUserHasScope(ctx, 'LUcampaignUapproval:staff')
+    await assertUserHasScope(ctx, 'campaign_approval:staff')
     const authUser = await authComponent.getAuthUser(ctx)
 
     if (!authUser.userId) {
@@ -105,7 +105,7 @@ export const getUcampaignUapprovalWorkQueue = query({
 
     const userId = authUser.userId
 
-    const items = await UcampaignUapprovalWorkItemHelpers.getAvailableWorkItemsByWorkflow(
+    const items = await CampaignWorkItemHelpers.getAvailableWorkItemsByWorkflow(
       ctx,
       userId,
       'campaign_approval',
@@ -117,25 +117,25 @@ export const getUcampaignUapprovalWorkQueue = query({
       return []
     }
 
-    // Batch load LUcampaignUapprovals
-    const LUcampaignUapprovalIds = new Set(
+    // Batch load campaigns
+    const campaignIds = new Set(
       humanItems.map(
-        (item) => item.metadata.aggregateTableId as Id<'LUcampaignUapprovals'>,
+        (item) => item.metadata.aggregateTableId as Id<'campaigns'>,
       ),
     )
-    const LUcampaignUapprovalsMap = new Map<Id<'LUcampaignUapprovals'>, Doc<'LUcampaignUapprovals'> | null>()
+    const campaignsMap = new Map<Id<'campaigns'>, Doc<'campaigns'> | null>()
     await Promise.all(
-      Array.from(LUcampaignUapprovalIds).map(async (LUcampaignUapprovalId) => {
-        const LUcampaignUapproval = await ctx.db.get(LUcampaignUapprovalId)
-        LUcampaignUapprovalsMap.set(LUcampaignUapprovalId, LUcampaignUapproval)
+      Array.from(campaignIds).map(async (campaignId) => {
+        const campaign = await ctx.db.get(campaignId)
+        campaignsMap.set(campaignId, campaign)
       }),
     )
 
     return humanItems.map((item) => {
       const metadata = item.metadata
       const workItem = item.workItem
-      const LUcampaignUapproval = LUcampaignUapprovalsMap.get(
-        metadata.aggregateTableId as Id<'LUcampaignUapprovals'>,
+      const campaign = campaignsMap.get(
+        metadata.aggregateTableId as Id<'campaigns'>,
       )
       const offer = requireHumanOffer(metadata)
 
@@ -147,11 +147,11 @@ export const getUcampaignUapprovalWorkQueue = query({
         taskType: metadata.payload.type,
         status: deriveWorkItemStatus(workItem, metadata),
         requiredScope: offer.requiredScope ?? null,
-        LUcampaignUapproval: LUcampaignUapproval
+        campaign: campaign
           ? {
-              _id: LUcampaignUapproval._id,
-              message: LUcampaignUapproval.message,
-              createdAt: LUcampaignUapproval.createdAt,
+              _id: campaign._id,
+              message: campaign.message,
+              createdAt: campaign.createdAt,
             }
           : null,
       }
@@ -162,12 +162,12 @@ export const getUcampaignUapprovalWorkQueue = query({
 /**
  * Get workflow task states
  */
-export const LUcampaignUapprovalWorkflowTaskStates = query({
+export const campaignWorkflowTaskStates = query({
   args: {
     workflowId: v.id('tasquencerWorkflows'),
   },
   handler: async (ctx, args) => {
-    await assertUserHasScope(ctx, 'LUcampaignUapproval:staff')
+    await assertUserHasScope(ctx, 'campaign_approval:staff')
     return await getWorkflowTaskStates(ctx.db, {
       workflowName: 'campaign_approval',
       workflowId: args.workflowId,

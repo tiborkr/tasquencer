@@ -3,7 +3,7 @@ import {
   createSystemScopeModule,
 } from '@repo/tasquencer'
 import { Authorization } from './tasquencer'
-import { LUcampaignUapprovalScopeModule } from './workflows/campaign_approval/scopes'
+import { campaignApprovalScopeModule } from './workflows/campaign_approval/scopes'
 import { authComponent } from './auth'
 import type { QueryCtx } from './_generated/server'
 import { userHasScope } from '@repo/tasquencer/components/authorization/helpers'
@@ -39,7 +39,7 @@ const systemScopeModule = createSystemScopeModule('system')
  */
 export const authService = Authorization.Service.make(userProvider)
   .withScopeModule(systemScopeModule)
-  .withScopeModule(LUcampaignUapprovalScopeModule)
+  .withScopeModule(campaignApprovalScopeModule)
   .build()
 
 /**

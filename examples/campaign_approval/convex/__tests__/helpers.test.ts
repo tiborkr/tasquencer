@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 /**
- * Test helper utilities for LUcampaignUapproval workflow tests
+ * Test helper utilities for campaign_approval workflow tests
  */
 
 import { convexTest } from 'convex-test'
@@ -10,8 +10,8 @@ import { authComponent } from '../auth'
 import { internal, components } from '../_generated/api'
 import type { Id } from '../_generated/dataModel'
 import {
-  AUTH_GREETING_GROUPS,
-  AUTH_GREETING_ROLES,
+  AUTH_CAMPAIGN_GROUPS,
+  AUTH_CAMPAIGN_ROLES,
 } from '../workflows/campaign_approval/authSetup'
 import { register as registerAuthorization } from '@repo/tasquencer/components/authorization/test'
 import { register as registerAudit } from '@repo/tasquencer/components/audit/test'
@@ -52,19 +52,19 @@ export async function waitForFlush(t: TestContext) {
 }
 
 /**
- * Setup LUcampaignUapproval authorization (roles and groups)
+ * Setup campaign_approval authorization (roles and groups)
  */
-export async function setupUcampaignUapprovalAuthorization(t: TestContext) {
+export async function setupCampaignApprovalAuthorization(t: TestContext) {
   await t.mutation(
-    internal.workflows.LUcampaignUapproval.authSetup.setupAuthUcampaignUapprovalAuthorization,
+    internal.workflows.campaign_approval.authSetup.setupCampaignApprovalAuthorization,
     {},
   )
 }
 
 /**
- * Create and authenticate a user with LUcampaignUapproval staff role
+ * Create and authenticate a user with campaign_approval staff role
  */
-export async function setupAuthenticatedUcampaignUapprovalUser(t: TestContext) {
+export async function setupAuthenticatedCampaignUser(t: TestContext) {
   const userId = await t.run(async (ctx) => {
     return await ctx.db.insert('users', {})
   })
@@ -72,11 +72,11 @@ export async function setupAuthenticatedUcampaignUapprovalUser(t: TestContext) {
   const group = await t.query(
     components.tasquencerAuthorization.api.getGroupByName,
     {
-      name: AUTH_GREETING_GROUPS.GREETING_TEAM,
+      name: AUTH_CAMPAIGN_GROUPS.CAMPAIGN_TEAM,
     },
   )
 
-  // Find the LUcampaignUapproval team group
+  // Find the campaign_approval team group
 
   if (group) {
     await t.mutation(
@@ -91,7 +91,7 @@ export async function setupAuthenticatedUcampaignUapprovalUser(t: TestContext) {
   const role = await t.query(
     components.tasquencerAuthorization.api.getRoleByName,
     {
-      name: AUTH_GREETING_ROLES.GREETING_STAFF,
+      name: AUTH_CAMPAIGN_ROLES.CAMPAIGN_STAFF,
     },
   )
 

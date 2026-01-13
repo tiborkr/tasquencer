@@ -26,10 +26,10 @@ import {
 } from 'lucide-react'
 
 export const Route = createFileRoute('/_app/simple/tasks/store/$workItemId')({
-  component: StoreUcampaignUapprovalTask,
+  component: StoreCampaignTask,
 })
 
-function StoreUcampaignUapprovalTask() {
+function StoreCampaignTask() {
   const { workItemId } = Route.useParams()
 
   return (
@@ -50,7 +50,7 @@ function TaskPageInner({
   const [isStarted, setIsStarted] = useState(false)
 
   const startMutation = useMutation({
-    mutationFn: useConvexMutation(api.workflows.LUcampaignUapproval.api.startWorkItem),
+    mutationFn: useConvexMutation(api.workflows.campaign_approval.api.startWorkItem),
     onSuccess: () => {
       setIsStarted(true)
     },
@@ -60,7 +60,7 @@ function TaskPageInner({
   })
 
   const completeMutation = useMutation({
-    mutationFn: useConvexMutation(api.workflows.LUcampaignUapproval.api.completeWorkItem),
+    mutationFn: useConvexMutation(api.workflows.campaign_approval.api.completeWorkItem),
     onSuccess: () => {
       navigate({ to: '/simple' })
     },
@@ -73,21 +73,21 @@ function TaskPageInner({
     setError(null)
     startMutation.mutate({
       workItemId,
-      args: { name: 'storeUcampaignUapproval' },
+      args: { name: 'storeCampaign' },
     })
   }
 
   const handleComplete = (e: React.FormEvent) => {
     e.preventDefault()
     if (!message.trim()) {
-      setError('Please enter a LUcampaignUapproval message')
+      setError('Please enter a LCampaign message')
       return
     }
     setError(null)
     completeMutation.mutate({
       workItemId,
       args: {
-        name: 'storeUcampaignUapproval',
+        name: 'storeCampaign',
         payload: { message: message.trim() },
       },
     })
@@ -106,11 +106,11 @@ function TaskPageInner({
             </div>
             <div>
               <h1 className="text-2xl font-semibold tracking-tight">
-                Store UcampaignUapproval
+                Store Campaign
               </h1>
               <p className="text-sm text-muted-foreground">
                 {isStarted
-                  ? 'Enter your LUcampaignUapproval message'
+                  ? 'Enter your LCampaign message'
                   : 'Claim this task to get started'}
               </p>
             </div>
@@ -126,7 +126,7 @@ function TaskPageInner({
           <Button asChild variant="outline" size="sm">
             <Link to="/simple">
               <ListTodo className="mr-2 h-4 w-4" />
-              All UcampaignUapprovals
+              All Campaigns
             </Link>
           </Button>
         </div>
@@ -174,7 +174,7 @@ function TaskPageInner({
                       <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-medium flex-shrink-0">
                         2
                       </span>
-                      <span>You'll enter a LUcampaignUapproval message</span>
+                      <span>You'll enter a LCampaign message</span>
                     </li>
                     <li className="flex items-start gap-2">
                       <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-medium flex-shrink-0">
@@ -215,10 +215,10 @@ function TaskPageInner({
                 </div>
                 <div>
                   <CardTitle className="text-lg">
-                    Enter UcampaignUapproval Message
+                    Enter Campaign Message
                   </CardTitle>
                   <CardDescription className="text-sm">
-                    Type your LUcampaignUapproval to complete the workflow
+                    Type your LCampaign to complete the workflow
                   </CardDescription>
                 </div>
               </div>
@@ -234,7 +234,7 @@ function TaskPageInner({
 
                   <div className="space-y-2">
                     <Label htmlFor="message" className="text-sm font-medium">
-                      UcampaignUapproval Message
+                      Campaign Message
                     </Label>
                     <Input
                       id="message"
@@ -245,7 +245,7 @@ function TaskPageInner({
                       className="h-11"
                     />
                     <p className="text-xs text-muted-foreground">
-                      Enter a friendly LUcampaignUapproval message to store
+                      Enter a friendly LCampaign message to store
                     </p>
                   </div>
 

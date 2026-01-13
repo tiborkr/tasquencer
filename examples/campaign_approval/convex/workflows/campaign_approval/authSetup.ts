@@ -3,32 +3,32 @@ import { internalMutation } from '../../_generated/server'
 import type { AppScope } from '../../authorization'
 
 /**
- * UcampaignUapproval workflow auth role and group constants
+ * Campaign approval workflow auth role and group constants
  */
-export const AUTH_GREETING_ROLES = {
-  GREETING_STAFF: 'LUcampaignUapproval_staff',
+export const AUTH_CAMPAIGN_ROLES = {
+  CAMPAIGN_STAFF: 'campaign_approval_staff',
 } as const
 
-export const AUTH_GREETING_GROUPS = {
-  GREETING_TEAM: 'LUcampaignUapproval_team',
+export const AUTH_CAMPAIGN_GROUPS = {
+  CAMPAIGN_TEAM: 'campaign_approval_team',
 } as const
 
 /**
- * Setup LUcampaignUapproval workflow authorization (roles, groups, scopes)
- * Creates the necessary auth structures for LUcampaignUapproval workflow
+ * Setup campaign_approval workflow authorization (roles, groups, scopes)
+ * Creates the necessary auth structures for campaign_approval workflow
  */
-export const setupAuthUcampaignUapprovalAuthorization = internalMutation({
+export const setupCampaignApprovalAuthorization = internalMutation({
   args: {},
   handler: async (ctx) => {
-    const scopes: AppScope[] = ['LUcampaignUapproval:staff', 'LUcampaignUapproval:write']
+    const scopes: AppScope[] = ['campaign_approval:staff', 'campaign_approval:write']
 
     const roleIds = await ctx.runMutation(
       components.tasquencerAuthorization.api.insertAuthRoles,
       {
         roles: [
           {
-            name: AUTH_GREETING_ROLES.GREETING_STAFF,
-            description: 'Role for LUcampaignUapproval workflow staff',
+            name: AUTH_CAMPAIGN_ROLES.CAMPAIGN_STAFF,
+            description: 'Role for campaign_approval workflow staff',
             scopes,
             isActive: true,
           },
@@ -36,14 +36,14 @@ export const setupAuthUcampaignUapprovalAuthorization = internalMutation({
       },
     )
 
-    // Create LUcampaignUapproval_team group
+    // Create campaign_approval_team group
     const groupIds = await ctx.runMutation(
       components.tasquencerAuthorization.api.insertAuthGroups,
       {
         groups: [
           {
-            name: AUTH_GREETING_GROUPS.GREETING_TEAM,
-            description: 'UcampaignUapproval workflow team members',
+            name: AUTH_CAMPAIGN_GROUPS.CAMPAIGN_TEAM,
+            description: 'Campaign approval workflow team members',
             isActive: true,
           },
         ],
@@ -55,7 +55,7 @@ export const setupAuthUcampaignUapprovalAuthorization = internalMutation({
 
     if (!roleId || !groupId) {
       throw new Error(
-        `Failed to create LUcampaignUapproval auth role/group (roles: ${roleIds.length}, groups: ${groupIds.length})`,
+        `Failed to create campaign_approval auth role/group (roles: ${roleIds.length}, groups: ${groupIds.length})`,
       )
     }
 
