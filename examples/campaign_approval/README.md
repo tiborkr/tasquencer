@@ -1,6 +1,6 @@
-# UcampaignUapproval Example
+# Campaign Approval Example
 
-A simple workflow example demonstrating Tasquencer with Convex, Better Auth, and React. This example shows how to build a human-in-the-loop workflow where users can claim and complete tasks through a work queue.
+An enterprise marketing campaign approval workflow demonstrating Tasquencer with Convex, Better Auth, and React. This example shows how to build complex multi-phase human-in-the-loop workflows with role-based authorization, XOR/AND routing, and revision loops.
 
 ## Tech Stack
 
@@ -12,167 +12,124 @@ A simple workflow example demonstrating Tasquencer with Convex, Better Auth, and
 
 ## Workflow Architecture
 
-The campaignApproval workflow is a minimal example that demonstrates the core Tasquencer patterns:
+The campaign approval workflow implements an 8-phase enterprise marketing campaign lifecycle with 35 tasks, parallel execution, and approval loops:
 
 ```
-[start] → [storeUcampaignUapproval] → [end]
+Phase 1: Initiation
+[start] → [submitRequest] → [intakeReview] → {XOR: approved/rejected/needs_changes}
+    ├── approved → [assignOwner] → Phase 2
+    ├── rejected → [end]
+    └── needs_changes → [submitRequest] (loop)
+
+Phase 2: Strategy (sequential)
+[conductResearch] → [defineMetrics] → [developStrategy] → [createPlan] → Phase 3
+
+Phase 3: Budget
+[developBudget] → {XOR: by amount}
+    ├── < $50k → [directorApproval]
+    └── >= $50k → [executiveApproval]
+        → {XOR: approved/rejected/revision}
+            ├── approved → [secureResources] → Phase 4
+            ├── rejected → [end]
+            └── revision → [developBudget] (loop)
+
+Phase 4: Creative Development
+[createBrief] → [developConcepts] → [internalReview] → {XOR}
+    ├── approved → [legalReview] → {XOR}
+    │       ├── approved → [finalApproval] → Phase 5
+    │       └── needs_changes → [legalRevise] → [legalReview] (loop)
+    └── needs_revision → [reviseAssets] → [internalReview] (loop)
+
+Phase 5: Technical Setup (parallel)
+[finalApproval] → {AND split: 3 parallel tasks}
+    ├── [buildInfra]
+    ├── [configAnalytics]
+    └── [setupMedia]
+        → {AND join} → [qaTest] → {XOR}
+            ├── passed → Phase 6
+            └── failed → [fixIssues] → [qaTest] (loop)
+
+Phase 6: Launch
+[preLaunchReview] → {XOR}
+    ├── ready → [launchApproval] → {XOR}
+    │       ├── approved → [internalComms] → Phase 7
+    │       ├── concerns → [addressConcerns] → [preLaunchReview] (loop)
+    │       └── rejected → [end]
+    └── not ready → [addressConcerns] → [preLaunchReview] (loop)
+
+Phase 7: Execution
+[launchCampaign] → [monitorPerformance] → [ongoingOptimization] → {XOR}
+    ├── continue → [monitorPerformance] (loop)
+    └── end → Phase 8
+
+Phase 8: Closure (sequential)
+[endCampaign] → [compileData] → [conductAnalysis] → [presentResults] → [archiveMaterials] → [end]
 ```
 
 ### Directory Structure
 
 ```
 convex/workflows/campaign_approval/
-├── definition.ts          # Version manager setup
+├── definition.ts              # Version manager setup
 ├── workflows/
-│   └── campaignApproval.workflow.ts   # Workflow definition
+│   └── campaign_approval.workflow.ts   # 35-task workflow definition
 ├── workItems/
-│   ├── storeUcampaignUapproval.workItem.ts  # Human task implementation
-│   └── authHelpers.ts     # Work item auth initialization
-├── api.ts                 # Public API endpoints
-├── schema.ts              # Database tables
-├── scopes.ts              # Authorization scopes
-├── db.ts                  # Database helpers
-├── helpers.ts             # Work item metadata helpers
-└── authSetup.ts           # Role & group setup
+│   ├── initiation/            # Phase 1: submitRequest, intakeReview, assignOwner
+│   ├── strategy/              # Phase 2: conductResearch, defineMetrics, etc.
+│   ├── budget/                # Phase 3: developBudget, approvals, secureResources
+│   ├── creative/              # Phase 4: createBrief, reviews, revisions
+│   ├── technical/             # Phase 5: buildInfra, configAnalytics, setupMedia, qaTest
+│   ├── launch/                # Phase 6: preLaunchReview, launchApproval, internalComms
+│   ├── execution/             # Phase 7: launchCampaign, monitor, optimize
+│   ├── closure/               # Phase 8: endCampaign, analysis, archive
+│   └── authHelpers.ts         # Work item auth initialization
+├── api.ts                     # Public API endpoints
+├── schema.ts                  # Database tables (campaigns, budgets, creatives, KPIs)
+├── scopes.ts                  # 12 authorization scopes
+├── db.ts                      # 18 database helpers
+├── helpers.ts                 # Work item metadata helpers
+└── authSetup.ts               # 10 roles & 10 groups setup
 ```
 
-### Workflow Definition
+### Authorization Model
 
-**[campaignApproval.workflow.ts](convex/workflows/campaign_approval/workflows/campaignApproval.workflow.ts)**
+**12 Scopes** control access to workflow tasks:
+- `campaign:read`, `campaign:request`, `campaign:intake`, `campaign:manage`
+- `campaign:creative_write`, `campaign:creative_review`, `campaign:legal_review`
+- `campaign:budget_approve_low` (< $50k), `campaign:budget_approve_high` (>= $50k)
+- `campaign:launch_approve`, `campaign:ops`, `campaign:media`
 
-The workflow initializes by creating a campaignApproval record with an empty message:
-
-```typescript
-const campaignApprovalWorkflowActions = Builder.workflowActions().initialize(
-  z.any(),
-  async ({ mutationCtx, workflow }) => {
-    const workflowId = await workflow.initialize()
-
-    // Create campaignApproval aggregate root with empty message
-    await insertUcampaignUapproval(mutationCtx.db, {
-      workflowId,
-      message: '',
-      createdAt: Date.now(),
-    })
-  },
-)
-
-export const campaignApprovalWorkflow = Builder.workflow('campaign_approval')
-  .withActions(campaignApprovalWorkflowActions)
-  .startCondition('start')
-  .task('storeUcampaignUapproval', storeUcampaignUapprovalTask)
-  .endCondition('end')
-  .connectCondition('start', (to) => to.task('storeUcampaignUapproval'))
-  .connectTask('storeUcampaignUapproval', (to) => to.condition('end'))
-```
-
-### Work Item (Human Task)
-
-**[storeUcampaignUapproval.workItem.ts](convex/workflows/campaign_approval/workItems/storeUcampaignUapproval.workItem.ts)**
-
-The `storeUcampaignUapproval` work item is a human task with claim-based assignment:
-
-1. **Start Action**: Claims the work item for the authenticated user
-2. **Complete Action**: Validates the user claimed the item, then updates the campaignApproval message
-
-```typescript
-const storeUcampaignUapprovalActions = authService.builders.workItemActions
-  .start(z.never(), storeWritePolicy, async ({ mutationCtx, workItem }) => {
-    // Automatically claims work item for current user
-    await UcampaignUapprovalWorkItemHelpers.claimWorkItem(mutationCtx, workItem.id, userId)
-    await workItem.start()
-  })
-  .complete(
-    z.object({ message: z.string().min(1) }),
-    storeWritePolicy,
-    async ({ mutationCtx, workItem, parent }, payload) => {
-      // Verify user claimed this item before completing
-      // Update campaignApproval message in database
-    },
-  )
-```
-
-### Authorization Scopes
-
-**[scopes.ts](convex/workflows/campaign_approval/scopes.ts)**
-
-Two scopes control access to the campaignApproval workflow:
-
-- `campaignApproval:staff` - Base scope for viewing campaignApprovals and work queue
-- `campaignApproval:write` - Permission to claim and complete campaignApproval tasks
+**10 Roles** bundle scopes for different personas:
+- `campaign_requester`, `campaign_coordinator`, `campaign_manager`
+- `campaign_creative`, `campaign_creative_lead`, `campaign_legal`
+- `campaign_ops`, `campaign_media`, `campaign_director`, `campaign_executive`
 
 ### API Endpoints
 
-**[api.ts](convex/workflows/campaign_approval/api.ts)**
-
 | Endpoint | Type | Description |
 |----------|------|-------------|
-| `initializeRootWorkflow` | Mutation | Start a new campaignApproval workflow |
+| `initializeRootWorkflow` | Mutation | Start a new campaign workflow |
 | `startWorkItem` | Mutation | Claim and start a work item |
-| `completeWorkItem` | Mutation | Complete work item with message |
-| `getUcampaignUapprovals` | Query | List all campaignApprovals |
-| `getUcampaignUapprovalWorkQueue` | Query | Get available work items for user |
-| `claimUcampaignUapprovalWorkItem` | Mutation | Claim a work item |
+| `completeWorkItem` | Mutation | Complete work item with payload |
+| `getCampaign` | Query | Get campaign by workflow ID |
+| `getCampaigns` | Query | List all campaigns |
+| `getMyCampaigns` | Query | Campaigns where user is requester/owner |
+| `getCampaignWorkQueue` | Query | Available work items for user |
+| `claimCampaignWorkItem` | Mutation | Claim a work item |
 
 ## UI Integration
-
-The frontend uses TanStack Router with file-based routing and TanStack Query for data fetching.
 
 ### Pages
 
 | Route | Description |
 |-------|-------------|
-| `/simple` | List all campaignApprovals with stats |
-| `/simple/new` | Create new campaignApproval workflow |
+| `/campaigns` | Campaign list with status badges |
+| `/campaigns/new` | Submit new campaign request |
+| `/campaigns/$id` | Campaign detail with workflow timeline |
+| `/campaigns/$id/budget` | Budget breakdown visualization |
+| `/campaigns/$id/creatives` | Creative assets gallery |
 | `/simple/queue` | Work queue with claimable tasks |
-| `/simple/tasks/store/$workItemId` | Claim & complete a campaignApproval task |
-
-### Data Flow Pattern
-
-```
-User Action (Click)
-    ↓
-useMutation + useConvexMutation
-    ↓
-Convex API (api.workflows.campaignApproval.api.*)
-    ↓
-Tasquencer Workflow Engine
-    ↓
-Database Update
-    ↓
-Real-time Subscription (convexQuery)
-    ↓
-useSuspenseQuery Re-render
-```
-
-### Example: Creating a Workflow
-
-```typescript
-const initializeMutation = useMutation({
-  mutationFn: useConvexMutation(api.workflows.campaignApproval.api.initializeRootWorkflow),
-  onSuccess: () => navigate({ to: '/simple/queue' }),
-})
-
-// Trigger workflow creation
-initializeMutation.mutate({ payload: {} })
-```
-
-### Example: Completing a Task
-
-```typescript
-const completeMutation = useMutation({
-  mutationFn: useConvexMutation(api.workflows.campaignApproval.api.completeWorkItem),
-})
-
-// Complete with message payload
-completeMutation.mutate({
-  workItemId,
-  args: {
-    name: 'storeUcampaignUapproval',
-    payload: { message: 'Hello, World!' },
-  },
-})
-```
+| `/simple/tasks/$workItemId` | Generic task execution page (all 35 tasks) |
 
 ## Setup
 
@@ -188,16 +145,9 @@ pnpm install
 npx convex dev
 ```
 
-This will:
-- Create a new Convex project (if first time)
-- Generate `.env.local` with your deployment URLs
-- Start the Convex dev server
-
 ### 3. Configure Better Auth
 
-Set up the required environment variables. See the [Better Auth + TanStack Start guide](https://labs.convex.dev/better-auth/framework-guides/tanstack-start#set-environment-variables) for details.
-
-Your `.env.local` should contain:
+Set up environment variables in `.env.local`:
 
 ```bash
 CONVEX_DEPLOYMENT=dev:your-project-name
@@ -212,33 +162,37 @@ SITE_URL=http://localhost:3000
 pnpm dev
 ```
 
-Open `http://localhost:3000` and register a new user account.
-
 ### 5. Run Setup Mutations
 
-After registering your first user, run these Convex mutations from the CLI:
-
 ```bash
-# Create superadmin role and assign to your user
+# Create superadmin role
 npx convex run scaffold:scaffoldSuperadmin
 
-# Create campaignApproval workflow roles and groups
-npx convex run workflows:campaignApproval:authSetup
+# Create campaign workflow roles and groups
+npx convex run workflows:campaign_approval:authSetup
 ```
 
-See the [Convex CLI documentation](https://docs.convex.dev/cli#run-convex-functions) for more details on running functions.
+### 6. Assign User to Groups
 
-### 6. Assign User to UcampaignUapproval Team
-
-After running the setup mutations, assign your user to the `campaignApproval_team` group through the Admin UI at `/admin/groups` to grant access to the campaignApproval workflow.
+Assign your user to appropriate groups through `/admin/groups`:
+- `marketing_requesters` - Submit campaign requests
+- `marketing_coordinators` - Review intake
+- `marketing_managers` - Manage campaigns
+- `creative_team` / `creative_leads` - Creative development
+- `legal_team` - Legal review
+- `marketing_ops` / `media_team` - Technical setup
+- `marketing_directors` - Budget approval < $50k, launch approval
+- `marketing_executives` - Budget approval >= $50k
 
 ## Usage
 
-1. Navigate to **Simple UcampaignUapproval > New UcampaignUapproval** to create a workflow
-2. Go to **Work Queue** to see pending tasks
-3. Click **Claim & Start** on a work item
-4. Enter a campaignApproval message and click **Complete Task**
-5. View completed campaignApprovals in **All UcampaignUapprovals**
+1. Navigate to **Campaigns > New Campaign** to submit a request
+2. As coordinator, review in **Work Queue** and approve/reject
+3. As manager, work through strategy, budget, and creative phases
+4. Parallel technical setup runs after creative approval
+5. Complete launch approval and internal communications
+6. Monitor and optimize during execution
+7. Close campaign with analysis and archive
 
 ## Admin Features
 

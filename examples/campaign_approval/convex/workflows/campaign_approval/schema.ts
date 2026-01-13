@@ -381,12 +381,6 @@ const archiveMaterialsPayload = v.object({
   archiveComplete: v.optional(v.boolean()),
 })
 
-// Legacy: Placeholder task for initial development (will be replaced by spec tasks)
-const storeCampaignPayload = v.object({
-  type: v.literal('storeCampaign'),
-  taskName: v.string(),
-})
-
 /**
  * Work item metadata table for campaign_approval workflow
  * Uses auth scope-based authorization with discriminated union payload
@@ -436,8 +430,6 @@ const campaignWorkItems = defineWorkItemMetadataTable('campaigns').withPayload(
     conductAnalysisPayload,
     presentResultsPayload,
     archiveMaterialsPayload,
-    // Legacy placeholder task
-    storeCampaignPayload,
   ),
 )
 

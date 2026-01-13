@@ -428,21 +428,9 @@ const TASK_CONFIGS: Record<string, TaskConfig> = {
     confirmationLabel: 'All materials have been archived',
     completionPayload: () => ({ archiveComplete: true }),
   },
-
-  // Legacy task
-  storeCampaign: {
-    category: 'confirmation',
-    title: 'Store Campaign',
-    description: 'Legacy task',
-    icon: FileText,
-    phase: 0,
-    confirmationLabel: 'Confirmed',
-    completionPayload: () => ({ confirmed: true }),
-  },
 }
 
 const PHASE_NAMES: Record<number, string> = {
-  0: 'Legacy',
   1: 'Initiation',
   2: 'Strategy',
   3: 'Budget',

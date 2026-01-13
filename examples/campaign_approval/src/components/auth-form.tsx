@@ -72,7 +72,6 @@ function SignInForm({
         },
       },
     )
-    console.log('authClient.signIn.email done')
   }
   return (
     <Form {...form}>
