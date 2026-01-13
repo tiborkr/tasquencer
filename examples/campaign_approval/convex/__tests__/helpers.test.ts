@@ -62,45 +62,83 @@ export async function setupCampaignApprovalAuthorization(t: TestContext) {
 }
 
 /**
- * Create and authenticate a user with campaign_approval staff role
+ * Create and authenticate a user with multiple campaign_approval roles
+ * Gives user both CAMPAIGN_REQUESTER (for submitting) and CAMPAIGN_COORDINATOR (for intake review)
+ * so they can complete the full Phase 1: Initiation workflow in tests.
  */
 export async function setupAuthenticatedCampaignUser(t: TestContext) {
   const userId = await t.run(async (ctx) => {
     return await ctx.db.insert('users', {})
   })
 
-  const group = await t.query(
+  // Add user to marketing_coordinators group
+  const coordinatorsGroup = await t.query(
     components.tasquencerAuthorization.api.getGroupByName,
     {
       name: AUTH_CAMPAIGN_GROUPS.MARKETING_COORDINATORS,
     },
   )
 
-  // Find the campaign_approval team group
-
-  if (group) {
+  if (coordinatorsGroup) {
     await t.mutation(
       components.tasquencerAuthorization.api.addUserToAuthGroup,
       {
         userId,
-        groupId: group._id,
+        groupId: coordinatorsGroup._id,
       },
     )
   }
 
-  const role = await t.query(
+  // Add user to marketing_requesters group (for submitRequest task)
+  const requestersGroup = await t.query(
+    components.tasquencerAuthorization.api.getGroupByName,
+    {
+      name: AUTH_CAMPAIGN_GROUPS.MARKETING_REQUESTERS,
+    },
+  )
+
+  if (requestersGroup) {
+    await t.mutation(
+      components.tasquencerAuthorization.api.addUserToAuthGroup,
+      {
+        userId,
+        groupId: requestersGroup._id,
+      },
+    )
+  }
+
+  // Assign CAMPAIGN_COORDINATOR role
+  const coordinatorRole = await t.query(
     components.tasquencerAuthorization.api.getRoleByName,
     {
       name: AUTH_CAMPAIGN_ROLES.CAMPAIGN_COORDINATOR,
     },
   )
 
-  if (role) {
+  if (coordinatorRole) {
     await t.mutation(
       components.tasquencerAuthorization.api.assignAuthRoleToUser,
       {
         userId,
-        roleId: role._id,
+        roleId: coordinatorRole._id,
+      },
+    )
+  }
+
+  // Assign CAMPAIGN_REQUESTER role (for submitRequest task)
+  const requesterRole = await t.query(
+    components.tasquencerAuthorization.api.getRoleByName,
+    {
+      name: AUTH_CAMPAIGN_ROLES.CAMPAIGN_REQUESTER,
+    },
+  )
+
+  if (requesterRole) {
+    await t.mutation(
+      components.tasquencerAuthorization.api.assignAuthRoleToUser,
+      {
+        userId,
+        roleId: requesterRole._id,
       },
     )
   }
