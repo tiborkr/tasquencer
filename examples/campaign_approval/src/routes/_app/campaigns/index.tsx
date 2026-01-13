@@ -65,7 +65,7 @@ function CampaignsPageInner() {
             </Link>
           </Button>
           <Button asChild size="sm">
-            <Link to="/simple/new">
+            <Link to="/campaigns/new">
               <Plus className="mr-2 h-4 w-4" />
               New Campaign
             </Link>
@@ -122,7 +122,7 @@ function CampaignsPageInner() {
             Create your first campaign to get started
           </p>
           <Button asChild size="sm" className="mt-4">
-            <Link to="/simple/new">
+            <Link to="/campaigns/new">
               <Plus className="mr-2 h-4 w-4" />
               New Campaign
             </Link>
