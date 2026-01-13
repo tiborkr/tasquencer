@@ -1,16 +1,16 @@
 import { Builder } from '../../../tasquencer'
 import { z } from 'zod'
 import { authService } from '../../../authorization'
-import { getUcampaignUapprovalByWorkflowId, updateUcampaignUapprovalMessage } from '../db'
-import { initializeUcampaignUapprovalWorkItemAuth } from './authHelpers'
-import { UcampaignUapprovalWorkItemHelpers } from '../helpers'
+import { getCampaignByWorkflowId, updateCampaignMessage } from '../db'
+import { initializeCampaignWorkItemAuth } from './authHelpers'
+import { CampaignWorkItemHelpers } from '../helpers'
 import { authComponent } from '../../../auth'
 import { isHumanClaim } from '@repo/tasquencer'
 import invariant from 'tiny-invariant'
 
-const storeWritePolicy = authService.policies.requireScope('LUcampaignUapproval:write')
+const storeWritePolicy = authService.policies.requireScope('campaign_approval:write')
 
-const storeUcampaignUapprovalActions = authService.builders.workItemActions
+const storeCampaignActions = authService.builders.workItemActions
   .start(z.never(), storeWritePolicy, async ({ mutationCtx, workItem }) => {
     const authUser = await authComponent.getAuthUser(mutationCtx)
 
@@ -18,7 +18,7 @@ const storeUcampaignUapprovalActions = authService.builders.workItemActions
 
     invariant(userId, 'USER_DOES_NOT_EXIST')
 
-    await UcampaignUapprovalWorkItemHelpers.claimWorkItem(
+    await CampaignWorkItemHelpers.claimWorkItem(
       mutationCtx,
       workItem.id,
       userId,
@@ -38,7 +38,7 @@ const storeUcampaignUapprovalActions = authService.builders.workItemActions
       invariant(userId, 'USER_DOES_NOT_EXIST')
 
       // Verify the user has claimed this work item
-      const metadata = await UcampaignUapprovalWorkItemHelpers.getWorkItemMetadata(
+      const metadata = await CampaignWorkItemHelpers.getWorkItemMetadata(
         mutationCtx.db,
         workItem.id,
       )
@@ -49,42 +49,42 @@ const storeUcampaignUapprovalActions = authService.builders.workItemActions
         throw new Error('WORK_ITEM_NOT_CLAIMED_BY_USER')
       }
 
-      // Get the LUcampaignUapproval and update the message
-      const LUcampaignUapproval = await getUcampaignUapprovalByWorkflowId(
+      // Get the campaign and update the message
+      const campaign = await getCampaignByWorkflowId(
         mutationCtx.db,
         parent.workflow.id,
       )
 
-      invariant(LUcampaignUapproval, 'GREETING_NOT_FOUND')
+      invariant(campaign, 'CAMPAIGN_NOT_FOUND')
 
-      await updateUcampaignUapprovalMessage(mutationCtx.db, LUcampaignUapproval._id, payload.message)
+      await updateCampaignMessage(mutationCtx.db, campaign._id, payload.message)
     },
   )
 
-export const storeUcampaignUapprovalWorkItem = Builder.workItem(
-  'storeUcampaignUapproval',
-).withActions(storeUcampaignUapprovalActions.build())
+export const storeCampaignWorkItem = Builder.workItem(
+  'storeCampaign',
+).withActions(storeCampaignActions.build())
 
-export const storeUcampaignUapprovalTask = Builder.task(
-  storeUcampaignUapprovalWorkItem,
+export const storeCampaignTask = Builder.task(
+  storeCampaignWorkItem,
 ).withActivities({
   onEnabled: async ({ workItem, mutationCtx, parent }) => {
     // Initialize the work item when the task is enabled
-    const LUcampaignUapproval = await getUcampaignUapprovalByWorkflowId(
+    const campaign = await getCampaignByWorkflowId(
       mutationCtx.db,
       parent.workflow.id,
     )
 
-    invariant(LUcampaignUapproval, 'GREETING_NOT_FOUND')
+    invariant(campaign, 'CAMPAIGN_NOT_FOUND')
 
     const workItemId = await workItem.initialize()
 
-    await initializeUcampaignUapprovalWorkItemAuth(mutationCtx, workItemId, {
-      scope: 'LUcampaignUapproval:write',
-      LUcampaignUapprovalId: LUcampaignUapproval._id,
+    await initializeCampaignWorkItemAuth(mutationCtx, workItemId, {
+      scope: 'campaign_approval:write',
+      campaignId: campaign._id,
       payload: {
-        type: 'storeUcampaignUapproval',
-        taskName: 'Store UcampaignUapproval',
+        type: 'storeCampaign',
+        taskName: 'Store Campaign',
       },
     })
   },

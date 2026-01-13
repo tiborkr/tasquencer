@@ -6,15 +6,15 @@ import { Button } from '@repo/ui/components/button'
 import { PlusCircle, ArrowLeft, ListTodo, Loader2 } from 'lucide-react'
 
 export const Route = createFileRoute('/_app/simple/new')({
-  component: NewUcampaignUapproval,
+  component: NewCampaign,
 })
 
-function NewUcampaignUapproval() {
+function NewCampaign() {
   const navigate = useNavigate()
 
   const initializeMutation = useMutation({
     mutationFn: useConvexMutation(
-      api.workflows.LUcampaignUapproval.api.initializeRootWorkflow,
+      api.workflows.campaign_approval.api.initializeRootWorkflow,
     ),
     onSuccess: () => {
       navigate({ to: '/simple/queue' })
@@ -31,13 +31,13 @@ function NewUcampaignUapproval() {
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <PlusCircle className="h-5 w-5 text-muted-foreground" />
-          <h1 className="text-lg font-semibold">New UcampaignUapproval</h1>
+          <h1 className="text-lg font-semibold">New Campaign</h1>
         </div>
         <div className="flex items-center gap-2">
           <Button asChild variant="outline" size="sm">
             <Link to="/simple">
               <ArrowLeft className="mr-2 h-4 w-4" />
-              All UcampaignUapprovals
+              All Campaigns
             </Link>
           </Button>
           <Button asChild variant="outline" size="sm">
@@ -53,9 +53,9 @@ function NewUcampaignUapproval() {
       <div className="max-w-lg mx-auto">
         <div className="rounded-lg border bg-card p-6 space-y-4">
           <div>
-            <h2 className="text-base font-medium">Create UcampaignUapproval Workflow</h2>
+            <h2 className="text-base font-medium">Create Campaign Workflow</h2>
             <p className="text-sm text-muted-foreground mt-1">
-              A work item will be created for you to enter the LUcampaignUapproval message.
+              A work item will be created for you to enter the LCampaign message.
             </p>
           </div>
 
@@ -78,7 +78,7 @@ function NewUcampaignUapproval() {
                 <span className="w-5 h-5 rounded-full bg-primary/10 text-primary text-xs font-medium flex items-center justify-center flex-shrink-0">
                   3
                 </span>
-                <span>You can claim it and enter your LUcampaignUapproval</span>
+                <span>You can claim it and enter your LCampaign</span>
               </li>
             </ol>
           </div>
@@ -97,7 +97,7 @@ function NewUcampaignUapproval() {
             ) : (
               <>
                 <PlusCircle className="mr-2 h-4 w-4" />
-                Create UcampaignUapproval Workflow
+                Create Campaign Workflow
               </>
             )}
           </Button>
@@ -105,7 +105,7 @@ function NewUcampaignUapproval() {
           {initializeMutation.isError && (
             <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3">
               <p className="text-sm text-destructive">
-                Failed to create LUcampaignUapproval. Please try again.
+                Failed to create LCampaign. Please try again.
               </p>
             </div>
           )}

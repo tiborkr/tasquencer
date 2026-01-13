@@ -33,10 +33,10 @@ import {
 } from 'lucide-react'
 
 export const Route = createFileRoute('/_app/simple/queue')({
-  component: UcampaignUapprovalQueue,
+  component: CampaignQueue,
 })
 
-function UcampaignUapprovalQueue() {
+function CampaignQueue() {
   return (
     <Suspense fallback={<QueuePageSkeleton />}>
       <QueuePageInner />
@@ -45,7 +45,7 @@ function UcampaignUapprovalQueue() {
 }
 
 function QueuePageInner() {
-  const q = convexQuery(api.workflows.LUcampaignUapproval.api.getUcampaignUapprovalWorkQueue, {})
+  const q = convexQuery(api.workflows.campaign_approval.api.getCampaignWorkQueue, {})
   const { data: workItems } = useSuspenseQuery(q)
 
   // Calculate stats
@@ -78,13 +78,13 @@ function QueuePageInner() {
           <Button asChild variant="outline" size="sm">
             <Link to="/simple">
               <ArrowLeft className="mr-2 h-4 w-4" />
-              All UcampaignUapprovals
+              All Campaigns
             </Link>
           </Button>
           <Button asChild size="sm">
             <Link to="/simple/new">
               <Plus className="mr-2 h-4 w-4" />
-              New UcampaignUapproval
+              New Campaign
             </Link>
           </Button>
         </div>
@@ -146,12 +146,12 @@ function QueuePageInner() {
               </div>
               <p className="mt-4 text-sm font-medium">No tasks in queue</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                Create a new LUcampaignUapproval to add tasks to the queue
+                Create a new LCampaign to add tasks to the queue
               </p>
               <Button asChild size="sm" className="mt-4">
                 <Link to="/simple/new">
                   <Plus className="mr-2 h-4 w-4" />
-                  New UcampaignUapproval
+                  New Campaign
                 </Link>
               </Button>
             </div>
