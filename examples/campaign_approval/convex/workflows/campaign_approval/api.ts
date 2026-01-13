@@ -164,16 +164,21 @@ export const getCampaignWorkQueue = query({
 
 /**
  * Get workflow task states
+ * Note: Using any cast to avoid TypeScript deep type instantiation
+ * limits with large workflow (18+ tasks)
  */
 export const campaignWorkflowTaskStates = query({
   args: {
     workflowId: v.id('tasquencerWorkflows'),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<Record<string, string>> => {
     await assertUserHasScope(ctx, 'campaign:read')
-    return await getWorkflowTaskStates(ctx.db, {
+    // Cast to any to break deep type chain
+    const getTaskStates = getWorkflowTaskStates as any
+    const result = await getTaskStates(ctx.db, {
       workflowName: 'campaign_approval',
       workflowId: args.workflowId,
     })
+    return result as Record<string, string>
   },
 })

@@ -67,6 +67,8 @@ export async function setupCampaignApprovalAuthorization(t: TestContext) {
  * - CAMPAIGN_REQUESTER: for submitting requests (Phase 1)
  * - CAMPAIGN_COORDINATOR: for intake review and management (Phase 1-2)
  * - CAMPAIGN_EXECUTIVE: for budget approvals (Phase 3) - includes both low and high budget approve scopes
+ * - CAMPAIGN_CREATIVE_LEAD: for creative tasks (Phase 4) - includes creative_write and creative_review
+ * - CAMPAIGN_LEGAL: for legal review tasks (Phase 4)
  */
 export async function setupAuthenticatedCampaignUser(t: TestContext) {
   const userId = await t.run(async (ctx) => {
@@ -127,6 +129,42 @@ export async function setupAuthenticatedCampaignUser(t: TestContext) {
     )
   }
 
+  // Add user to creative_leads group (for creative tasks)
+  const creativeLeadsGroup = await t.query(
+    components.tasquencerAuthorization.api.getGroupByName,
+    {
+      name: AUTH_CAMPAIGN_GROUPS.CREATIVE_LEADS_GROUP,
+    },
+  )
+
+  if (creativeLeadsGroup) {
+    await t.mutation(
+      components.tasquencerAuthorization.api.addUserToAuthGroup,
+      {
+        userId,
+        groupId: creativeLeadsGroup._id,
+      },
+    )
+  }
+
+  // Add user to legal_team group (for legal review tasks)
+  const legalGroup = await t.query(
+    components.tasquencerAuthorization.api.getGroupByName,
+    {
+      name: AUTH_CAMPAIGN_GROUPS.LEGAL_TEAM,
+    },
+  )
+
+  if (legalGroup) {
+    await t.mutation(
+      components.tasquencerAuthorization.api.addUserToAuthGroup,
+      {
+        userId,
+        groupId: legalGroup._id,
+      },
+    )
+  }
+
   // Assign CAMPAIGN_COORDINATOR role
   const coordinatorRole = await t.query(
     components.tasquencerAuthorization.api.getRoleByName,
@@ -177,6 +215,42 @@ export async function setupAuthenticatedCampaignUser(t: TestContext) {
       {
         userId,
         roleId: executiveRole._id,
+      },
+    )
+  }
+
+  // Assign CAMPAIGN_CREATIVE_LEAD role (for creative tasks - includes creative_write and creative_review)
+  const creativeLeadRole = await t.query(
+    components.tasquencerAuthorization.api.getRoleByName,
+    {
+      name: AUTH_CAMPAIGN_ROLES.CAMPAIGN_CREATIVE_LEAD,
+    },
+  )
+
+  if (creativeLeadRole) {
+    await t.mutation(
+      components.tasquencerAuthorization.api.assignAuthRoleToUser,
+      {
+        userId,
+        roleId: creativeLeadRole._id,
+      },
+    )
+  }
+
+  // Assign CAMPAIGN_LEGAL role (for legal review tasks)
+  const legalRole = await t.query(
+    components.tasquencerAuthorization.api.getRoleByName,
+    {
+      name: AUTH_CAMPAIGN_ROLES.CAMPAIGN_LEGAL,
+    },
+  )
+
+  if (legalRole) {
+    await t.mutation(
+      components.tasquencerAuthorization.api.assignAuthRoleToUser,
+      {
+        userId,
+        roleId: legalRole._id,
       },
     )
   }

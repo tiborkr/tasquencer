@@ -23,6 +23,15 @@ import {
   executiveApprovalTask,
   secureResourcesTask,
 } from '../workItems/budget'
+import {
+  createBriefTask,
+  developConceptsTask,
+  internalReviewTask,
+  reviseAssetsTask,
+  legalReviewTask,
+  legalReviseTask,
+  finalApprovalTask,
+} from '../workItems/creative'
 
 /**
  * Campaign request payload schema for workflow initialization
@@ -138,7 +147,55 @@ async function getBudgetApprovalDecision(
 }
 
 /**
- * Campaign Approval Workflow - Phases 1, 2 & 3
+ * Helper to get internal review decision from work item metadata
+ * Used for XOR routing after internal creative review
+ */
+async function getInternalReviewDecision(
+  db: any,
+  workflowId: any,
+): Promise<'approved' | 'needs_revision' | null> {
+  const campaign = await getCampaignByWorkflowId(db, workflowId)
+  if (!campaign) return null
+
+  const workItems = await getCampaignWorkItemsByAggregate(db, campaign._id)
+
+  // Get the most recent internalReview work item (for loop scenarios)
+  const reviewItems = workItems
+    .filter((wi) => wi.payload.type === 'internalReview')
+    .sort((a, b) => b._creationTime - a._creationTime)
+
+  const reviewItem = reviewItems[0]
+  if (!reviewItem || reviewItem.payload.type !== 'internalReview') return null
+
+  return reviewItem.payload.decision ?? null
+}
+
+/**
+ * Helper to get legal review decision from work item metadata
+ * Used for XOR routing after legal review
+ */
+async function getLegalReviewDecision(
+  db: any,
+  workflowId: any,
+): Promise<'approved' | 'needs_changes' | null> {
+  const campaign = await getCampaignByWorkflowId(db, workflowId)
+  if (!campaign) return null
+
+  const workItems = await getCampaignWorkItemsByAggregate(db, campaign._id)
+
+  // Get the most recent legalReview work item (for loop scenarios)
+  const reviewItems = workItems
+    .filter((wi) => wi.payload.type === 'legalReview')
+    .sort((a, b) => b._creationTime - a._creationTime)
+
+  const reviewItem = reviewItems[0]
+  if (!reviewItem || reviewItem.payload.type !== 'legalReview') return null
+
+  return reviewItem.payload.decision ?? null
+}
+
+/**
+ * Campaign Approval Workflow - Phases 1, 2, 3 & 4
  *
  * Phase 1: Initiation
  * start -> submitRequest -> intakeReview -> [XOR routing]
@@ -154,9 +211,16 @@ async function getBudgetApprovalDecision(
  *   - < $50k -> directorApproval -> [XOR routing by decision]
  *   - >= $50k -> executiveApproval -> [XOR routing by decision]
  * Approval decisions:
- *   - approved -> secureResources -> end (TODO: Phase 4)
+ *   - approved -> secureResources -> Phase 4
  *   - rejected -> end
  *   - revision_requested -> developBudget (loop)
+ *
+ * Phase 4: Creative Development
+ * secureResources -> createBrief -> developConcepts -> internalReview -> [XOR routing]
+ *   - approved -> legalReview -> [XOR routing]
+ *       - approved -> finalApproval -> end (TODO: Phase 5)
+ *       - needs_changes -> legalRevise -> legalReview (loop)
+ *   - needs_revision -> reviseAssets -> internalReview (loop)
  *
  * Uses XOR split pattern with route() callback for dynamic path selection.
  */
@@ -182,6 +246,16 @@ export const campaignApprovalWorkflow = Builder.workflow('campaign_approval')
   .task('directorApproval', directorApprovalTask)
   .task('executiveApproval', executiveApprovalTask)
   .task('secureResources', secureResourcesTask)
+  // Phase 4: Creative Tasks
+  // Note: internalReview uses XOR split to route to legalReview or reviseAssets
+  // Note: legalReview uses XOR split to route to finalApproval or legalRevise
+  .task('createBrief', createBriefTask)
+  .task('developConcepts', developConceptsTask)
+  .task('internalReview', internalReviewTask)
+  .task('reviseAssets', reviseAssetsTask)
+  .task('legalReview', legalReviewTask)
+  .task('legalRevise', legalReviseTask)
+  .task('finalApproval', finalApprovalTask)
   // Connections: Start -> Submit Request
   .connectCondition('start', (to) => to.task('submitRequest'))
   // Submit Request -> Intake Review
@@ -275,5 +349,52 @@ export const campaignApprovalWorkflow = Builder.workflow('campaign_approval')
         return route.toCondition('end')
       }),
   )
-  // Secure Resources -> End (TODO: connect to Phase 4 Creative tasks)
-  .connectTask('secureResources', (to) => to.condition('end'))
+  // Secure Resources -> Create Brief (Phase 4 begins)
+  .connectTask('secureResources', (to) => to.task('createBrief'))
+  // Phase 4: Creative Development flow
+  // Create Brief -> Develop Concepts
+  .connectTask('createBrief', (to) => to.task('developConcepts'))
+  // Develop Concepts -> Internal Review
+  .connectTask('developConcepts', (to) => to.task('internalReview'))
+  // Internal Review -> XOR Split (routes to legalReview or reviseAssets)
+  .connectTask('internalReview', (to) =>
+    to
+      .task('legalReview')
+      .task('reviseAssets')
+      .route(async ({ route, mutationCtx, parent }) => {
+        const decision = await getInternalReviewDecision(
+          mutationCtx.db,
+          parent.workflow.id,
+        )
+
+        if (decision === 'approved') {
+          return route.toTask('legalReview')
+        }
+        // needs_revision or no decision -> reviseAssets
+        return route.toTask('reviseAssets')
+      }),
+  )
+  // Revise Assets -> Internal Review (loop back)
+  .connectTask('reviseAssets', (to) => to.task('internalReview'))
+  // Legal Review -> XOR Split (routes to finalApproval or legalRevise)
+  .connectTask('legalReview', (to) =>
+    to
+      .task('finalApproval')
+      .task('legalRevise')
+      .route(async ({ route, mutationCtx, parent }) => {
+        const decision = await getLegalReviewDecision(
+          mutationCtx.db,
+          parent.workflow.id,
+        )
+
+        if (decision === 'approved') {
+          return route.toTask('finalApproval')
+        }
+        // needs_changes or no decision -> legalRevise
+        return route.toTask('legalRevise')
+      }),
+  )
+  // Legal Revise -> Legal Review (loop back)
+  .connectTask('legalRevise', (to) => to.task('legalReview'))
+  // Final Approval -> End (TODO: connect to Phase 5 Technical tasks)
+  .connectTask('finalApproval', (to) => to.condition('end'))

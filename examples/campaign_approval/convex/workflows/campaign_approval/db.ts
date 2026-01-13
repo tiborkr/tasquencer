@@ -174,6 +174,16 @@ export async function insertCampaignCreative(
 }
 
 /**
+ * Get a single creative asset by ID
+ */
+export async function getCampaignCreative(
+  db: DatabaseReader,
+  creativeId: Id<'campaignCreatives'>,
+): Promise<Doc<'campaignCreatives'> | null> {
+  return await db.get(creativeId)
+}
+
+/**
  * List creative assets by campaign ID
  */
 export async function listCreativesByCampaignId(
