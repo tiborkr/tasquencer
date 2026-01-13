@@ -22,6 +22,9 @@ function NewCampaign() {
   const [targetAudience, setTargetAudience] = useState('')
   const [estimatedBudget, setEstimatedBudget] = useState('10000')
 
+  // Note: With 25+ workflow elements, TypeScript type inference hits depth limits (TS2589).
+  // Using @ts-expect-error to suppress. Runtime validation still works via Convex schema.
+  // @ts-expect-error TS2589: Type instantiation is excessively deep due to 25+ workflow tasks
   const initializeMutation = useMutation({
     mutationFn: useConvexMutation(
       api.workflows.campaign_approval.api.initializeRootWorkflow,

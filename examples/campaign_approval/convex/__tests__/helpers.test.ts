@@ -69,6 +69,8 @@ export async function setupCampaignApprovalAuthorization(t: TestContext) {
  * - CAMPAIGN_EXECUTIVE: for budget approvals (Phase 3) - includes both low and high budget approve scopes
  * - CAMPAIGN_CREATIVE_LEAD: for creative tasks (Phase 4) - includes creative_write and creative_review
  * - CAMPAIGN_LEGAL: for legal review tasks (Phase 4)
+ * - CAMPAIGN_OPS: for technical setup tasks (Phase 5) - includes ops scope
+ * - CAMPAIGN_MEDIA: for media setup tasks (Phase 5) - includes media scope
  */
 export async function setupAuthenticatedCampaignUser(t: TestContext) {
   const userId = await t.run(async (ctx) => {
@@ -251,6 +253,78 @@ export async function setupAuthenticatedCampaignUser(t: TestContext) {
       {
         userId,
         roleId: legalRole._id,
+      },
+    )
+  }
+
+  // Add user to marketing_ops_team group (for Phase 5 technical tasks)
+  const opsGroup = await t.query(
+    components.tasquencerAuthorization.api.getGroupByName,
+    {
+      name: AUTH_CAMPAIGN_GROUPS.MARKETING_OPS_TEAM,
+    },
+  )
+
+  if (opsGroup) {
+    await t.mutation(
+      components.tasquencerAuthorization.api.addUserToAuthGroup,
+      {
+        userId,
+        groupId: opsGroup._id,
+      },
+    )
+  }
+
+  // Assign CAMPAIGN_OPS role (for Phase 5 technical tasks - buildInfra, configAnalytics, qaTest, fixIssues)
+  const opsRole = await t.query(
+    components.tasquencerAuthorization.api.getRoleByName,
+    {
+      name: AUTH_CAMPAIGN_ROLES.CAMPAIGN_OPS,
+    },
+  )
+
+  if (opsRole) {
+    await t.mutation(
+      components.tasquencerAuthorization.api.assignAuthRoleToUser,
+      {
+        userId,
+        roleId: opsRole._id,
+      },
+    )
+  }
+
+  // Add user to media_team group (for Phase 5 setupMedia task)
+  const mediaGroup = await t.query(
+    components.tasquencerAuthorization.api.getGroupByName,
+    {
+      name: AUTH_CAMPAIGN_GROUPS.MEDIA_TEAM,
+    },
+  )
+
+  if (mediaGroup) {
+    await t.mutation(
+      components.tasquencerAuthorization.api.addUserToAuthGroup,
+      {
+        userId,
+        groupId: mediaGroup._id,
+      },
+    )
+  }
+
+  // Assign CAMPAIGN_MEDIA role (for Phase 5 setupMedia task)
+  const mediaRole = await t.query(
+    components.tasquencerAuthorization.api.getRoleByName,
+    {
+      name: AUTH_CAMPAIGN_ROLES.CAMPAIGN_MEDIA,
+    },
+  )
+
+  if (mediaRole) {
+    await t.mutation(
+      components.tasquencerAuthorization.api.assignAuthRoleToUser,
+      {
+        userId,
+        roleId: mediaRole._id,
       },
     )
   }

@@ -8,14 +8,22 @@ import { authComponent } from '../../auth'
 import { type HumanWorkItemOffer, isHumanOffer } from '@repo/tasquencer'
 import { assertUserHasScope } from '../../authorization'
 
-// Export version manager API
+// Extract API from version manager
+// Note: With 20+ tasks, TypeScript type inference hits depth limits
+// Using internal/exported pattern to manage type complexity
+const versionApi = campaignApprovalVersionManager.apiForVersion('v1')
+
+// Export work item APIs directly (these don't hit the depth limit)
 export const {
-  initializeRootWorkflow,
   initializeWorkItem,
   startWorkItem,
   completeWorkItem,
   helpers: { getWorkflowTaskStates },
-} = campaignApprovalVersionManager.apiForVersion('v1')
+} = versionApi
+
+// Export initializeRootWorkflow with explicit typing to avoid TS2589
+// The mutation still works correctly at runtime
+export const initializeRootWorkflow = versionApi.initializeRootWorkflow as typeof versionApi.initializeRootWorkflow
 
 function requireHumanOffer(
   metadata: Doc<'campaignWorkItems'>,
