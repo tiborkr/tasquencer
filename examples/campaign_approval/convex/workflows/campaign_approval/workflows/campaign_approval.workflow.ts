@@ -32,6 +32,13 @@ import {
   legalReviseTask,
   finalApprovalTask,
 } from '../workItems/creative'
+import {
+  buildInfraTask,
+  configAnalyticsTask,
+  setupMediaTask,
+  qaTestTask,
+  fixIssuesTask,
+} from '../workItems/technical'
 
 /**
  * Campaign request payload schema for workflow initialization
@@ -195,7 +202,31 @@ async function getLegalReviewDecision(
 }
 
 /**
- * Campaign Approval Workflow - Phases 1, 2, 3 & 4
+ * Helper to get QA test decision from work item metadata
+ * Used for XOR routing after QA testing
+ */
+async function getQaTestDecision(
+  db: any,
+  workflowId: any,
+): Promise<'passed' | 'failed' | null> {
+  const campaign = await getCampaignByWorkflowId(db, workflowId)
+  if (!campaign) return null
+
+  const workItems = await getCampaignWorkItemsByAggregate(db, campaign._id)
+
+  // Get the most recent qaTest work item (for loop scenarios)
+  const testItems = workItems
+    .filter((wi) => wi.payload.type === 'qaTest')
+    .sort((a, b) => b._creationTime - a._creationTime)
+
+  const testItem = testItems[0]
+  if (!testItem || testItem.payload.type !== 'qaTest') return null
+
+  return testItem.payload.decision ?? null
+}
+
+/**
+ * Campaign Approval Workflow - Phases 1, 2, 3, 4 & 5
  *
  * Phase 1: Initiation
  * start -> submitRequest -> intakeReview -> [XOR routing]
@@ -218,11 +249,21 @@ async function getLegalReviewDecision(
  * Phase 4: Creative Development
  * secureResources -> createBrief -> developConcepts -> internalReview -> [XOR routing]
  *   - approved -> legalReview -> [XOR routing]
- *       - approved -> finalApproval -> end (TODO: Phase 5)
+ *       - approved -> finalApproval -> Phase 5
  *       - needs_changes -> legalRevise -> legalReview (loop)
  *   - needs_revision -> reviseAssets -> internalReview (loop)
  *
+ * Phase 5: Technical Setup
+ * finalApproval -> parallelSetup (AND split) -> [3 parallel tasks]
+ *   - buildInfra (campaign:ops)
+ *   - configAnalytics (campaign:ops)
+ *   - setupMedia (campaign:media)
+ * All three -> setupJoin (AND join) -> qaTest -> [XOR routing]
+ *   - passed -> end (TODO: Phase 6 Launch)
+ *   - failed -> fixIssues -> qaTest (loop)
+ *
  * Uses XOR split pattern with route() callback for dynamic path selection.
+ * Uses AND split/join for parallel technical setup tasks.
  */
 export const campaignApprovalWorkflow = Builder.workflow('campaign_approval')
   .withActions(campaignApprovalWorkflowActions)
@@ -256,6 +297,16 @@ export const campaignApprovalWorkflow = Builder.workflow('campaign_approval')
   .task('legalReview', legalReviewTask)
   .task('legalRevise', legalReviseTask)
   .task('finalApproval', finalApprovalTask)
+  // Phase 5: Technical Tasks
+  // Note: Uses AND split for parallel execution and AND join to wait for all
+  // Note: qaTest uses XOR split to route based on pass/fail
+  .dummyTask('parallelSetup', Builder.dummyTask().withSplitType('and'))
+  .task('buildInfra', buildInfraTask)
+  .task('configAnalytics', configAnalyticsTask)
+  .task('setupMedia', setupMediaTask)
+  .dummyTask('setupJoin', Builder.dummyTask().withJoinType('and'))
+  .task('qaTest', qaTestTask)
+  .task('fixIssues', fixIssuesTask)
   // Connections: Start -> Submit Request
   .connectCondition('start', (to) => to.task('submitRequest'))
   // Submit Request -> Intake Review
@@ -396,5 +447,37 @@ export const campaignApprovalWorkflow = Builder.workflow('campaign_approval')
   )
   // Legal Revise -> Legal Review (loop back)
   .connectTask('legalRevise', (to) => to.task('legalReview'))
-  // Final Approval -> End (TODO: connect to Phase 5 Technical tasks)
-  .connectTask('finalApproval', (to) => to.condition('end'))
+  // Final Approval -> Phase 5 Technical Setup (AND split for parallel tasks)
+  .connectTask('finalApproval', (to) => to.task('parallelSetup'))
+  // Phase 5: Technical Setup connections
+  // AND split: parallelSetup -> buildInfra, configAnalytics, setupMedia (all start in parallel)
+  .connectTask('parallelSetup', (to) =>
+    to.task('buildInfra').task('configAnalytics').task('setupMedia'),
+  )
+  // Each parallel task connects to the AND join
+  .connectTask('buildInfra', (to) => to.task('setupJoin'))
+  .connectTask('configAnalytics', (to) => to.task('setupJoin'))
+  .connectTask('setupMedia', (to) => to.task('setupJoin'))
+  // AND join -> QA Test
+  .connectTask('setupJoin', (to) => to.task('qaTest'))
+  // QA Test -> XOR Split (routes to end or fixIssues)
+  .connectTask('qaTest', (to) =>
+    to
+      .condition('end')
+      .task('fixIssues')
+      .route(async ({ route, mutationCtx, parent }) => {
+        const decision = await getQaTestDecision(
+          mutationCtx.db,
+          parent.workflow.id,
+        )
+
+        if (decision === 'passed') {
+          // TODO: Connect to Phase 6 Launch instead of end
+          return route.toCondition('end')
+        }
+        // failed or no decision -> fixIssues
+        return route.toTask('fixIssues')
+      }),
+  )
+  // Fix Issues -> QA Test (loop back)
+  .connectTask('fixIssues', (to) => to.task('qaTest'))
