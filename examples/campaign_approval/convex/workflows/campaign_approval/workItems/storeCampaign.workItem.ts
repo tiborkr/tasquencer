@@ -9,7 +9,7 @@ import { isHumanClaim } from '@repo/tasquencer'
 import invariant from 'tiny-invariant'
 
 const storeWritePolicy = authService.policies.requireScope(
-  'campaign_approval:write',
+  'campaign:manage',
 )
 
 const storeCampaignActions = authService.builders.workItemActions
@@ -85,7 +85,7 @@ export const storeCampaignTask = Builder.task(
     const workItemId = await workItem.initialize()
 
     await initializeCampaignWorkItemAuth(mutationCtx, workItemId, {
-      scope: 'campaign_approval:write',
+      scope: 'campaign:manage',
       campaignId: campaign._id,
       payload: {
         type: 'storeCampaign',

@@ -179,7 +179,7 @@ describe('Campaign Approval Workflow', () => {
       // User without proper scopes should be denied access
       await expect(
         t.query(api.workflows.campaign_approval.api.getCampaignWorkQueue, {}),
-      ).rejects.toThrow('does not have scope campaign_approval:staff')
+      ).rejects.toThrow('does not have scope campaign:read')
     })
   })
 
