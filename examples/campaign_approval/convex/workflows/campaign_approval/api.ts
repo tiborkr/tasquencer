@@ -2,7 +2,17 @@ import { v } from 'convex/values'
 import { mutation, query } from '../../_generated/server'
 import type { Doc, Id } from '../../_generated/dataModel'
 import { campaignApprovalVersionManager } from './definition'
-import { getCampaignByWorkflowId, listCampaigns } from './db'
+import {
+  getCampaignByWorkflowId,
+  listCampaigns,
+  listCampaignsByRequester,
+  listCampaignsByOwner,
+  getCampaign as getCampaignFromDb,
+  getCampaignBudgetByCampaignId,
+  listCreativesByCampaignId,
+  listKPIsByCampaignId,
+  updateCampaign,
+} from './db'
 import { CampaignWorkItemHelpers } from './helpers'
 import { authComponent } from '../../auth'
 import { type HumanWorkItemOffer, isHumanOffer } from '@repo/tasquencer'
@@ -18,6 +28,9 @@ export const {
   initializeWorkItem,
   startWorkItem,
   completeWorkItem,
+  failWorkItem,
+  cancelWorkItem,
+  cancelRootWorkflow,
   helpers: { getWorkflowTaskStates },
 } = versionApi
 
@@ -188,5 +201,216 @@ export const campaignWorkflowTaskStates = query({
       workflowId: args.workflowId,
     })
     return result as Record<string, string>
+  },
+})
+
+// ============================================================================
+// Campaign Query Endpoints
+// ============================================================================
+
+/**
+ * Get campaign by ID with related data
+ */
+export const getCampaignWithDetails = query({
+  args: {
+    campaignId: v.id('campaigns'),
+  },
+  handler: async (ctx, args) => {
+    await assertUserHasScope(ctx, 'campaign:read')
+    const campaign = await getCampaignFromDb(ctx.db, args.campaignId)
+    if (!campaign) {
+      return null
+    }
+
+    // Get related data
+    const [budget, kpis] = await Promise.all([
+      getCampaignBudgetByCampaignId(ctx.db, args.campaignId),
+      listKPIsByCampaignId(ctx.db, args.campaignId),
+    ])
+
+    // Get workflow status
+    const getTaskStates = getWorkflowTaskStates as any
+    const taskStates = await getTaskStates(ctx.db, {
+      workflowName: 'campaign_approval',
+      workflowId: campaign.workflowId,
+    })
+
+    return {
+      campaign,
+      budget,
+      kpis,
+      workflowTaskStates: taskStates as Record<string, string>,
+    }
+  },
+})
+
+/**
+ * Get campaigns owned by or requested by current user
+ */
+export const getMyCampaigns = query({
+  args: {},
+  handler: async (ctx) => {
+    await assertUserHasScope(ctx, 'campaign:read')
+    const authUser = await authComponent.getAuthUser(ctx)
+
+    if (!authUser.userId) {
+      return []
+    }
+
+    const userId = authUser.userId as Id<'users'>
+
+    // Get campaigns where user is requester or owner
+    const [requestedCampaigns, ownedCampaigns] = await Promise.all([
+      listCampaignsByRequester(ctx.db, userId),
+      listCampaignsByOwner(ctx.db, userId),
+    ])
+
+    // Merge and deduplicate by campaign ID
+    const campaignMap = new Map<Id<'campaigns'>, Doc<'campaigns'>>()
+    for (const campaign of requestedCampaigns) {
+      campaignMap.set(campaign._id, campaign)
+    }
+    for (const campaign of ownedCampaigns) {
+      campaignMap.set(campaign._id, campaign)
+    }
+
+    // Sort by creation time descending
+    return Array.from(campaignMap.values()).sort(
+      (a, b) => b._creationTime - a._creationTime,
+    )
+  },
+})
+
+// ============================================================================
+// Budget Query Endpoints
+// ============================================================================
+
+/**
+ * Get budget details for a campaign
+ */
+export const getCampaignBudget = query({
+  args: {
+    campaignId: v.id('campaigns'),
+  },
+  handler: async (ctx, args) => {
+    await assertUserHasScope(ctx, 'campaign:read')
+    return await getCampaignBudgetByCampaignId(ctx.db, args.campaignId)
+  },
+})
+
+// ============================================================================
+// Creative Query Endpoints
+// ============================================================================
+
+/**
+ * Get all creative assets for a campaign
+ */
+export const getCampaignCreatives = query({
+  args: {
+    campaignId: v.id('campaigns'),
+  },
+  handler: async (ctx, args) => {
+    await assertUserHasScope(ctx, 'campaign:read')
+    return await listCreativesByCampaignId(ctx.db, args.campaignId)
+  },
+})
+
+// ============================================================================
+// Work Item Query Endpoints
+// ============================================================================
+
+/**
+ * Get a specific work item with full context including campaign data
+ */
+export const getWorkItem = query({
+  args: {
+    workItemId: v.id('tasquencerWorkItems'),
+  },
+  handler: async (ctx, args) => {
+    await assertUserHasScope(ctx, 'campaign:read')
+
+    // Get work item from tasquencer
+    const workItem = await ctx.db.get(args.workItemId)
+    if (!workItem) {
+      return null
+    }
+
+    // Get campaign work item metadata
+    const metadata = await CampaignWorkItemHelpers.getWorkItemMetadata(
+      ctx.db,
+      args.workItemId,
+    )
+    if (!metadata) {
+      return null
+    }
+
+    // Get campaign details
+    const campaign = await ctx.db.get(
+      metadata.aggregateTableId as Id<'campaigns'>,
+    )
+
+    const offer = isHumanOffer(metadata.offer) ? metadata.offer : null
+
+    return {
+      workItem: {
+        _id: workItem._id,
+        state: workItem.state,
+      },
+      metadata: {
+        _id: metadata._id,
+        workItemId: metadata.workItemId,
+        taskName: metadata.payload.taskName,
+        taskType: metadata.payload.type,
+        payload: metadata.payload,
+        requiredScope: offer?.requiredScope ?? null,
+        requiredGroupId: offer?.requiredGroupId ?? null,
+      },
+      status: deriveWorkItemStatus(workItem, metadata),
+      campaign: campaign
+        ? {
+            _id: campaign._id,
+            name: campaign.name,
+            objective: campaign.objective,
+            status: campaign.status,
+            estimatedBudget: campaign.estimatedBudget,
+            createdAt: campaign.createdAt,
+          }
+        : null,
+    }
+  },
+})
+
+// ============================================================================
+// Workflow Management Endpoints
+// ============================================================================
+
+/**
+ * Cancel an in-progress campaign workflow
+ * Updates campaign status to 'cancelled'
+ *
+ * Note: This mutation only updates the campaign status. To fully cancel the
+ * workflow (stop all in-progress tasks), use the cancelRootWorkflow mutation
+ * separately. Full cancellation requires calling the internal API which needs
+ * to be properly wired through an internal mutation file.
+ *
+ * TODO: Wire up full workflow cancellation through internal.ts
+ */
+export const cancelCampaignWorkflow = mutation({
+  args: {
+    workflowId: v.id('tasquencerWorkflows'),
+    reason: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await assertUserHasScope(ctx, 'campaign:manage')
+
+    // Get the campaign
+    const campaign = await getCampaignByWorkflowId(ctx.db, args.workflowId)
+    if (!campaign) {
+      throw new Error('CAMPAIGN_NOT_FOUND')
+    }
+
+    // Update campaign status to cancelled
+    // The workflow will stop naturally as no work items will be processed
+    await updateCampaign(ctx.db, campaign._id, { status: 'cancelled' })
   },
 })
