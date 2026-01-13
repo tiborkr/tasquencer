@@ -45,6 +45,11 @@ import {
   launchApprovalTask,
   internalCommsTask,
 } from '../workItems/launch'
+import {
+  launchCampaignTask,
+  monitorPerformanceTask,
+  ongoingOptimizationTask,
+} from '../workItems/execution'
 
 /**
  * Campaign request payload schema for workflow initialization
@@ -280,7 +285,32 @@ async function getLaunchApprovalDecision(
 }
 
 /**
- * Campaign Approval Workflow - Phases 1, 2, 3, 4, 5 & 6
+ * Helper to get optimization decision from work item metadata
+ * Used for XOR routing after ongoingOptimization (Phase 7)
+ * Returns 'continue' to loop back to monitoring, 'end' to proceed to closure
+ */
+async function getOptimizationDecision(
+  db: any,
+  workflowId: any,
+): Promise<'continue' | 'end' | null> {
+  const campaign = await getCampaignByWorkflowId(db, workflowId)
+  if (!campaign) return null
+
+  const workItems = await getCampaignWorkItemsByAggregate(db, campaign._id)
+
+  // Get the most recent ongoingOptimization work item (for loop scenarios)
+  const optimizationItems = workItems
+    .filter((wi) => wi.payload.type === 'ongoingOptimization')
+    .sort((a, b) => b._creationTime - a._creationTime)
+
+  const optimizationItem = optimizationItems[0]
+  if (!optimizationItem || optimizationItem.payload.type !== 'ongoingOptimization') return null
+
+  return optimizationItem.payload.decision ?? null
+}
+
+/**
+ * Campaign Approval Workflow - Phases 1, 2, 3, 4, 5, 6 & 7
  *
  * Phase 1: Initiation
  * start -> submitRequest -> intakeReview -> [XOR routing]
@@ -319,15 +349,20 @@ async function getLaunchApprovalDecision(
  * Phase 6: Launch
  * preLaunchReview -> [XOR routing]
  *   - readyForApproval -> launchApproval -> [XOR routing]
- *       - approved -> internalComms -> end (TODO: Phase 7 Execution)
+ *       - approved -> internalComms -> Phase 7
  *       - concerns -> addressConcerns -> preLaunchReview (loop)
  *       - rejected -> end
  *   - not ready -> addressConcerns -> preLaunchReview (loop)
  *
+ * Phase 7: Execution
+ * internalComms -> launchCampaign -> monitorPerformance -> ongoingOptimization -> [XOR routing]
+ *   - continue -> monitorPerformance (loop until campaign end)
+ *   - end -> [end] (TODO: Phase 8 Closure)
+ *
  * Uses XOR split pattern with route() callback for dynamic path selection.
  * Uses AND split/join for parallel technical setup tasks.
  *
- * Note: With 27 tasks + 2 conditions, TypeScript hits type depth limits (TS2589).
+ * Note: With 30 tasks + 2 conditions, TypeScript hits type depth limits (TS2589).
  * Using @ts-expect-error to suppress type checking during build. The workflow
  * still validates types at runtime through Convex schema.
  */
@@ -381,6 +416,12 @@ export const campaignApprovalWorkflow = Builder.workflow('campaign_approval')
   .task('addressConcerns', addressConcernsTask)
   .task('launchApproval', launchApprovalTask)
   .task('internalComms', internalCommsTask)
+  // Phase 7: Execution Tasks
+  // Note: monitorPerformance uses XOR join for input from launchCampaign OR ongoingOptimization loop
+  // Note: ongoingOptimization uses XOR split to route to monitorPerformance (continue) or end
+  .task('launchCampaign', launchCampaignTask)
+  .task('monitorPerformance', monitorPerformanceTask)
+  .task('ongoingOptimization', ongoingOptimizationTask)
   // Connections: Start -> Submit Request
   .connectCondition('start', (to) => to.task('submitRequest'))
   // Submit Request -> Intake Review
@@ -597,5 +638,31 @@ export const campaignApprovalWorkflow = Builder.workflow('campaign_approval')
         return route.toCondition('end')
       }),
   )
-  // Internal Comms -> end (TODO: Connect to Phase 7 Execution)
-  .connectTask('internalComms', (to) => to.condition('end'))
+  // Internal Comms -> Phase 7 Execution
+  .connectTask('internalComms', (to) => to.task('launchCampaign'))
+  // Phase 7: Execution Connections
+  // Launch Campaign -> Monitor Performance
+  // @ts-expect-error TS2589: Type instantiation depth exceeded (30+ workflow elements)
+  .connectTask('launchCampaign', (to: any) => to.task('monitorPerformance'))
+  // Monitor Performance -> Ongoing Optimization
+  // @ts-expect-error TS2589: Type instantiation depth exceeded (30+ workflow elements)
+  .connectTask('monitorPerformance', (to: any) => to.task('ongoingOptimization'))
+  // Ongoing Optimization -> XOR Split (routes to monitorPerformance loop or end)
+  // @ts-expect-error TS2589: Type instantiation depth exceeded (30+ workflow elements)
+  .connectTask('ongoingOptimization', (to: any) =>
+    to
+      .task('monitorPerformance')
+      .condition('end')
+      .route(async ({ route, mutationCtx, parent }: any) => {
+        const decision = await getOptimizationDecision(
+          mutationCtx.db,
+          parent.workflow.id,
+        )
+
+        if (decision === 'continue') {
+          return route.toTask('monitorPerformance')
+        }
+        // end or no decision -> end (TODO: Phase 8 Closure)
+        return route.toCondition('end')
+      }),
+  )

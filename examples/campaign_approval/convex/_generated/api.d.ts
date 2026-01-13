@@ -24,6 +24,7 @@ import type * as workflows_campaign_approval_scopes from "../workflows/campaign_
 import type * as workflows_campaign_approval_workItems_authHelpers from "../workflows/campaign_approval/workItems/authHelpers.js";
 import type * as workflows_campaign_approval_workItems_budget_index from "../workflows/campaign_approval/workItems/budget/index.js";
 import type * as workflows_campaign_approval_workItems_creative_index from "../workflows/campaign_approval/workItems/creative/index.js";
+import type * as workflows_campaign_approval_workItems_execution_index from "../workflows/campaign_approval/workItems/execution/index.js";
 import type * as workflows_campaign_approval_workItems_initiation_index from "../workflows/campaign_approval/workItems/initiation/index.js";
 import type * as workflows_campaign_approval_workItems_launch_index from "../workflows/campaign_approval/workItems/launch/index.js";
 import type * as workflows_campaign_approval_workItems_strategy_index from "../workflows/campaign_approval/workItems/strategy/index.js";
@@ -53,6 +54,7 @@ declare const fullApi: ApiFromModules<{
   "workflows/campaign_approval/workItems/authHelpers": typeof workflows_campaign_approval_workItems_authHelpers;
   "workflows/campaign_approval/workItems/budget/index": typeof workflows_campaign_approval_workItems_budget_index;
   "workflows/campaign_approval/workItems/creative/index": typeof workflows_campaign_approval_workItems_creative_index;
+  "workflows/campaign_approval/workItems/execution/index": typeof workflows_campaign_approval_workItems_execution_index;
   "workflows/campaign_approval/workItems/initiation/index": typeof workflows_campaign_approval_workItems_initiation_index;
   "workflows/campaign_approval/workItems/launch/index": typeof workflows_campaign_approval_workItems_launch_index;
   "workflows/campaign_approval/workItems/strategy/index": typeof workflows_campaign_approval_workItems_strategy_index;
