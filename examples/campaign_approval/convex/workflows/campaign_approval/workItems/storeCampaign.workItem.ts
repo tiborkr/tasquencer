@@ -1,14 +1,16 @@
 import { Builder } from '../../../tasquencer'
 import { z } from 'zod'
 import { authService } from '../../../authorization'
-import { getCampaignByWorkflowId, updateCampaignMessage } from '../db'
+import { getCampaignByWorkflowId, updateCampaign } from '../db'
 import { initializeCampaignWorkItemAuth } from './authHelpers'
 import { CampaignWorkItemHelpers } from '../helpers'
 import { authComponent } from '../../../auth'
 import { isHumanClaim } from '@repo/tasquencer'
 import invariant from 'tiny-invariant'
 
-const storeWritePolicy = authService.policies.requireScope('campaign_approval:write')
+const storeWritePolicy = authService.policies.requireScope(
+  'campaign_approval:write',
+)
 
 const storeCampaignActions = authService.builders.workItemActions
   .start(z.never(), storeWritePolicy, async ({ mutationCtx, workItem }) => {
@@ -27,7 +29,7 @@ const storeCampaignActions = authService.builders.workItemActions
   })
   .complete(
     z.object({
-      message: z.string().min(1, 'Message is required'),
+      objective: z.string().min(1, 'Objective update is required'),
     }),
     storeWritePolicy,
     async ({ mutationCtx, workItem, parent }, payload) => {
@@ -49,7 +51,7 @@ const storeCampaignActions = authService.builders.workItemActions
         throw new Error('WORK_ITEM_NOT_CLAIMED_BY_USER')
       }
 
-      // Get the campaign and update the message
+      // Get the campaign and update the objective
       const campaign = await getCampaignByWorkflowId(
         mutationCtx.db,
         parent.workflow.id,
@@ -57,7 +59,10 @@ const storeCampaignActions = authService.builders.workItemActions
 
       invariant(campaign, 'CAMPAIGN_NOT_FOUND')
 
-      await updateCampaignMessage(mutationCtx.db, campaign._id, payload.message)
+      await updateCampaign(mutationCtx.db, campaign._id, {
+        objective: payload.objective,
+        status: 'intake_review',
+      })
     },
   )
 

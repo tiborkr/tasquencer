@@ -18,6 +18,25 @@ import {
   setup,
 } from '../../../__tests__/helpers.test'
 
+/**
+ * Helper to create a valid campaign request payload for testing
+ */
+function createTestCampaignPayload(userId: string, overrides?: Record<string, unknown>) {
+  const now = Date.now()
+  return {
+    name: 'Test Campaign',
+    objective: 'Test objective for campaign',
+    targetAudience: 'Test audience',
+    keyMessages: ['Message 1', 'Message 2'],
+    channels: ['email', 'social'] as ('email' | 'paid_ads' | 'social' | 'events' | 'content')[],
+    proposedStartDate: now + 7 * 24 * 60 * 60 * 1000, // 7 days from now
+    proposedEndDate: now + 30 * 24 * 60 * 60 * 1000, // 30 days from now
+    estimatedBudget: 10000,
+    requesterId: userId,
+    ...overrides,
+  }
+}
+
 beforeEach(() => {
   vi.useFakeTimers()
 })
@@ -33,11 +52,11 @@ describe('Campaign Approval Workflow', () => {
       const t = setup()
 
       await setupCampaignApprovalAuthorization(t)
-      await setupAuthenticatedCampaignUser(t)
+      const { userId } = await setupAuthenticatedCampaignUser(t)
 
-      // Initialize the workflow
+      // Initialize the workflow with campaign data
       await t.mutation(api.workflows.campaign_approval.api.initializeRootWorkflow, {
-        payload: {},
+        payload: createTestCampaignPayload(userId),
       })
 
       await waitForFlush(t)
@@ -48,7 +67,9 @@ describe('Campaign Approval Workflow', () => {
         {},
       )
       expect(campaigns.length).toBe(1)
-      expect(campaigns[0].message).toBe('') // Initially empty
+      expect(campaigns[0].name).toBe('Test Campaign')
+      expect(campaigns[0].objective).toBe('Test objective for campaign')
+      expect(campaigns[0].status).toBe('draft')
 
       const workflowId = campaigns[0].workflowId
 
@@ -84,12 +105,12 @@ describe('Campaign Approval Workflow', () => {
       )
       expect(startedTaskStates.storeCampaign).toBe('started')
 
-      // Complete the work item with a message
+      // Complete the work item with an updated objective
       await t.mutation(api.workflows.campaign_approval.api.completeWorkItem, {
         workItemId,
         args: {
           name: 'storeCampaign',
-          payload: { message: 'Hello, World!' },
+          payload: { objective: 'Updated campaign objective' },
         },
       })
 
@@ -102,12 +123,13 @@ describe('Campaign Approval Workflow', () => {
       )
       expect(completedTaskStates.storeCampaign).toBe('completed')
 
-      // Verify the campaign message was stored
+      // Verify the campaign objective was updated and status changed
       const updatedCampaigns = await t.query(
         api.workflows.campaign_approval.api.getCampaigns,
         {},
       )
-      expect(updatedCampaigns[0].message).toBe('Hello, World!')
+      expect(updatedCampaigns[0].objective).toBe('Updated campaign objective')
+      expect(updatedCampaigns[0].status).toBe('intake_review')
     })
   })
 
@@ -116,11 +138,11 @@ describe('Campaign Approval Workflow', () => {
       const t = setup()
 
       await setupCampaignApprovalAuthorization(t)
-      await setupAuthenticatedCampaignUser(t)
+      const { userId } = await setupAuthenticatedCampaignUser(t)
 
       // Initialize the workflow
       await t.mutation(api.workflows.campaign_approval.api.initializeRootWorkflow, {
-        payload: {},
+        payload: createTestCampaignPayload(userId),
       })
 
       await waitForFlush(t)
@@ -142,9 +164,9 @@ describe('Campaign Approval Workflow', () => {
       await setupCampaignApprovalAuthorization(t)
 
       // First create a workflow as an authenticated user
-      const { authSpies } = await setupAuthenticatedCampaignUser(t)
+      const { authSpies, userId } = await setupAuthenticatedCampaignUser(t)
       await t.mutation(api.workflows.campaign_approval.api.initializeRootWorkflow, {
-        payload: {},
+        payload: createTestCampaignPayload(userId),
       })
       await waitForFlush(t)
 
@@ -166,11 +188,11 @@ describe('Campaign Approval Workflow', () => {
       const t = setup()
 
       await setupCampaignApprovalAuthorization(t)
-      await setupAuthenticatedCampaignUser(t)
+      const { userId } = await setupAuthenticatedCampaignUser(t)
 
       // Initialize the workflow
       await t.mutation(api.workflows.campaign_approval.api.initializeRootWorkflow, {
-        payload: {},
+        payload: createTestCampaignPayload(userId),
       })
 
       await waitForFlush(t)
@@ -215,11 +237,11 @@ describe('Campaign Approval Workflow', () => {
       const t = setup()
 
       await setupCampaignApprovalAuthorization(t)
-      await setupAuthenticatedCampaignUser(t)
+      const { userId } = await setupAuthenticatedCampaignUser(t)
 
       // Initialize the workflow
       await t.mutation(api.workflows.campaign_approval.api.initializeRootWorkflow, {
-        payload: {},
+        payload: createTestCampaignPayload(userId),
       })
 
       await waitForFlush(t)
@@ -236,6 +258,8 @@ describe('Campaign Approval Workflow', () => {
 
       expect(campaign).not.toBeNull()
       expect(campaign?.workflowId).toBe(campaigns[0].workflowId)
+      expect(campaign?.name).toBe('Test Campaign')
+      expect(campaign?.estimatedBudget).toBe(10000)
     })
   })
 })

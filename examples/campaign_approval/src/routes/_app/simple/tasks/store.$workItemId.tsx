@@ -5,8 +5,8 @@ import { useConvexMutation } from '@convex-dev/react-query'
 import { api } from '@/convex/_generated/api'
 import type { Id } from '@/convex/_generated/dataModel'
 import { Button } from '@repo/ui/components/button'
-import { Input } from '@repo/ui/components/input'
 import { Label } from '@repo/ui/components/label'
+import { Textarea } from '@repo/ui/components/textarea'
 import {
   Card,
   CardContent,
@@ -22,7 +22,7 @@ import {
   Loader2,
   ListTodo,
   Play,
-  MessageSquare,
+  Target,
 } from 'lucide-react'
 
 export const Route = createFileRoute('/_app/simple/tasks/store/$workItemId')({
@@ -45,12 +45,14 @@ function TaskPageInner({
   workItemId: Id<'tasquencerWorkItems'>
 }) {
   const navigate = useNavigate()
-  const [message, setMessage] = useState('')
+  const [objective, setObjective] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [isStarted, setIsStarted] = useState(false)
 
   const startMutation = useMutation({
-    mutationFn: useConvexMutation(api.workflows.campaign_approval.api.startWorkItem),
+    mutationFn: useConvexMutation(
+      api.workflows.campaign_approval.api.startWorkItem,
+    ),
     onSuccess: () => {
       setIsStarted(true)
     },
@@ -60,7 +62,9 @@ function TaskPageInner({
   })
 
   const completeMutation = useMutation({
-    mutationFn: useConvexMutation(api.workflows.campaign_approval.api.completeWorkItem),
+    mutationFn: useConvexMutation(
+      api.workflows.campaign_approval.api.completeWorkItem,
+    ),
     onSuccess: () => {
       navigate({ to: '/simple' })
     },
@@ -79,8 +83,8 @@ function TaskPageInner({
 
   const handleComplete = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!message.trim()) {
-      setError('Please enter a LCampaign message')
+    if (!objective.trim()) {
+      setError('Please enter an updated campaign objective')
       return
     }
     setError(null)
@@ -88,7 +92,7 @@ function TaskPageInner({
       workItemId,
       args: {
         name: 'storeCampaign',
-        payload: { message: message.trim() },
+        payload: { objective: objective.trim() },
       },
     })
   }
@@ -110,7 +114,7 @@ function TaskPageInner({
               </h1>
               <p className="text-sm text-muted-foreground">
                 {isStarted
-                  ? 'Enter your LCampaign message'
+                  ? 'Update the campaign objective'
                   : 'Claim this task to get started'}
               </p>
             </div>
@@ -174,13 +178,13 @@ function TaskPageInner({
                       <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-medium flex-shrink-0">
                         2
                       </span>
-                      <span>You'll enter a LCampaign message</span>
+                      <span>You&apos;ll update the campaign objective</span>
                     </li>
                     <li className="flex items-start gap-2">
                       <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-medium flex-shrink-0">
                         3
                       </span>
-                      <span>The workflow will complete</span>
+                      <span>The campaign moves to intake review</span>
                     </li>
                   </ul>
                 </div>
@@ -211,14 +215,12 @@ function TaskPageInner({
             <CardHeader className="border-b bg-muted/30 px-6 py-5">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
-                  <MessageSquare className="h-5 w-5" />
+                  <Target className="h-5 w-5" />
                 </div>
                 <div>
-                  <CardTitle className="text-lg">
-                    Enter Campaign Message
-                  </CardTitle>
+                  <CardTitle className="text-lg">Update Objective</CardTitle>
                   <CardDescription className="text-sm">
-                    Type your LCampaign to complete the workflow
+                    Refine the campaign objective before review
                   </CardDescription>
                 </div>
               </div>
@@ -233,19 +235,19 @@ function TaskPageInner({
                   )}
 
                   <div className="space-y-2">
-                    <Label htmlFor="message" className="text-sm font-medium">
-                      Campaign Message
+                    <Label htmlFor="objective" className="text-sm font-medium">
+                      Campaign Objective
                     </Label>
-                    <Input
-                      id="message"
-                      placeholder="Hello, World!"
-                      value={message}
-                      onChange={(e) => setMessage(e.target.value)}
+                    <Textarea
+                      id="objective"
+                      placeholder="Describe the campaign objective..."
+                      value={objective}
+                      onChange={(e) => setObjective(e.target.value)}
                       disabled={isPending}
-                      className="h-11"
+                      rows={4}
                     />
                     <p className="text-xs text-muted-foreground">
-                      Enter a friendly LCampaign message to store
+                      Enter the refined campaign objective
                     </p>
                   </div>
 
