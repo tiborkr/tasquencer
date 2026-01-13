@@ -2290,6 +2290,305 @@ describe('Campaign Approval Workflow', () => {
       expect(taskStates.legalReview).toBe('enabled')
     })
   })
+
+  describe('Phase 7: Execution - Happy Path', () => {
+    it('completes execution phase from launchCampaign through optimization with end decision', async () => {
+      const t = setup()
+
+      await setupCampaignApprovalAuthorization(t)
+      const { userId } = await setupAuthenticatedCampaignUser(t)
+
+      await t.mutation(initializeRootWorkflowMutation, {
+        payload: createTestCampaignPayload(userId, { estimatedBudget: 30000 }),
+      })
+      await waitForFlush(t)
+
+      const campaigns = await t.query(
+        api.workflows.campaign_approval.api.getCampaigns,
+        {},
+      )
+      const workflowId = campaigns[0].workflowId
+
+      // Complete Phases 1-6
+      await completePhase1And2(t, userId)
+      await completePhase3(t)
+      await completePhase4(t)
+      await completePhase5(t)
+      await completePhase6(t)
+
+      // Verify Phase 7 starts with launchCampaign
+      let taskStates = await t.query(
+        api.workflows.campaign_approval.api.campaignWorkflowTaskStates,
+        { workflowId },
+      )
+      expect(taskStates.internalComms).toBe('completed')
+      expect(taskStates.launchCampaign).toBe('enabled')
+      expect(taskStates.monitorPerformance).toBe('disabled')
+
+      // launchCampaign
+      let workQueue = await t.query(
+        api.workflows.campaign_approval.api.getCampaignWorkQueue,
+        {},
+      )
+      expect(workQueue.length).toBe(1)
+      expect(workQueue[0].taskType).toBe('launchCampaign')
+      let workItemId = workQueue[0].workItemId
+
+      await t.mutation(api.workflows.campaign_approval.api.startWorkItem, {
+        workItemId,
+        args: { name: 'launchCampaign' },
+      })
+      await waitForFlush(t)
+      await t.mutation(api.workflows.campaign_approval.api.completeWorkItem, {
+        workItemId,
+        args: {
+          name: 'launchCampaign',
+          payload: {
+            launchedAt: Date.now(),
+            activatedComponents: [
+              { component: 'ads', platform: 'Google Ads', status: 'live' },
+              { component: 'emails', status: 'scheduled', scheduledTime: Date.now() + 24 * 60 * 60 * 1000 },
+            ],
+            launchNotes: 'Campaign launched successfully',
+          },
+        },
+      })
+      await waitForFlush(t)
+
+      // Verify monitorPerformance is enabled
+      taskStates = await t.query(
+        api.workflows.campaign_approval.api.campaignWorkflowTaskStates,
+        { workflowId },
+      )
+      expect(taskStates.launchCampaign).toBe('completed')
+      expect(taskStates.monitorPerformance).toBe('enabled')
+
+      // monitorPerformance
+      workQueue = await t.query(
+        api.workflows.campaign_approval.api.getCampaignWorkQueue,
+        {},
+      )
+      expect(workQueue[0].taskType).toBe('monitorPerformance')
+      workItemId = workQueue[0].workItemId
+
+      await t.mutation(api.workflows.campaign_approval.api.startWorkItem, {
+        workItemId,
+        args: { name: 'monitorPerformance' },
+      })
+      await waitForFlush(t)
+      await t.mutation(api.workflows.campaign_approval.api.completeWorkItem, {
+        workItemId,
+        args: {
+          name: 'monitorPerformance',
+          payload: {
+            monitoringPeriod: { start: Date.now() - 7 * 24 * 60 * 60 * 1000, end: Date.now() },
+            metrics: [
+              { metric: 'impressions', value: 50000, benchmark: 45000, status: 'above_target' },
+              { metric: 'clicks', value: 2500, benchmark: 2000, status: 'above_target' },
+            ],
+            overallStatus: 'healthy',
+          },
+        },
+      })
+      await waitForFlush(t)
+
+      // Verify ongoingOptimization is enabled
+      taskStates = await t.query(
+        api.workflows.campaign_approval.api.campaignWorkflowTaskStates,
+        { workflowId },
+      )
+      expect(taskStates.monitorPerformance).toBe('completed')
+      expect(taskStates.ongoingOptimization).toBe('enabled')
+
+      // ongoingOptimization - end campaign (no more optimization cycles)
+      workQueue = await t.query(
+        api.workflows.campaign_approval.api.getCampaignWorkQueue,
+        {},
+      )
+      expect(workQueue[0].taskType).toBe('ongoingOptimization')
+      workItemId = workQueue[0].workItemId
+
+      await t.mutation(api.workflows.campaign_approval.api.startWorkItem, {
+        workItemId,
+        args: { name: 'ongoingOptimization' },
+      })
+      await waitForFlush(t)
+      await t.mutation(api.workflows.campaign_approval.api.completeWorkItem, {
+        workItemId,
+        args: {
+          name: 'ongoingOptimization',
+          payload: {
+            optimizations: [
+              {
+                type: 'targeting',
+                description: 'Expanded audience segment',
+                expectedImpact: '10% increase in reach',
+                implementedAt: Date.now(),
+              },
+            ],
+            nextReviewDate: Date.now() + 7 * 24 * 60 * 60 * 1000,
+            decision: 'end', // End the optimization loop
+          },
+        },
+      })
+      await waitForFlush(t)
+
+      // Verify workflow reaches end condition
+      taskStates = await t.query(
+        api.workflows.campaign_approval.api.campaignWorkflowTaskStates,
+        { workflowId },
+      )
+      expect(taskStates.ongoingOptimization).toBe('completed')
+      // monitorPerformance should NOT be re-enabled since decision was 'end'
+    })
+  })
+
+  describe('Phase 7: Execution - Optimization Loop', () => {
+    it('loops back to monitorPerformance when optimization continues', async () => {
+      const t = setup()
+
+      await setupCampaignApprovalAuthorization(t)
+      const { userId } = await setupAuthenticatedCampaignUser(t)
+
+      await t.mutation(initializeRootWorkflowMutation, {
+        payload: createTestCampaignPayload(userId, { estimatedBudget: 30000 }),
+      })
+      await waitForFlush(t)
+
+      const campaigns = await t.query(
+        api.workflows.campaign_approval.api.getCampaigns,
+        {},
+      )
+      const workflowId = campaigns[0].workflowId
+
+      // Complete Phases 1-6
+      await completePhase1And2(t, userId)
+      await completePhase3(t)
+      await completePhase4(t)
+      await completePhase5(t)
+      await completePhase6(t)
+
+      // launchCampaign
+      let workQueue = await t.query(
+        api.workflows.campaign_approval.api.getCampaignWorkQueue,
+        {},
+      )
+      let workItemId = workQueue[0].workItemId
+
+      await t.mutation(api.workflows.campaign_approval.api.startWorkItem, {
+        workItemId,
+        args: { name: 'launchCampaign' },
+      })
+      await waitForFlush(t)
+      await t.mutation(api.workflows.campaign_approval.api.completeWorkItem, {
+        workItemId,
+        args: {
+          name: 'launchCampaign',
+          payload: {
+            launchedAt: Date.now(),
+            launchNotes: 'Campaign launched',
+          },
+        },
+      })
+      await waitForFlush(t)
+
+      // monitorPerformance (first cycle)
+      workQueue = await t.query(
+        api.workflows.campaign_approval.api.getCampaignWorkQueue,
+        {},
+      )
+      workItemId = workQueue[0].workItemId
+
+      await t.mutation(api.workflows.campaign_approval.api.startWorkItem, {
+        workItemId,
+        args: { name: 'monitorPerformance' },
+      })
+      await waitForFlush(t)
+      await t.mutation(api.workflows.campaign_approval.api.completeWorkItem, {
+        workItemId,
+        args: {
+          name: 'monitorPerformance',
+          payload: {
+            metrics: [{ metric: 'conversions', value: 100, status: 'below_target' }],
+            overallStatus: 'needs_attention',
+          },
+        },
+      })
+      await waitForFlush(t)
+
+      // ongoingOptimization - continue (more optimization needed)
+      workQueue = await t.query(
+        api.workflows.campaign_approval.api.getCampaignWorkQueue,
+        {},
+      )
+      workItemId = workQueue[0].workItemId
+
+      await t.mutation(api.workflows.campaign_approval.api.startWorkItem, {
+        workItemId,
+        args: { name: 'ongoingOptimization' },
+      })
+      await waitForFlush(t)
+      await t.mutation(api.workflows.campaign_approval.api.completeWorkItem, {
+        workItemId,
+        args: {
+          name: 'ongoingOptimization',
+          payload: {
+            optimizations: [
+              {
+                type: 'bid_adjustment',
+                description: 'Increased bids on high-performing keywords',
+                expectedImpact: '15% increase in conversions',
+                implementedAt: Date.now(),
+              },
+            ],
+            decision: 'continue', // Continue the optimization loop
+          },
+        },
+      })
+      await waitForFlush(t)
+
+      // Verify monitorPerformance is enabled again (loop back)
+      let taskStates = await t.query(
+        api.workflows.campaign_approval.api.campaignWorkflowTaskStates,
+        { workflowId },
+      )
+      expect(taskStates.ongoingOptimization).toBe('completed')
+      expect(taskStates.monitorPerformance).toBe('enabled') // Loop back enabled
+
+      // Complete second monitoring cycle
+      workQueue = await t.query(
+        api.workflows.campaign_approval.api.getCampaignWorkQueue,
+        {},
+      )
+      expect(workQueue[0].taskType).toBe('monitorPerformance')
+      workItemId = workQueue[0].workItemId
+
+      await t.mutation(api.workflows.campaign_approval.api.startWorkItem, {
+        workItemId,
+        args: { name: 'monitorPerformance' },
+      })
+      await waitForFlush(t)
+      await t.mutation(api.workflows.campaign_approval.api.completeWorkItem, {
+        workItemId,
+        args: {
+          name: 'monitorPerformance',
+          payload: {
+            metrics: [{ metric: 'conversions', value: 150, status: 'on_track' }],
+            overallStatus: 'healthy',
+          },
+        },
+      })
+      await waitForFlush(t)
+
+      // Verify ongoingOptimization is enabled again
+      taskStates = await t.query(
+        api.workflows.campaign_approval.api.campaignWorkflowTaskStates,
+        { workflowId },
+      )
+      expect(taskStates.monitorPerformance).toBe('completed')
+      expect(taskStates.ongoingOptimization).toBe('enabled')
+    })
+  })
 })
 
 /**
@@ -2726,6 +3025,75 @@ async function completePhase5(t: ReturnType<typeof setup>) {
   await t.mutation(api.workflows.campaign_approval.api.completeWorkItem, {
     workItemId: workQueue[0].workItemId,
     args: { name: 'qaTest', payload: { result: 'passed' } },
+  })
+  await waitForFlush(t)
+}
+
+/**
+ * Helper function to complete Phase 6 (Launch)
+ * Completes: preLaunchReview (ready), launchApproval (approved), internalComms
+ */
+async function completePhase6(t: ReturnType<typeof setup>) {
+  // preLaunchReview - ready for approval
+  let workQueue = await t.query(
+    api.workflows.campaign_approval.api.getCampaignWorkQueue,
+    {},
+  )
+  let workItemId = workQueue[0].workItemId
+
+  await t.mutation(api.workflows.campaign_approval.api.startWorkItem, {
+    workItemId,
+    args: { name: 'preLaunchReview' },
+  })
+  await waitForFlush(t)
+  await t.mutation(api.workflows.campaign_approval.api.completeWorkItem, {
+    workItemId,
+    args: {
+      name: 'preLaunchReview',
+      payload: { readyForApproval: true },
+    },
+  })
+  await waitForFlush(t)
+
+  // launchApproval - approved
+  workQueue = await t.query(
+    api.workflows.campaign_approval.api.getCampaignWorkQueue,
+    {},
+  )
+  workItemId = workQueue[0].workItemId
+
+  await t.mutation(api.workflows.campaign_approval.api.startWorkItem, {
+    workItemId,
+    args: { name: 'launchApproval' },
+  })
+  await waitForFlush(t)
+  await t.mutation(api.workflows.campaign_approval.api.completeWorkItem, {
+    workItemId,
+    args: {
+      name: 'launchApproval',
+      payload: { decision: 'approved', approverNotes: 'Approved' },
+    },
+  })
+  await waitForFlush(t)
+
+  // internalComms
+  workQueue = await t.query(
+    api.workflows.campaign_approval.api.getCampaignWorkQueue,
+    {},
+  )
+  workItemId = workQueue[0].workItemId
+
+  await t.mutation(api.workflows.campaign_approval.api.startWorkItem, {
+    workItemId,
+    args: { name: 'internalComms' },
+  })
+  await waitForFlush(t)
+  await t.mutation(api.workflows.campaign_approval.api.completeWorkItem, {
+    workItemId,
+    args: {
+      name: 'internalComms',
+      payload: { communicationsSent: true },
+    },
   })
   await waitForFlush(t)
 }
