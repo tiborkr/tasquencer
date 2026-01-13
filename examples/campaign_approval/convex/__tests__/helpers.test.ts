@@ -63,8 +63,10 @@ export async function setupCampaignApprovalAuthorization(t: TestContext) {
 
 /**
  * Create and authenticate a user with multiple campaign_approval roles
- * Gives user both CAMPAIGN_REQUESTER (for submitting) and CAMPAIGN_COORDINATOR (for intake review)
- * so they can complete the full Phase 1: Initiation workflow in tests.
+ * Gives user comprehensive roles to complete full workflow testing:
+ * - CAMPAIGN_REQUESTER: for submitting requests (Phase 1)
+ * - CAMPAIGN_COORDINATOR: for intake review and management (Phase 1-2)
+ * - CAMPAIGN_EXECUTIVE: for budget approvals (Phase 3) - includes both low and high budget approve scopes
  */
 export async function setupAuthenticatedCampaignUser(t: TestContext) {
   const userId = await t.run(async (ctx) => {
@@ -107,6 +109,24 @@ export async function setupAuthenticatedCampaignUser(t: TestContext) {
     )
   }
 
+  // Add user to marketing_executives group (for budget approval tasks)
+  const executivesGroup = await t.query(
+    components.tasquencerAuthorization.api.getGroupByName,
+    {
+      name: AUTH_CAMPAIGN_GROUPS.MARKETING_EXECUTIVES_GROUP,
+    },
+  )
+
+  if (executivesGroup) {
+    await t.mutation(
+      components.tasquencerAuthorization.api.addUserToAuthGroup,
+      {
+        userId,
+        groupId: executivesGroup._id,
+      },
+    )
+  }
+
   // Assign CAMPAIGN_COORDINATOR role
   const coordinatorRole = await t.query(
     components.tasquencerAuthorization.api.getRoleByName,
@@ -139,6 +159,24 @@ export async function setupAuthenticatedCampaignUser(t: TestContext) {
       {
         userId,
         roleId: requesterRole._id,
+      },
+    )
+  }
+
+  // Assign CAMPAIGN_EXECUTIVE role (for budget approval tasks - includes both low and high budget approval)
+  const executiveRole = await t.query(
+    components.tasquencerAuthorization.api.getRoleByName,
+    {
+      name: AUTH_CAMPAIGN_ROLES.CAMPAIGN_EXECUTIVE,
+    },
+  )
+
+  if (executiveRole) {
+    await t.mutation(
+      components.tasquencerAuthorization.api.assignAuthRoleToUser,
+      {
+        userId,
+        roleId: executiveRole._id,
       },
     )
   }
