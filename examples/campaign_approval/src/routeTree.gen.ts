@@ -13,14 +13,17 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppSimpleRouteImport } from './routes/_app/simple'
+import { Route as AppCampaignsRouteImport } from './routes/_app/campaigns'
 import { Route as AppAuditRouteImport } from './routes/_app/audit'
 import { Route as AppAdminRouteImport } from './routes/_app/admin'
 import { Route as AppSimpleIndexRouteImport } from './routes/_app/simple/index'
+import { Route as AppCampaignsIndexRouteImport } from './routes/_app/campaigns/index'
 import { Route as AppAuditIndexRouteImport } from './routes/_app/audit/index'
 import { Route as AppAdminIndexRouteImport } from './routes/_app/admin/index'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as AppSimpleQueueRouteImport } from './routes/_app/simple/queue'
 import { Route as AppSimpleNewRouteImport } from './routes/_app/simple/new'
+import { Route as AppCampaignsCampaignIdRouteImport } from './routes/_app/campaigns/$campaignId'
 import { Route as AppAuditTraceIdRouteImport } from './routes/_app/audit/$traceId'
 import { Route as AppAdminUsersRouteImport } from './routes/_app/admin/users'
 import { Route as AppAdminRolesRouteImport } from './routes/_app/admin/roles'
@@ -50,6 +53,11 @@ const AppSimpleRoute = AppSimpleRouteImport.update({
   path: '/simple',
   getParentRoute: () => AppRoute,
 } as any)
+const AppCampaignsRoute = AppCampaignsRouteImport.update({
+  id: '/campaigns',
+  path: '/campaigns',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppAuditRoute = AppAuditRouteImport.update({
   id: '/audit',
   path: '/audit',
@@ -64,6 +72,11 @@ const AppSimpleIndexRoute = AppSimpleIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AppSimpleRoute,
+} as any)
+const AppCampaignsIndexRoute = AppCampaignsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppCampaignsRoute,
 } as any)
 const AppAuditIndexRoute = AppAuditIndexRouteImport.update({
   id: '/',
@@ -89,6 +102,11 @@ const AppSimpleNewRoute = AppSimpleNewRouteImport.update({
   id: '/new',
   path: '/new',
   getParentRoute: () => AppSimpleRoute,
+} as any)
+const AppCampaignsCampaignIdRoute = AppCampaignsCampaignIdRouteImport.update({
+  id: '/$campaignId',
+  path: '/$campaignId',
+  getParentRoute: () => AppCampaignsRoute,
 } as any)
 const AppAuditTraceIdRoute = AppAuditTraceIdRouteImport.update({
   id: '/$traceId',
@@ -144,16 +162,19 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/admin': typeof AppAdminRouteWithChildren
   '/audit': typeof AppAuditRouteWithChildren
+  '/campaigns': typeof AppCampaignsRouteWithChildren
   '/simple': typeof AppSimpleRouteWithChildren
   '/admin/groups': typeof AppAdminGroupsRoute
   '/admin/roles': typeof AppAdminRolesRoute
   '/admin/users': typeof AppAdminUsersRouteWithChildren
   '/audit/$traceId': typeof AppAuditTraceIdRouteWithChildren
+  '/campaigns/$campaignId': typeof AppCampaignsCampaignIdRoute
   '/simple/new': typeof AppSimpleNewRoute
   '/simple/queue': typeof AppSimpleQueueRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/admin/': typeof AppAdminIndexRoute
   '/audit/': typeof AppAuditIndexRoute
+  '/campaigns/': typeof AppCampaignsIndexRoute
   '/simple/': typeof AppSimpleIndexRoute
   '/audit/$traceId/visualizer': typeof AppAuditTraceIdVisualizerRoute
   '/admin/users/': typeof AppAdminUsersIndexRoute
@@ -166,11 +187,13 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/admin/groups': typeof AppAdminGroupsRoute
   '/admin/roles': typeof AppAdminRolesRoute
+  '/campaigns/$campaignId': typeof AppCampaignsCampaignIdRoute
   '/simple/new': typeof AppSimpleNewRoute
   '/simple/queue': typeof AppSimpleQueueRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/admin': typeof AppAdminIndexRoute
   '/audit': typeof AppAuditIndexRoute
+  '/campaigns': typeof AppCampaignsIndexRoute
   '/simple': typeof AppSimpleIndexRoute
   '/audit/$traceId/visualizer': typeof AppAuditTraceIdVisualizerRoute
   '/admin/users': typeof AppAdminUsersIndexRoute
@@ -185,16 +208,19 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/_app/admin': typeof AppAdminRouteWithChildren
   '/_app/audit': typeof AppAuditRouteWithChildren
+  '/_app/campaigns': typeof AppCampaignsRouteWithChildren
   '/_app/simple': typeof AppSimpleRouteWithChildren
   '/_app/admin/groups': typeof AppAdminGroupsRoute
   '/_app/admin/roles': typeof AppAdminRolesRoute
   '/_app/admin/users': typeof AppAdminUsersRouteWithChildren
   '/_app/audit/$traceId': typeof AppAuditTraceIdRouteWithChildren
+  '/_app/campaigns/$campaignId': typeof AppCampaignsCampaignIdRoute
   '/_app/simple/new': typeof AppSimpleNewRoute
   '/_app/simple/queue': typeof AppSimpleQueueRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/_app/admin/': typeof AppAdminIndexRoute
   '/_app/audit/': typeof AppAuditIndexRoute
+  '/_app/campaigns/': typeof AppCampaignsIndexRoute
   '/_app/simple/': typeof AppSimpleIndexRoute
   '/_app/audit/$traceId/visualizer': typeof AppAuditTraceIdVisualizerRoute
   '/_app/admin/users/': typeof AppAdminUsersIndexRoute
@@ -209,16 +235,19 @@ export interface FileRouteTypes {
     | '/login'
     | '/admin'
     | '/audit'
+    | '/campaigns'
     | '/simple'
     | '/admin/groups'
     | '/admin/roles'
     | '/admin/users'
     | '/audit/$traceId'
+    | '/campaigns/$campaignId'
     | '/simple/new'
     | '/simple/queue'
     | '/api/auth/$'
     | '/admin/'
     | '/audit/'
+    | '/campaigns/'
     | '/simple/'
     | '/audit/$traceId/visualizer'
     | '/admin/users/'
@@ -231,11 +260,13 @@ export interface FileRouteTypes {
     | '/login'
     | '/admin/groups'
     | '/admin/roles'
+    | '/campaigns/$campaignId'
     | '/simple/new'
     | '/simple/queue'
     | '/api/auth/$'
     | '/admin'
     | '/audit'
+    | '/campaigns'
     | '/simple'
     | '/audit/$traceId/visualizer'
     | '/admin/users'
@@ -249,16 +280,19 @@ export interface FileRouteTypes {
     | '/login'
     | '/_app/admin'
     | '/_app/audit'
+    | '/_app/campaigns'
     | '/_app/simple'
     | '/_app/admin/groups'
     | '/_app/admin/roles'
     | '/_app/admin/users'
     | '/_app/audit/$traceId'
+    | '/_app/campaigns/$campaignId'
     | '/_app/simple/new'
     | '/_app/simple/queue'
     | '/api/auth/$'
     | '/_app/admin/'
     | '/_app/audit/'
+    | '/_app/campaigns/'
     | '/_app/simple/'
     | '/_app/audit/$traceId/visualizer'
     | '/_app/admin/users/'
@@ -304,6 +338,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSimpleRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/campaigns': {
+      id: '/_app/campaigns'
+      path: '/campaigns'
+      fullPath: '/campaigns'
+      preLoaderRoute: typeof AppCampaignsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/audit': {
       id: '/_app/audit'
       path: '/audit'
@@ -324,6 +365,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/simple/'
       preLoaderRoute: typeof AppSimpleIndexRouteImport
       parentRoute: typeof AppSimpleRoute
+    }
+    '/_app/campaigns/': {
+      id: '/_app/campaigns/'
+      path: '/'
+      fullPath: '/campaigns/'
+      preLoaderRoute: typeof AppCampaignsIndexRouteImport
+      parentRoute: typeof AppCampaignsRoute
     }
     '/_app/audit/': {
       id: '/_app/audit/'
@@ -359,6 +407,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/simple/new'
       preLoaderRoute: typeof AppSimpleNewRouteImport
       parentRoute: typeof AppSimpleRoute
+    }
+    '/_app/campaigns/$campaignId': {
+      id: '/_app/campaigns/$campaignId'
+      path: '/$campaignId'
+      fullPath: '/campaigns/$campaignId'
+      preLoaderRoute: typeof AppCampaignsCampaignIdRouteImport
+      parentRoute: typeof AppCampaignsRoute
     }
     '/_app/audit/$traceId': {
       id: '/_app/audit/$traceId'
@@ -486,6 +541,20 @@ const AppAuditRouteWithChildren = AppAuditRoute._addFileChildren(
   AppAuditRouteChildren,
 )
 
+interface AppCampaignsRouteChildren {
+  AppCampaignsCampaignIdRoute: typeof AppCampaignsCampaignIdRoute
+  AppCampaignsIndexRoute: typeof AppCampaignsIndexRoute
+}
+
+const AppCampaignsRouteChildren: AppCampaignsRouteChildren = {
+  AppCampaignsCampaignIdRoute: AppCampaignsCampaignIdRoute,
+  AppCampaignsIndexRoute: AppCampaignsIndexRoute,
+}
+
+const AppCampaignsRouteWithChildren = AppCampaignsRoute._addFileChildren(
+  AppCampaignsRouteChildren,
+)
+
 interface AppSimpleRouteChildren {
   AppSimpleNewRoute: typeof AppSimpleNewRoute
   AppSimpleQueueRoute: typeof AppSimpleQueueRoute
@@ -507,12 +576,14 @@ const AppSimpleRouteWithChildren = AppSimpleRoute._addFileChildren(
 interface AppRouteChildren {
   AppAdminRoute: typeof AppAdminRouteWithChildren
   AppAuditRoute: typeof AppAuditRouteWithChildren
+  AppCampaignsRoute: typeof AppCampaignsRouteWithChildren
   AppSimpleRoute: typeof AppSimpleRouteWithChildren
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppAdminRoute: AppAdminRouteWithChildren,
   AppAuditRoute: AppAuditRouteWithChildren,
+  AppCampaignsRoute: AppCampaignsRouteWithChildren,
   AppSimpleRoute: AppSimpleRouteWithChildren,
 }
 
