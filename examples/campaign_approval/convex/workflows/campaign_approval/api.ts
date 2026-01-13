@@ -34,6 +34,7 @@ export const {
   helpers: { getWorkflowTaskStates },
 } = versionApi
 
+
 // Export initializeRootWorkflow with explicit typing to avoid TS2589
 // The mutation still works correctly at runtime
 export const initializeRootWorkflow = versionApi.initializeRootWorkflow as typeof versionApi.initializeRootWorkflow
@@ -386,14 +387,15 @@ export const getWorkItem = query({
 
 /**
  * Cancel an in-progress campaign workflow
- * Updates campaign status to 'cancelled'
  *
- * Note: This mutation only updates the campaign status. To fully cancel the
- * workflow (stop all in-progress tasks), use the cancelRootWorkflow mutation
- * separately. Full cancellation requires calling the internal API which needs
- * to be properly wired through an internal mutation file.
+ * Updates the campaign status to 'cancelled'. For full workflow cancellation
+ * including stopping all pending work items, use `cancelRootWorkflow` which is
+ * exported directly from the version manager API.
  *
- * TODO: Wire up full workflow cancellation through internal.ts
+ * Usage patterns:
+ * - Domain-level cancellation: Call this mutation to update campaign status
+ * - Full workflow cancellation: Call `cancelRootWorkflow` to stop all work items
+ * - Both: Call this first for status update, then `cancelRootWorkflow` for cleanup
  */
 export const cancelCampaignWorkflow = mutation({
   args: {
@@ -410,7 +412,10 @@ export const cancelCampaignWorkflow = mutation({
     }
 
     // Update campaign status to cancelled
-    // The workflow will stop naturally as no work items will be processed
     await updateCampaign(ctx.db, campaign._id, { status: 'cancelled' })
+
+    // Note: For full workflow cancellation (stopping work items), clients should
+    // also call cancelRootWorkflow. Due to TypeScript type complexity with 25+
+    // workflow tasks, internal mutation calls hit type inference limits (TS2589).
   },
 })

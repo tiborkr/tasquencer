@@ -23,11 +23,11 @@ import {
   ChevronRight,
 } from 'lucide-react'
 
-export const Route = createFileRoute('/_app/simple/')({
-  component: SimpleIndex,
+export const Route = createFileRoute('/_app/campaigns/')({
+  component: CampaignsIndex,
 })
 
-function SimpleIndex() {
+function CampaignsIndex() {
   return (
     <Suspense fallback={<CampaignsPageSkeleton />}>
       <CampaignsPageInner />
@@ -43,7 +43,9 @@ function CampaignsPageInner() {
   const stats = useMemo(() => {
     const completed = campaigns.filter((c) => c.status === 'completed').length
     const pending = campaigns.filter((c) => c.status === 'draft').length
-    const active = campaigns.filter((c) => c.status === 'active').length
+    const active = campaigns.filter(
+      (c) => c.status !== 'completed' && c.status !== 'draft' && c.status !== 'cancelled',
+    ).length
     return { total: campaigns.length, completed, pending, active }
   }, [campaigns])
 
@@ -72,7 +74,7 @@ function CampaignsPageInner() {
       </div>
 
       {/* Stats Row */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-4 gap-4">
         <div className="rounded-lg border bg-card p-4">
           <div className="flex items-center gap-2 text-muted-foreground">
             <Hash className="h-4 w-4" />
@@ -81,6 +83,15 @@ function CampaignsPageInner() {
             </span>
           </div>
           <p className="mt-2 text-2xl font-semibold">{stats.total}</p>
+        </div>
+        <div className="rounded-lg border bg-card p-4">
+          <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
+            <Clock className="h-4 w-4" />
+            <span className="text-xs font-medium uppercase tracking-wider">
+              Active
+            </span>
+          </div>
+          <p className="mt-2 text-2xl font-semibold">{stats.active}</p>
         </div>
         <div className="rounded-lg border bg-card p-4">
           <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
@@ -195,7 +206,8 @@ function CampaignsPageSkeleton() {
             <div className="h-9 w-32 bg-muted rounded" />
           </div>
         </div>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-4 gap-4">
+          <div className="h-20 bg-muted rounded-lg" />
           <div className="h-20 bg-muted rounded-lg" />
           <div className="h-20 bg-muted rounded-lg" />
           <div className="h-20 bg-muted rounded-lg" />
