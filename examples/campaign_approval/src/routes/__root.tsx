@@ -48,7 +48,7 @@ export const Route = createRootRouteWithContext<{
         content: 'width=device-width, initial-scale=1',
       },
       {
-        title: 'Tasquencer Example / UcampaignUapproval workflow',
+        title: 'Tasquencer Example / CampaignApproval workflow',
       },
     ],
     links: [

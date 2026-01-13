@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate, Link } from '@tanstack/react-router'
-import { useMutation } from '@tanstack/react-query'
-import { useConvexMutation } from '@convex-dev/react-query'
+import { useMutation, useSuspenseQuery } from '@tanstack/react-query'
+import { useConvexMutation, convexQuery } from '@convex-dev/react-query'
 import { api } from '@/convex/_generated/api'
 import { Button } from '@repo/ui/components/button'
 import { Input } from '@repo/ui/components/input'
@@ -15,6 +15,11 @@ export const Route = createFileRoute('/_app/simple/new')({
 
 function NewCampaign() {
   const navigate = useNavigate()
+
+  // Get current authenticated user
+  const { data: currentUser } = useSuspenseQuery(
+    convexQuery(api.auth.getCurrentUser, {}),
+  )
 
   // Simple form state
   const [name, setName] = useState('')
@@ -52,7 +57,9 @@ function NewCampaign() {
         proposedStartDate: now + 7 * 24 * 60 * 60 * 1000, // 7 days from now
         proposedEndDate: now + 30 * 24 * 60 * 60 * 1000, // 30 days from now
         estimatedBudget: parseInt(estimatedBudget) || 10000,
-        requesterId: 'placeholder-user-id', // Will be replaced by auth
+        // userId is the application user ID from the 'users' table
+        // (_id is the Better Auth user ID, which is different)
+        requesterId: currentUser?.userId ?? '',
       },
     })
   }
@@ -137,7 +144,7 @@ function NewCampaign() {
 
           <Button
             onClick={handleCreate}
-            disabled={initializeMutation.isPending}
+            disabled={initializeMutation.isPending || !currentUser?.userId}
             className="w-full"
             size="lg"
           >

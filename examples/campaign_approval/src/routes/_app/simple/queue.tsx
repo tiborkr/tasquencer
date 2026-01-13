@@ -146,7 +146,7 @@ function QueuePageInner() {
               </div>
               <p className="mt-4 text-sm font-medium">No tasks in queue</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                Create a new LCampaign to add tasks to the queue
+                Create a new Campaign to add tasks to the queue
               </p>
               <Button asChild size="sm" className="mt-4">
                 <Link to="/simple/new">

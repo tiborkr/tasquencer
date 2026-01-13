@@ -18,17 +18,17 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <NavMain
           items={[
             {
-              title: 'Simple UcampaignUapproval',
+              title: 'Simple Campaign Approval',
               icon: MessageSquare,
               isActive: () => true,
               items: [
                 {
-                  title: 'All UcampaignUapprovals',
-                  renderLink: () => <Link to="/simple">All UcampaignUapprovals</Link>,
+                  title: 'All Campaign Approvals',
+                  renderLink: () => <Link to="/simple">All Campaign Approvals</Link>,
                 },
                 {
-                  title: 'New UcampaignUapproval',
-                  renderLink: () => <Link to="/simple/new">New UcampaignUapproval</Link>,
+                  title: 'New Campaign Approval',
+                  renderLink: () => <Link to="/simple/new">New Campaign Approval</Link>,
                 },
                 {
                   title: 'Work Queue',

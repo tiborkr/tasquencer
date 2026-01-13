@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate, Link } from '@tanstack/react-router'
-import { useMutation } from '@tanstack/react-query'
-import { useConvexMutation } from '@convex-dev/react-query'
+import { useMutation, useSuspenseQuery } from '@tanstack/react-query'
+import { useConvexMutation, convexQuery } from '@convex-dev/react-query'
 import { api } from '@/convex/_generated/api'
 import { Button } from '@repo/ui/components/button'
 import { Input } from '@repo/ui/components/input'
@@ -26,6 +26,11 @@ type Channel = (typeof CHANNEL_OPTIONS)[number]['id']
 
 function NewCampaign() {
   const navigate = useNavigate()
+
+  // Get current authenticated user
+  const { data: currentUser } = useSuspenseQuery(
+    convexQuery(api.auth.getCurrentUser, {}),
+  )
 
   // Form state
   const [name, setName] = useState('')
@@ -73,12 +78,15 @@ function NewCampaign() {
         proposedStartDate: now + startOffset * 24 * 60 * 60 * 1000,
         proposedEndDate: now + (startOffset + duration) * 24 * 60 * 60 * 1000,
         estimatedBudget: parseInt(estimatedBudget) || 10000,
-        requesterId: 'placeholder-user-id', // Will be replaced by auth
+        // userId is the application user ID from the 'users' table
+        // (_id is the Better Auth user ID, which is different)
+        requesterId: currentUser?.userId ?? '',
       },
     })
   }
 
-  const isValid = name.trim().length > 0 && channels.length > 0
+  const isValid =
+    name.trim().length > 0 && channels.length > 0 && currentUser?.userId
 
   return (
     <div className="p-6 space-y-6">
