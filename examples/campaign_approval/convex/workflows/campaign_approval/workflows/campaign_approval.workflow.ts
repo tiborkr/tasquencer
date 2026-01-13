@@ -50,6 +50,13 @@ import {
   monitorPerformanceTask,
   ongoingOptimizationTask,
 } from '../workItems/execution'
+import {
+  endCampaignTask,
+  compileDataTask,
+  conductAnalysisTask,
+  presentResultsTask,
+  archiveMaterialsTask,
+} from '../workItems/closure'
 
 /**
  * Campaign request payload schema for workflow initialization
@@ -310,7 +317,7 @@ async function getOptimizationDecision(
 }
 
 /**
- * Campaign Approval Workflow - Phases 1, 2, 3, 4, 5, 6 & 7
+ * Campaign Approval Workflow - Phases 1 through 8
  *
  * Phase 1: Initiation
  * start -> submitRequest -> intakeReview -> [XOR routing]
@@ -357,12 +364,15 @@ async function getOptimizationDecision(
  * Phase 7: Execution
  * internalComms -> launchCampaign -> monitorPerformance -> ongoingOptimization -> [XOR routing]
  *   - continue -> monitorPerformance (loop until campaign end)
- *   - end -> [end] (TODO: Phase 8 Closure)
+ *   - end -> Phase 8
+ *
+ * Phase 8: Closure (sequential linear flow)
+ * endCampaign -> compileData -> conductAnalysis -> presentResults -> archiveMaterials -> end
  *
  * Uses XOR split pattern with route() callback for dynamic path selection.
  * Uses AND split/join for parallel technical setup tasks.
  *
- * Note: With 30 tasks + 2 conditions, TypeScript hits type depth limits (TS2589).
+ * Note: With 35 tasks + 2 conditions, TypeScript hits type depth limits (TS2589).
  * Using @ts-expect-error to suppress type checking during build. The workflow
  * still validates types at runtime through Convex schema.
  */
@@ -418,10 +428,16 @@ export const campaignApprovalWorkflow = Builder.workflow('campaign_approval')
   .task('internalComms', internalCommsTask)
   // Phase 7: Execution Tasks
   // Note: monitorPerformance uses XOR join for input from launchCampaign OR ongoingOptimization loop
-  // Note: ongoingOptimization uses XOR split to route to monitorPerformance (continue) or end
+  // Note: ongoingOptimization uses XOR split to route to monitorPerformance (continue) or endCampaign
   .task('launchCampaign', launchCampaignTask)
   .task('monitorPerformance', monitorPerformanceTask)
   .task('ongoingOptimization', ongoingOptimizationTask)
+  // Phase 8: Closure Tasks (sequential)
+  .task('endCampaign', endCampaignTask)
+  .task('compileData', compileDataTask)
+  .task('conductAnalysis', conductAnalysisTask)
+  .task('presentResults', presentResultsTask)
+  .task('archiveMaterials', archiveMaterialsTask)
   // Connections: Start -> Submit Request
   .connectCondition('start', (to) => to.task('submitRequest'))
   // Submit Request -> Intake Review
@@ -617,12 +633,13 @@ export const campaignApprovalWorkflow = Builder.workflow('campaign_approval')
   // Address Concerns -> Pre-Launch Review (loop back)
   .connectTask('addressConcerns', (to) => to.task('preLaunchReview'))
   // Launch Approval -> XOR Split (routes to internalComms, addressConcerns, or end)
-  .connectTask('launchApproval', (to) =>
+  // @ts-expect-error TS2589: Type instantiation depth exceeded (35+ workflow elements)
+  .connectTask('launchApproval', (to: any) =>
     to
       .task('internalComms')
       .task('addressConcerns')
       .condition('end')
-      .route(async ({ route, mutationCtx, parent }) => {
+      .route(async ({ route, mutationCtx, parent }: any) => {
         const decision = await getLaunchApprovalDecision(
           mutationCtx.db,
           parent.workflow.id,
@@ -639,7 +656,8 @@ export const campaignApprovalWorkflow = Builder.workflow('campaign_approval')
       }),
   )
   // Internal Comms -> Phase 7 Execution
-  .connectTask('internalComms', (to) => to.task('launchCampaign'))
+  // @ts-expect-error TS2589: Type instantiation depth exceeded (35+ workflow elements)
+  .connectTask('internalComms', (to: any) => to.task('launchCampaign'))
   // Phase 7: Execution Connections
   // Launch Campaign -> Monitor Performance
   // @ts-expect-error TS2589: Type instantiation depth exceeded (30+ workflow elements)
@@ -647,12 +665,12 @@ export const campaignApprovalWorkflow = Builder.workflow('campaign_approval')
   // Monitor Performance -> Ongoing Optimization
   // @ts-expect-error TS2589: Type instantiation depth exceeded (30+ workflow elements)
   .connectTask('monitorPerformance', (to: any) => to.task('ongoingOptimization'))
-  // Ongoing Optimization -> XOR Split (routes to monitorPerformance loop or end)
-  // @ts-expect-error TS2589: Type instantiation depth exceeded (30+ workflow elements)
+  // Ongoing Optimization -> XOR Split (routes to monitorPerformance loop or Phase 8 Closure)
+  // @ts-expect-error TS2589: Type instantiation depth exceeded (35+ workflow elements)
   .connectTask('ongoingOptimization', (to: any) =>
     to
       .task('monitorPerformance')
-      .condition('end')
+      .task('endCampaign')
       .route(async ({ route, mutationCtx, parent }: any) => {
         const decision = await getOptimizationDecision(
           mutationCtx.db,
@@ -662,7 +680,18 @@ export const campaignApprovalWorkflow = Builder.workflow('campaign_approval')
         if (decision === 'continue') {
           return route.toTask('monitorPerformance')
         }
-        // end or no decision -> end (TODO: Phase 8 Closure)
-        return route.toCondition('end')
+        // end or no decision -> Phase 8 Closure
+        return route.toTask('endCampaign')
       }),
   )
+  // Phase 8: Closure Connections (sequential)
+  // @ts-expect-error TS2589: Type instantiation depth exceeded (35+ workflow elements)
+  .connectTask('endCampaign', (to: any) => to.task('compileData'))
+  // @ts-expect-error TS2589: Type instantiation depth exceeded (35+ workflow elements)
+  .connectTask('compileData', (to: any) => to.task('conductAnalysis'))
+  // @ts-expect-error TS2589: Type instantiation depth exceeded (35+ workflow elements)
+  .connectTask('conductAnalysis', (to: any) => to.task('presentResults'))
+  // @ts-expect-error TS2589: Type instantiation depth exceeded (35+ workflow elements)
+  .connectTask('presentResults', (to: any) => to.task('archiveMaterials'))
+  // @ts-expect-error TS2589: Type instantiation depth exceeded (35+ workflow elements)
+  .connectTask('archiveMaterials', (to: any) => to.condition('end'))

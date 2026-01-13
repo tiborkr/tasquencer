@@ -2589,6 +2589,277 @@ describe('Campaign Approval Workflow', () => {
       expect(taskStates.ongoingOptimization).toBe('enabled')
     })
   })
+
+  describe('Phase 8: Closure - Happy Path', () => {
+    it('completes full closure phase from endCampaign through archiveMaterials', async () => {
+      const t = setup()
+
+      await setupCampaignApprovalAuthorization(t)
+      const { userId } = await setupAuthenticatedCampaignUser(t)
+
+      await t.mutation(initializeRootWorkflowMutation, {
+        payload: createTestCampaignPayload(userId, { estimatedBudget: 30000 }),
+      })
+      await waitForFlush(t)
+
+      const campaigns = await t.query(
+        api.workflows.campaign_approval.api.getCampaigns,
+        {},
+      )
+      const workflowId = campaigns[0].workflowId
+
+      // Complete Phases 1-6
+      await completePhase1And2(t, userId)
+      await completePhase3(t)
+      await completePhase4(t)
+      await completePhase5(t)
+      await completePhase6(t)
+
+      // Complete Phase 7 with 'end' decision to trigger Phase 8
+      await completePhase7WithEnd(t)
+
+      // Verify endCampaign is enabled (Phase 8 starts)
+      let taskStates = await t.query(
+        api.workflows.campaign_approval.api.campaignWorkflowTaskStates,
+        { workflowId },
+      )
+      expect(taskStates.endCampaign).toBe('enabled')
+
+      // endCampaign
+      let workQueue = await t.query(
+        api.workflows.campaign_approval.api.getCampaignWorkQueue,
+        {},
+      )
+      expect(workQueue[0].taskType).toBe('endCampaign')
+      let workItemId = workQueue[0].workItemId
+
+      await t.mutation(api.workflows.campaign_approval.api.startWorkItem, {
+        workItemId,
+        args: { name: 'endCampaign' },
+      })
+      await waitForFlush(t)
+      await t.mutation(api.workflows.campaign_approval.api.completeWorkItem, {
+        workItemId,
+        args: {
+          name: 'endCampaign',
+          payload: {
+            endedAt: Date.now(),
+            deactivatedComponents: [
+              { component: 'ads', platform: 'Google Ads', deactivatedAt: Date.now() },
+              { component: 'emails', deactivatedAt: Date.now() },
+              { component: 'social', platform: 'LinkedIn', deactivatedAt: Date.now() },
+            ],
+            remainingBudget: 2500,
+            endNotes: 'Campaign ended successfully',
+          },
+        },
+      })
+      await waitForFlush(t)
+
+      taskStates = await t.query(
+        api.workflows.campaign_approval.api.campaignWorkflowTaskStates,
+        { workflowId },
+      )
+      expect(taskStates.endCampaign).toBe('completed')
+      expect(taskStates.compileData).toBe('enabled')
+
+      // compileData
+      workQueue = await t.query(
+        api.workflows.campaign_approval.api.getCampaignWorkQueue,
+        {},
+      )
+      expect(workQueue[0].taskType).toBe('compileData')
+      workItemId = workQueue[0].workItemId
+
+      await t.mutation(api.workflows.campaign_approval.api.startWorkItem, {
+        workItemId,
+        args: { name: 'compileData' },
+      })
+      await waitForFlush(t)
+      await t.mutation(api.workflows.campaign_approval.api.completeWorkItem, {
+        workItemId,
+        args: {
+          name: 'compileData',
+          payload: {
+            dataSources: [
+              {
+                source: 'google_analytics',
+                metricsCollected: ['sessions', 'conversions', 'bounce_rate'],
+                dataRange: { start: Date.now() - 30 * 24 * 60 * 60 * 1000, end: Date.now() },
+              },
+              {
+                source: 'ad_platform',
+                metricsCollected: ['impressions', 'clicks', 'spend'],
+                dataRange: { start: Date.now() - 30 * 24 * 60 * 60 * 1000, end: Date.now() },
+              },
+            ],
+            aggregatedMetrics: {
+              totalImpressions: 500000,
+              totalClicks: 15000,
+              totalConversions: 750,
+              totalSpend: 27500,
+              totalRevenue: 125000,
+            },
+            dataLocation: '/reports/campaign-data.xlsx',
+          },
+        },
+      })
+      await waitForFlush(t)
+
+      taskStates = await t.query(
+        api.workflows.campaign_approval.api.campaignWorkflowTaskStates,
+        { workflowId },
+      )
+      expect(taskStates.compileData).toBe('completed')
+      expect(taskStates.conductAnalysis).toBe('enabled')
+
+      // conductAnalysis - get KPIs first for the payload
+      const kpis = await t.run(async (ctx) => {
+        return await ctx.db.query('campaignKPIs').collect()
+      })
+
+      workQueue = await t.query(
+        api.workflows.campaign_approval.api.getCampaignWorkQueue,
+        {},
+      )
+      expect(workQueue[0].taskType).toBe('conductAnalysis')
+      workItemId = workQueue[0].workItemId
+
+      await t.mutation(api.workflows.campaign_approval.api.startWorkItem, {
+        workItemId,
+        args: { name: 'conductAnalysis' },
+      })
+      await waitForFlush(t)
+      await t.mutation(api.workflows.campaign_approval.api.completeWorkItem, {
+        workItemId,
+        args: {
+          name: 'conductAnalysis',
+          payload: {
+            kpiResults: kpis.map((kpi) => ({
+              kpiId: kpi._id,
+              metric: kpi.metric,
+              target: kpi.targetValue,
+              actual: Math.round(kpi.targetValue * 1.1), // 110% of target
+              percentAchieved: 110,
+              analysis: 'Exceeded target by 10%',
+            })),
+            whatWorked: ['Targeted messaging', 'Social proof elements'],
+            whatDidntWork: ['Initial ad creative underperformed'],
+            lessonsLearned: ['A/B test earlier', 'Focus on mobile-first'],
+            recommendationsForFuture: ['Increase social spend', 'Test video ads'],
+            overallAssessment: 'exceeded_goals',
+          },
+        },
+      })
+      await waitForFlush(t)
+
+      // Verify KPIs were updated with actual values
+      const updatedKpis = await t.run(async (ctx) => {
+        return await ctx.db.query('campaignKPIs').collect()
+      })
+      for (const kpi of updatedKpis) {
+        expect(kpi.actualValue).toBeDefined()
+        expect(kpi.actualValue).toBe(Math.round(kpi.targetValue * 1.1))
+      }
+
+      taskStates = await t.query(
+        api.workflows.campaign_approval.api.campaignWorkflowTaskStates,
+        { workflowId },
+      )
+      expect(taskStates.conductAnalysis).toBe('completed')
+      expect(taskStates.presentResults).toBe('enabled')
+
+      // presentResults
+      workQueue = await t.query(
+        api.workflows.campaign_approval.api.getCampaignWorkQueue,
+        {},
+      )
+      expect(workQueue[0].taskType).toBe('presentResults')
+      workItemId = workQueue[0].workItemId
+
+      await t.mutation(api.workflows.campaign_approval.api.startWorkItem, {
+        workItemId,
+        args: { name: 'presentResults' },
+      })
+      await waitForFlush(t)
+      await t.mutation(api.workflows.campaign_approval.api.completeWorkItem, {
+        workItemId,
+        args: {
+          name: 'presentResults',
+          payload: {
+            presentationDate: Date.now(),
+            attendees: ['CMO', 'VP Marketing', 'Campaign Manager'],
+            presentationUrl: 'https://slides.example.com/campaign-results',
+            feedbackReceived: 'Great results, continue with similar approach',
+            followUpActions: [
+              { action: 'Plan Q2 campaign', owner: 'Campaign Manager', dueDate: Date.now() + 14 * 24 * 60 * 60 * 1000 },
+            ],
+          },
+        },
+      })
+      await waitForFlush(t)
+
+      taskStates = await t.query(
+        api.workflows.campaign_approval.api.campaignWorkflowTaskStates,
+        { workflowId },
+      )
+      expect(taskStates.presentResults).toBe('completed')
+      expect(taskStates.archiveMaterials).toBe('enabled')
+
+      // archiveMaterials - final task
+      workQueue = await t.query(
+        api.workflows.campaign_approval.api.getCampaignWorkQueue,
+        {},
+      )
+      expect(workQueue[0].taskType).toBe('archiveMaterials')
+      workItemId = workQueue[0].workItemId
+
+      await t.mutation(api.workflows.campaign_approval.api.startWorkItem, {
+        workItemId,
+        args: { name: 'archiveMaterials' },
+      })
+      await waitForFlush(t)
+      await t.mutation(api.workflows.campaign_approval.api.completeWorkItem, {
+        workItemId,
+        args: {
+          name: 'archiveMaterials',
+          payload: {
+            archivedItems: [
+              { itemType: 'creative_assets', location: '/archive/creatives', description: 'All ad creatives and designs' },
+              { itemType: 'analytics_data', location: '/archive/analytics', description: 'Raw and processed metrics' },
+              { itemType: 'reports', location: '/archive/reports', description: 'Final campaign report' },
+              { itemType: 'documentation', location: '/archive/docs', description: 'Strategy and planning docs' },
+            ],
+            archiveLocation: '/archive/campaign-2026-q1',
+            retentionPeriod: '2 years',
+            archivedAt: Date.now(),
+          },
+        },
+      })
+      await waitForFlush(t)
+
+      // Verify workflow reaches end condition and campaign is completed
+      taskStates = await t.query(
+        api.workflows.campaign_approval.api.campaignWorkflowTaskStates,
+        { workflowId },
+      )
+      expect(taskStates.archiveMaterials).toBe('completed')
+
+      // Verify campaign status is 'completed'
+      const completedCampaigns = await t.query(
+        api.workflows.campaign_approval.api.getCampaigns,
+        {},
+      )
+      expect(completedCampaigns[0].status).toBe('completed')
+
+      // Verify work queue is empty (workflow complete)
+      workQueue = await t.query(
+        api.workflows.campaign_approval.api.getCampaignWorkQueue,
+        {},
+      )
+      expect(workQueue.length).toBe(0)
+    })
+  })
 })
 
 /**
@@ -3093,6 +3364,92 @@ async function completePhase6(t: ReturnType<typeof setup>) {
     args: {
       name: 'internalComms',
       payload: { communicationsSent: true },
+    },
+  })
+  await waitForFlush(t)
+}
+
+/**
+ * Helper function to complete Phase 7 (Execution) with 'end' decision
+ * Completes: launchCampaign, monitorPerformance, ongoingOptimization (end decision)
+ * This triggers Phase 8 Closure instead of looping back to monitoring
+ */
+async function completePhase7WithEnd(t: ReturnType<typeof setup>) {
+  // launchCampaign
+  let workQueue = await t.query(
+    api.workflows.campaign_approval.api.getCampaignWorkQueue,
+    {},
+  )
+  let workItemId = workQueue[0].workItemId
+
+  await t.mutation(api.workflows.campaign_approval.api.startWorkItem, {
+    workItemId,
+    args: { name: 'launchCampaign' },
+  })
+  await waitForFlush(t)
+  await t.mutation(api.workflows.campaign_approval.api.completeWorkItem, {
+    workItemId,
+    args: {
+      name: 'launchCampaign',
+      payload: {
+        launchedAt: Date.now(),
+        launchNotes: 'Campaign launched successfully',
+      },
+    },
+  })
+  await waitForFlush(t)
+
+  // monitorPerformance
+  workQueue = await t.query(
+    api.workflows.campaign_approval.api.getCampaignWorkQueue,
+    {},
+  )
+  workItemId = workQueue[0].workItemId
+
+  await t.mutation(api.workflows.campaign_approval.api.startWorkItem, {
+    workItemId,
+    args: { name: 'monitorPerformance' },
+  })
+  await waitForFlush(t)
+  await t.mutation(api.workflows.campaign_approval.api.completeWorkItem, {
+    workItemId,
+    args: {
+      name: 'monitorPerformance',
+      payload: {
+        metrics: [{ metric: 'conversions', value: 500, status: 'on_track' }],
+        overallStatus: 'healthy',
+      },
+    },
+  })
+  await waitForFlush(t)
+
+  // ongoingOptimization - end decision (triggers Phase 8)
+  workQueue = await t.query(
+    api.workflows.campaign_approval.api.getCampaignWorkQueue,
+    {},
+  )
+  workItemId = workQueue[0].workItemId
+
+  await t.mutation(api.workflows.campaign_approval.api.startWorkItem, {
+    workItemId,
+    args: { name: 'ongoingOptimization' },
+  })
+  await waitForFlush(t)
+  await t.mutation(api.workflows.campaign_approval.api.completeWorkItem, {
+    workItemId,
+    args: {
+      name: 'ongoingOptimization',
+      payload: {
+        optimizations: [
+          {
+            type: 'budget_reallocation',
+            description: 'Final budget optimization',
+            expectedImpact: 'Maximize remaining ROI',
+            implementedAt: Date.now(),
+          },
+        ],
+        decision: 'end', // End the campaign, trigger Phase 8
+      },
     },
   })
   await waitForFlush(t)
