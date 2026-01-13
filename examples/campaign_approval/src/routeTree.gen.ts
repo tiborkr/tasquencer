@@ -30,6 +30,7 @@ import { Route as AppAdminRolesRouteImport } from './routes/_app/admin/roles'
 import { Route as AppAdminGroupsRouteImport } from './routes/_app/admin/groups'
 import { Route as AppAuditTraceIdIndexRouteImport } from './routes/_app/audit/$traceId.index'
 import { Route as AppAdminUsersIndexRouteImport } from './routes/_app/admin/users.index'
+import { Route as AppSimpleTasksWorkItemIdRouteImport } from './routes/_app/simple/tasks/$workItemId'
 import { Route as AppAuditTraceIdVisualizerRouteImport } from './routes/_app/audit/$traceId.visualizer'
 import { Route as AppSimpleTasksStoreWorkItemIdRouteImport } from './routes/_app/simple/tasks/store.$workItemId'
 import { Route as AppAdminUsersUserIdAssignRouteImport } from './routes/_app/admin/users.$userId.assign'
@@ -138,6 +139,12 @@ const AppAdminUsersIndexRoute = AppAdminUsersIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppAdminUsersRoute,
 } as any)
+const AppSimpleTasksWorkItemIdRoute =
+  AppSimpleTasksWorkItemIdRouteImport.update({
+    id: '/tasks/$workItemId',
+    path: '/tasks/$workItemId',
+    getParentRoute: () => AppSimpleRoute,
+  } as any)
 const AppAuditTraceIdVisualizerRoute =
   AppAuditTraceIdVisualizerRouteImport.update({
     id: '/visualizer',
@@ -177,6 +184,7 @@ export interface FileRoutesByFullPath {
   '/campaigns/': typeof AppCampaignsIndexRoute
   '/simple/': typeof AppSimpleIndexRoute
   '/audit/$traceId/visualizer': typeof AppAuditTraceIdVisualizerRoute
+  '/simple/tasks/$workItemId': typeof AppSimpleTasksWorkItemIdRoute
   '/admin/users/': typeof AppAdminUsersIndexRoute
   '/audit/$traceId/': typeof AppAuditTraceIdIndexRoute
   '/admin/users/$userId/assign': typeof AppAdminUsersUserIdAssignRoute
@@ -196,6 +204,7 @@ export interface FileRoutesByTo {
   '/campaigns': typeof AppCampaignsIndexRoute
   '/simple': typeof AppSimpleIndexRoute
   '/audit/$traceId/visualizer': typeof AppAuditTraceIdVisualizerRoute
+  '/simple/tasks/$workItemId': typeof AppSimpleTasksWorkItemIdRoute
   '/admin/users': typeof AppAdminUsersIndexRoute
   '/audit/$traceId': typeof AppAuditTraceIdIndexRoute
   '/admin/users/$userId/assign': typeof AppAdminUsersUserIdAssignRoute
@@ -223,6 +232,7 @@ export interface FileRoutesById {
   '/_app/campaigns/': typeof AppCampaignsIndexRoute
   '/_app/simple/': typeof AppSimpleIndexRoute
   '/_app/audit/$traceId/visualizer': typeof AppAuditTraceIdVisualizerRoute
+  '/_app/simple/tasks/$workItemId': typeof AppSimpleTasksWorkItemIdRoute
   '/_app/admin/users/': typeof AppAdminUsersIndexRoute
   '/_app/audit/$traceId/': typeof AppAuditTraceIdIndexRoute
   '/_app/admin/users/$userId/assign': typeof AppAdminUsersUserIdAssignRoute
@@ -250,6 +260,7 @@ export interface FileRouteTypes {
     | '/campaigns/'
     | '/simple/'
     | '/audit/$traceId/visualizer'
+    | '/simple/tasks/$workItemId'
     | '/admin/users/'
     | '/audit/$traceId/'
     | '/admin/users/$userId/assign'
@@ -269,6 +280,7 @@ export interface FileRouteTypes {
     | '/campaigns'
     | '/simple'
     | '/audit/$traceId/visualizer'
+    | '/simple/tasks/$workItemId'
     | '/admin/users'
     | '/audit/$traceId'
     | '/admin/users/$userId/assign'
@@ -295,6 +307,7 @@ export interface FileRouteTypes {
     | '/_app/campaigns/'
     | '/_app/simple/'
     | '/_app/audit/$traceId/visualizer'
+    | '/_app/simple/tasks/$workItemId'
     | '/_app/admin/users/'
     | '/_app/audit/$traceId/'
     | '/_app/admin/users/$userId/assign'
@@ -457,6 +470,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAdminUsersIndexRouteImport
       parentRoute: typeof AppAdminUsersRoute
     }
+    '/_app/simple/tasks/$workItemId': {
+      id: '/_app/simple/tasks/$workItemId'
+      path: '/tasks/$workItemId'
+      fullPath: '/simple/tasks/$workItemId'
+      preLoaderRoute: typeof AppSimpleTasksWorkItemIdRouteImport
+      parentRoute: typeof AppSimpleRoute
+    }
     '/_app/audit/$traceId/visualizer': {
       id: '/_app/audit/$traceId/visualizer'
       path: '/visualizer'
@@ -559,6 +579,7 @@ interface AppSimpleRouteChildren {
   AppSimpleNewRoute: typeof AppSimpleNewRoute
   AppSimpleQueueRoute: typeof AppSimpleQueueRoute
   AppSimpleIndexRoute: typeof AppSimpleIndexRoute
+  AppSimpleTasksWorkItemIdRoute: typeof AppSimpleTasksWorkItemIdRoute
   AppSimpleTasksStoreWorkItemIdRoute: typeof AppSimpleTasksStoreWorkItemIdRoute
 }
 
@@ -566,6 +587,7 @@ const AppSimpleRouteChildren: AppSimpleRouteChildren = {
   AppSimpleNewRoute: AppSimpleNewRoute,
   AppSimpleQueueRoute: AppSimpleQueueRoute,
   AppSimpleIndexRoute: AppSimpleIndexRoute,
+  AppSimpleTasksWorkItemIdRoute: AppSimpleTasksWorkItemIdRoute,
   AppSimpleTasksStoreWorkItemIdRoute: AppSimpleTasksStoreWorkItemIdRoute,
 }
 
