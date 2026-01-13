@@ -28,22 +28,22 @@ export const Route = createFileRoute('/_app/simple/')({
 
 function SimpleIndex() {
   return (
-    <Suspense fallback={<UcampaignUapprovalsPageSkeleton />}>
-      <UcampaignUapprovalsPageInner />
+    <Suspense fallback={<CampaignsPageSkeleton />}>
+      <CampaignsPageInner />
     </Suspense>
   )
 }
 
-function UcampaignUapprovalsPageInner() {
-  const q = convexQuery(api.workflows.LUcampaignUapproval.api.getUcampaignUapprovals, {})
-  const { data: LUcampaignUapprovals } = useSuspenseQuery(q)
+function CampaignsPageInner() {
+  const q = convexQuery(api.workflows.campaign_approval.api.getCampaigns, {})
+  const { data: campaigns } = useSuspenseQuery(q)
 
   // Calculate stats
   const stats = useMemo(() => {
-    const completed = LUcampaignUapprovals.filter((g) => g.message).length
-    const pending = LUcampaignUapprovals.filter((g) => !g.message).length
-    return { total: LUcampaignUapprovals.length, completed, pending }
-  }, [LUcampaignUapprovals])
+    const completed = campaigns.filter((g) => g.message).length
+    const pending = campaigns.filter((g) => !g.message).length
+    return { total: campaigns.length, completed, pending }
+  }, [campaigns])
 
   return (
     <div className="p-6 space-y-6">
@@ -51,7 +51,7 @@ function UcampaignUapprovalsPageInner() {
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <MessageSquare className="h-5 w-5 text-muted-foreground" />
-          <h1 className="text-lg font-semibold">UcampaignUapprovals</h1>
+          <h1 className="text-lg font-semibold">Campaigns</h1>
         </div>
         <div className="flex items-center gap-2">
           <Button asChild variant="outline" size="sm">
@@ -63,7 +63,7 @@ function UcampaignUapprovalsPageInner() {
           <Button asChild size="sm">
             <Link to="/simple/new">
               <Plus className="mr-2 h-4 w-4" />
-              New UcampaignUapproval
+              New Campaign
             </Link>
           </Button>
         </div>
@@ -100,18 +100,18 @@ function UcampaignUapprovalsPageInner() {
         </div>
       </div>
 
-      {/* UcampaignUapprovals Table */}
-      {LUcampaignUapprovals.length === 0 ? (
+      {/* Campaigns Table */}
+      {campaigns.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center border rounded-lg">
           <MessageSquare className="h-8 w-8 text-muted-foreground mb-3" />
-          <p className="text-sm font-medium">No LUcampaignUapprovals yet</p>
+          <p className="text-sm font-medium">No campaigns yet</p>
           <p className="text-sm text-muted-foreground mt-1">
-            Create your first LUcampaignUapproval to get started
+            Create your first campaign to get started
           </p>
           <Button asChild size="sm" className="mt-4">
             <Link to="/simple/new">
               <Plus className="mr-2 h-4 w-4" />
-              New UcampaignUapproval
+              New Campaign
             </Link>
           </Button>
         </div>
@@ -127,14 +127,14 @@ function UcampaignUapprovalsPageInner() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {LUcampaignUapprovals.map((LUcampaignUapproval, index) => (
-                <TableRow key={LUcampaignUapproval._id}>
+              {campaigns.map((campaign, index) => (
+                <TableRow key={campaign._id}>
                   <TableCell className="text-muted-foreground font-mono">
                     {index + 1}
                   </TableCell>
                   <TableCell>
-                    {LUcampaignUapproval.message ? (
-                      <span className="font-medium">{LUcampaignUapproval.message}</span>
+                    {campaign.message ? (
+                      <span className="font-medium">{campaign.message}</span>
                     ) : (
                       <span className="text-muted-foreground italic">
                         Pending...
@@ -142,18 +142,18 @@ function UcampaignUapprovalsPageInner() {
                     )}
                   </TableCell>
                   <TableCell className="hidden sm:table-cell text-muted-foreground">
-                    {new Date(LUcampaignUapproval.createdAt).toLocaleDateString()}
+                    {new Date(campaign.createdAt).toLocaleDateString()}
                   </TableCell>
                   <TableCell className="text-right">
                     <Badge
                       variant="outline"
                       className={
-                        LUcampaignUapproval.message
+                        campaign.message
                           ? 'border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-500/5'
                           : 'border-amber-500/30 text-amber-600 dark:text-amber-400 bg-amber-500/5'
                       }
                     >
-                      {LUcampaignUapproval.message ? 'Completed' : 'Pending'}
+                      {campaign.message ? 'Completed' : 'Pending'}
                     </Badge>
                   </TableCell>
                 </TableRow>
@@ -166,7 +166,7 @@ function UcampaignUapprovalsPageInner() {
   )
 }
 
-function UcampaignUapprovalsPageSkeleton() {
+function CampaignsPageSkeleton() {
   return (
     <div className="p-6">
       <div className="animate-pulse space-y-6">

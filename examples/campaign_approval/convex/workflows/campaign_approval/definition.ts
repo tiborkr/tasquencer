@@ -1,6 +1,6 @@
-import { LUcampaignUapprovalWorkflow } from './workflows/LUcampaignUapproval.workflow'
+import { campaignApprovalWorkflow } from './workflows/campaign_approval.workflow'
 import { versionManagerFor } from '../../tasquencer'
 
-export const LUcampaignUapprovalVersionManager = versionManagerFor('campaign_approval')
-  .registerVersion('v1', LUcampaignUapprovalWorkflow)
+export const campaignApprovalVersionManager = versionManagerFor('campaign_approval')
+  .registerVersion('v1', campaignApprovalWorkflow)
   .build()

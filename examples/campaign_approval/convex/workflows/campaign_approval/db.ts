@@ -2,44 +2,44 @@ import type { DatabaseReader, DatabaseWriter } from '../../_generated/server'
 import type { Doc, Id } from '../../_generated/dataModel'
 
 /**
- * Insert a new LUcampaignUapproval record
+ * Insert a new campaign record
  */
-export async function insertUcampaignUapproval(
+export async function insertCampaign(
   db: DatabaseWriter,
-  LUcampaignUapproval: Omit<Doc<'LUcampaignUapprovals'>, '_id' | '_creationTime'>,
-): Promise<Id<'LUcampaignUapprovals'>> {
-  return await db.insert('LUcampaignUapprovals', LUcampaignUapproval)
+  campaign: Omit<Doc<'campaigns'>, '_id' | '_creationTime'>,
+): Promise<Id<'campaigns'>> {
+  return await db.insert('campaigns', campaign)
 }
 
 /**
- * Get LUcampaignUapproval by workflow ID
+ * Get campaign by workflow ID
  */
-export async function getUcampaignUapprovalByWorkflowId(
+export async function getCampaignByWorkflowId(
   db: DatabaseReader,
   workflowId: Id<'tasquencerWorkflows'>,
-): Promise<Doc<'LUcampaignUapprovals'> | null> {
+): Promise<Doc<'campaigns'> | null> {
   return await db
-    .query('LUcampaignUapprovals')
+    .query('campaigns')
     .withIndex('by_workflow_id', (q) => q.eq('workflowId', workflowId))
     .unique()
 }
 
 /**
- * Update LUcampaignUapproval message
+ * Update campaign message
  */
-export async function updateUcampaignUapprovalMessage(
+export async function updateCampaignMessage(
   db: DatabaseWriter,
-  LUcampaignUapprovalId: Id<'LUcampaignUapprovals'>,
+  campaignId: Id<'campaigns'>,
   message: string,
 ): Promise<void> {
-  await db.patch(LUcampaignUapprovalId, { message })
+  await db.patch(campaignId, { message })
 }
 
 /**
- * List all LUcampaignUapprovals
+ * List all campaigns
  */
-export async function listUcampaignUapprovals(
+export async function listCampaigns(
   db: DatabaseReader,
-): Promise<Doc<'LUcampaignUapprovals'>[]> {
-  return await db.query('LUcampaignUapprovals').order('desc').collect()
+): Promise<Doc<'campaigns'>[]> {
+  return await db.query('campaigns').order('desc').collect()
 }

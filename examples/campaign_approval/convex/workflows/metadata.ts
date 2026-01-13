@@ -1,6 +1,6 @@
 import { makeGetWorkflowStructureQuery } from '@repo/tasquencer'
 
-import { LUcampaignUapprovalVersionManager } from './campaign_approval/definition'
+import { campaignApprovalVersionManager } from './campaign_approval/definition'
 
 export const { getWorkflowStructure, genericGetWorkflowStructure } =
-  makeGetWorkflowStructureQuery([LUcampaignUapprovalVersionManager])
+  makeGetWorkflowStructureQuery([campaignApprovalVersionManager])

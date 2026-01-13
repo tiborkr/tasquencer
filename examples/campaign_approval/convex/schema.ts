@@ -1,7 +1,7 @@
 import { defineSchema, defineTable } from 'convex/server'
 import { schema as tasquencerTables } from '@repo/tasquencer'
 
-import LUcampaignUapprovalTables from './workflows/campaign_approval/schema'
+import campaignApprovalTables from './workflows/campaign_approval/schema'
 
 // The schema is entirely optional.
 // You can delete this file (schema.ts) and the
@@ -13,5 +13,5 @@ const users = defineTable({})
 export default defineSchema({
   users,
   ...tasquencerTables,
-  ...LUcampaignUapprovalTables,
+  ...campaignApprovalTables,
 })
