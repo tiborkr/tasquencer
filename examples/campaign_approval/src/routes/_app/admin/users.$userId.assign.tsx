@@ -28,6 +28,7 @@ import {
   Loader2,
   ArrowLeft,
   Info,
+  AlertTriangle,
 } from 'lucide-react'
 import { Link } from '@tanstack/react-router'
 
@@ -59,6 +60,7 @@ function RouteComponent() {
   )
   const [selectedRoleIds, setSelectedRoleIds] = useState<Set<string>>(new Set())
   const [isSaving, setIsSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   const userMemberships = useQuery(
     api.admin.authorization.getUserAuthGroupMemberships,
@@ -98,6 +100,7 @@ function RouteComponent() {
 
   const handleSave = async () => {
     setIsSaving(true)
+    setSaveError(null)
     try {
       await updateUserGroupMemberships({
         userId: userId,
@@ -111,7 +114,7 @@ function RouteComponent() {
 
       navigate({ to: '/admin/users' })
     } catch (error) {
-      alert(`Error: ${error}`)
+      setSaveError(error instanceof Error ? error.message : String(error))
       setIsSaving(false)
     }
   }
@@ -476,7 +479,13 @@ function RouteComponent() {
 
           {/* Save Card */}
           <Card className="border-primary/20 bg-primary/5">
-            <CardContent className="pt-6">
+            <CardContent className="pt-6 space-y-4">
+              {saveError && (
+                <div className="flex items-start gap-2 rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm">
+                  <AlertTriangle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
+                  <p className="text-destructive">{saveError}</p>
+                </div>
+              )}
               <Button
                 onClick={handleSave}
                 disabled={isSaving}
@@ -495,7 +504,7 @@ function RouteComponent() {
                   </>
                 )}
               </Button>
-              <p className="mt-3 text-center text-xs text-muted-foreground">
+              <p className="text-center text-xs text-muted-foreground">
                 Changes will take effect immediately
               </p>
             </CardContent>
