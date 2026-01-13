@@ -91,12 +91,18 @@ function RouteComponent() {
   // Loading states
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  // Error states
+  const [createError, setCreateError] = useState<string | null>(null)
+  const [editError, setEditError] = useState<string | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+
   // Reset form when dialogs open/close
   useEffect(() => {
     if (createDialogOpen) {
       setFormName('')
       setFormDescription('')
       setFormIsActive(true)
+      setCreateError(null)
     }
   }, [createDialogOpen])
 
@@ -111,6 +117,7 @@ function RouteComponent() {
           ?.filter((gr) => gr.groupId === selectedGroup._id)
           .map((gr) => gr.roleId) || []
       setSelectedRoleIds(new Set(currentRoleIds))
+      setEditError(null)
     }
   }, [editDialogOpen, selectedGroup, groupRoles])
 
@@ -118,6 +125,7 @@ function RouteComponent() {
     if (!formName.trim() || !formDescription.trim()) return
 
     setIsSubmitting(true)
+    setCreateError(null)
     try {
       await createGroup({
         name: formName.trim(),
@@ -125,7 +133,7 @@ function RouteComponent() {
       })
       setCreateDialogOpen(false)
     } catch (error) {
-      alert(`Error creating group: ${error}`)
+      setCreateError(error instanceof Error ? error.message : String(error))
     } finally {
       setIsSubmitting(false)
     }
@@ -174,7 +182,7 @@ function RouteComponent() {
       setEditDialogOpen(false)
       setSelectedGroup(null)
     } catch (error) {
-      alert(`Error updating group: ${error}`)
+      setEditError(error instanceof Error ? error.message : String(error))
     } finally {
       setIsSubmitting(false)
     }
@@ -184,6 +192,7 @@ function RouteComponent() {
     if (!selectedGroup) return
 
     setIsSubmitting(true)
+    setDeleteError(null)
     try {
       await deleteGroup({
         groupId: selectedGroup._id,
@@ -191,7 +200,7 @@ function RouteComponent() {
       setDeleteDialogOpen(false)
       setSelectedGroup(null)
     } catch (error) {
-      alert(`Error deleting group: ${error}`)
+      setDeleteError(error instanceof Error ? error.message : String(error))
     } finally {
       setIsSubmitting(false)
     }
@@ -204,6 +213,7 @@ function RouteComponent() {
 
   const openDeleteDialog = (group: Group) => {
     setSelectedGroup(group)
+    setDeleteError(null)
     setDeleteDialogOpen(true)
   }
 
@@ -457,6 +467,12 @@ function RouteComponent() {
                 onChange={(e) => setFormDescription(e.target.value)}
               />
             </div>
+            {createError && (
+              <div className="flex items-start gap-2 rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm">
+                <AlertTriangle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
+                <p className="text-destructive">{createError}</p>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button
@@ -576,6 +592,12 @@ function RouteComponent() {
                 </div>
               )}
             </div>
+            {editError && (
+              <div className="flex items-start gap-2 rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm">
+                <AlertTriangle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
+                <p className="text-destructive">{editError}</p>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button
@@ -613,6 +635,12 @@ function RouteComponent() {
               undone.
             </DialogDescription>
           </DialogHeader>
+          {deleteError && (
+            <div className="flex items-start gap-2 rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm">
+              <AlertTriangle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
+              <p className="text-destructive">{deleteError}</p>
+            </div>
+          )}
           <DialogFooter>
             <Button
               variant="outline"

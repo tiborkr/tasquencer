@@ -90,6 +90,11 @@ function RouteComponent() {
   // Loading states
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  // Error states
+  const [createError, setCreateError] = useState<string | null>(null)
+  const [editError, setEditError] = useState<string | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+
   // Group scopes by type
   const scopesByType = useMemo(() => {
     if (!availableScopes) return { system: [], domain: [] }
@@ -115,6 +120,7 @@ function RouteComponent() {
       setFormDescription('')
       setFormIsActive(true)
       setSelectedScopes(new Set())
+      setCreateError(null)
     }
   }, [createDialogOpen])
 
@@ -124,6 +130,7 @@ function RouteComponent() {
       setFormDescription(selectedRole.description)
       setFormIsActive(selectedRole.isActive)
       setSelectedScopes(new Set(selectedRole.scopes))
+      setEditError(null)
     }
   }, [editDialogOpen, selectedRole])
 
@@ -131,6 +138,7 @@ function RouteComponent() {
     if (!formName.trim() || !formDescription.trim()) return
 
     setIsSubmitting(true)
+    setCreateError(null)
     try {
       await createRole({
         name: formName.trim(),
@@ -139,7 +147,7 @@ function RouteComponent() {
       })
       setCreateDialogOpen(false)
     } catch (error) {
-      alert(`Error creating role: ${error}`)
+      setCreateError(error instanceof Error ? error.message : String(error))
     } finally {
       setIsSubmitting(false)
     }
@@ -149,6 +157,7 @@ function RouteComponent() {
     if (!selectedRole || !formName.trim() || !formDescription.trim()) return
 
     setIsSubmitting(true)
+    setEditError(null)
     try {
       await updateRole({
         roleId: selectedRole._id,
@@ -160,7 +169,7 @@ function RouteComponent() {
       setEditDialogOpen(false)
       setSelectedRole(null)
     } catch (error) {
-      alert(`Error updating role: ${error}`)
+      setEditError(error instanceof Error ? error.message : String(error))
     } finally {
       setIsSubmitting(false)
     }
@@ -170,6 +179,7 @@ function RouteComponent() {
     if (!selectedRole) return
 
     setIsSubmitting(true)
+    setDeleteError(null)
     try {
       await deleteRole({
         roleId: selectedRole._id,
@@ -177,7 +187,7 @@ function RouteComponent() {
       setDeleteDialogOpen(false)
       setSelectedRole(null)
     } catch (error) {
-      alert(`Error deleting role: ${error}`)
+      setDeleteError(error instanceof Error ? error.message : String(error))
     } finally {
       setIsSubmitting(false)
     }
@@ -190,6 +200,7 @@ function RouteComponent() {
 
   const openDeleteDialog = (role: Role) => {
     setSelectedRole(role)
+    setDeleteError(null)
     setDeleteDialogOpen(true)
   }
 
@@ -468,6 +479,12 @@ function RouteComponent() {
                 onToggleScope={toggleScope}
               />
             </div>
+            {createError && (
+              <div className="flex items-start gap-2 rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm">
+                <AlertTriangle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
+                <p className="text-destructive">{createError}</p>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button
@@ -550,6 +567,12 @@ function RouteComponent() {
                 onToggleScope={toggleScope}
               />
             </div>
+            {editError && (
+              <div className="flex items-start gap-2 rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm">
+                <AlertTriangle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
+                <p className="text-destructive">{editError}</p>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button
@@ -588,6 +611,12 @@ function RouteComponent() {
               associated permissions.
             </DialogDescription>
           </DialogHeader>
+          {deleteError && (
+            <div className="flex items-start gap-2 rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm">
+              <AlertTriangle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
+              <p className="text-destructive">{deleteError}</p>
+            </div>
+          )}
           <DialogFooter>
             <Button
               variant="outline"
