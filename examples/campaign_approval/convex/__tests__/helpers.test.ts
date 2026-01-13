@@ -72,7 +72,7 @@ export async function setupAuthenticatedCampaignUser(t: TestContext) {
   const group = await t.query(
     components.tasquencerAuthorization.api.getGroupByName,
     {
-      name: AUTH_CAMPAIGN_GROUPS.CAMPAIGN_TEAM,
+      name: AUTH_CAMPAIGN_GROUPS.MARKETING_COORDINATORS,
     },
   )
 
@@ -91,7 +91,7 @@ export async function setupAuthenticatedCampaignUser(t: TestContext) {
   const role = await t.query(
     components.tasquencerAuthorization.api.getRoleByName,
     {
-      name: AUTH_CAMPAIGN_ROLES.CAMPAIGN_STAFF,
+      name: AUTH_CAMPAIGN_ROLES.CAMPAIGN_COORDINATOR,
     },
   )
 

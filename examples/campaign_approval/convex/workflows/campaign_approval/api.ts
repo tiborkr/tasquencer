@@ -43,7 +43,7 @@ export const getCampaign = query({
     workflowId: v.id('tasquencerWorkflows'),
   },
   handler: async (ctx, args) => {
-    await assertUserHasScope(ctx, 'campaign_approval:staff')
+    await assertUserHasScope(ctx, 'campaign:read')
     return await getCampaignByWorkflowId(ctx.db, args.workflowId)
   },
 })
@@ -54,7 +54,7 @@ export const getCampaign = query({
 export const getCampaigns = query({
   args: {},
   handler: async (ctx) => {
-    await assertUserHasScope(ctx, 'campaign_approval:staff')
+    await assertUserHasScope(ctx, 'campaign:read')
     return await listCampaigns(ctx.db)
   },
 })
@@ -67,7 +67,7 @@ export const claimCampaignWorkItem = mutation({
     workItemId: v.id('tasquencerWorkItems'),
   },
   handler: async (ctx, args) => {
-    await assertUserHasScope(ctx, 'campaign_approval:write')
+    await assertUserHasScope(ctx, 'campaign:manage')
     const authUser = await authComponent.getAuthUser(ctx)
 
     if (!authUser.userId) {
@@ -96,7 +96,7 @@ export const claimCampaignWorkItem = mutation({
 export const getCampaignWorkQueue = query({
   args: {},
   handler: async (ctx) => {
-    await assertUserHasScope(ctx, 'campaign_approval:staff')
+    await assertUserHasScope(ctx, 'campaign:read')
     const authUser = await authComponent.getAuthUser(ctx)
 
     if (!authUser.userId) {
@@ -170,7 +170,7 @@ export const campaignWorkflowTaskStates = query({
     workflowId: v.id('tasquencerWorkflows'),
   },
   handler: async (ctx, args) => {
-    await assertUserHasScope(ctx, 'campaign_approval:staff')
+    await assertUserHasScope(ctx, 'campaign:read')
     return await getWorkflowTaskStates(ctx.db, {
       workflowName: 'campaign_approval',
       workflowId: args.workflowId,
