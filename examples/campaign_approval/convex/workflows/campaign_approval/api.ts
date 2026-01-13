@@ -150,7 +150,10 @@ export const getCampaignWorkQueue = query({
         campaign: campaign
           ? {
               _id: campaign._id,
-              message: campaign.message,
+              name: campaign.name,
+              objective: campaign.objective,
+              status: campaign.status,
+              estimatedBudget: campaign.estimatedBudget,
               createdAt: campaign.createdAt,
             }
           : null,

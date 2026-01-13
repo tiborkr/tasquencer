@@ -40,9 +40,10 @@ function CampaignsPageInner() {
 
   // Calculate stats
   const stats = useMemo(() => {
-    const completed = campaigns.filter((g) => g.message).length
-    const pending = campaigns.filter((g) => !g.message).length
-    return { total: campaigns.length, completed, pending }
+    const completed = campaigns.filter((c) => c.status === 'completed').length
+    const pending = campaigns.filter((c) => c.status === 'draft').length
+    const active = campaigns.filter((c) => c.status === 'active').length
+    return { total: campaigns.length, completed, pending, active }
   }, [campaigns])
 
   return (
@@ -121,7 +122,8 @@ function CampaignsPageInner() {
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 <TableHead className="w-16">#</TableHead>
-                <TableHead>Message</TableHead>
+                <TableHead>Name</TableHead>
+                <TableHead className="hidden sm:table-cell">Budget</TableHead>
                 <TableHead className="hidden sm:table-cell">Created</TableHead>
                 <TableHead className="text-right">Status</TableHead>
               </TableRow>
@@ -133,13 +135,13 @@ function CampaignsPageInner() {
                     {index + 1}
                   </TableCell>
                   <TableCell>
-                    {campaign.message ? (
-                      <span className="font-medium">{campaign.message}</span>
-                    ) : (
-                      <span className="text-muted-foreground italic">
-                        Pending...
-                      </span>
-                    )}
+                    <span className="font-medium">{campaign.name}</span>
+                    <p className="text-xs text-muted-foreground truncate max-w-xs">
+                      {campaign.objective}
+                    </p>
+                  </TableCell>
+                  <TableCell className="hidden sm:table-cell text-muted-foreground">
+                    ${campaign.estimatedBudget.toLocaleString()}
                   </TableCell>
                   <TableCell className="hidden sm:table-cell text-muted-foreground">
                     {new Date(campaign.createdAt).toLocaleDateString()}
@@ -148,12 +150,14 @@ function CampaignsPageInner() {
                     <Badge
                       variant="outline"
                       className={
-                        campaign.message
+                        campaign.status === 'completed'
                           ? 'border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-500/5'
-                          : 'border-amber-500/30 text-amber-600 dark:text-amber-400 bg-amber-500/5'
+                          : campaign.status === 'active'
+                            ? 'border-blue-500/30 text-blue-600 dark:text-blue-400 bg-blue-500/5'
+                            : 'border-amber-500/30 text-amber-600 dark:text-amber-400 bg-amber-500/5'
                       }
                     >
-                      {campaign.message ? 'Completed' : 'Pending'}
+                      {campaign.status}
                     </Badge>
                   </TableCell>
                 </TableRow>
