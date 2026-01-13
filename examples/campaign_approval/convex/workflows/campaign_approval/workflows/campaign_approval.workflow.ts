@@ -10,6 +10,12 @@ import {
   intakeReviewTask,
   assignOwnerTask,
 } from '../workItems/initiation'
+import {
+  conductResearchTask,
+  defineMetricsTask,
+  developStrategyTask,
+  createPlanTask,
+} from '../workItems/strategy'
 
 /**
  * Campaign request payload schema for workflow initialization
@@ -73,13 +79,17 @@ async function getIntakeDecision(
 }
 
 /**
- * Campaign Approval Workflow - Phase 1: Initiation
+ * Campaign Approval Workflow - Phases 1 & 2
  *
- * Flow:
+ * Phase 1: Initiation
  * start -> submitRequest -> intakeReview -> [XOR routing]
- *   - approved -> assignOwner -> end (TODO: connect to Phase 2)
+ *   - approved -> assignOwner -> Phase 2
  *   - rejected -> end
  *   - needs_changes -> submitRequest (loop)
+ *
+ * Phase 2: Strategy (sequential linear flow)
+ * assignOwner -> conductResearch -> defineMetrics -> developStrategy -> createPlan -> end
+ * (TODO: connect createPlan to Phase 3 Budget tasks)
  *
  * Uses XOR split pattern with route() callback for dynamic path selection.
  */
@@ -93,6 +103,11 @@ export const campaignApprovalWorkflow = Builder.workflow('campaign_approval')
   .task('submitRequest', submitRequestTask)
   .task('intakeReview', intakeReviewTask)
   .task('assignOwner', assignOwnerTask)
+  // Phase 2: Strategy Tasks (sequential)
+  .task('conductResearch', conductResearchTask)
+  .task('defineMetrics', defineMetricsTask)
+  .task('developStrategy', developStrategyTask)
+  .task('createPlan', createPlanTask)
   // Connections: Start -> Submit Request
   .connectCondition('start', (to) => to.task('submitRequest'))
   // Submit Request -> Intake Review
@@ -119,5 +134,11 @@ export const campaignApprovalWorkflow = Builder.workflow('campaign_approval')
         return route.toCondition('end')
       }),
   )
-  // Assign Owner -> End (TODO: connect to Phase 2 strategy tasks)
-  .connectTask('assignOwner', (to) => to.condition('end'))
+  // Assign Owner -> Conduct Research (Phase 2 begins)
+  .connectTask('assignOwner', (to) => to.task('conductResearch'))
+  // Phase 2: Strategy sequential flow
+  .connectTask('conductResearch', (to) => to.task('defineMetrics'))
+  .connectTask('defineMetrics', (to) => to.task('developStrategy'))
+  .connectTask('developStrategy', (to) => to.task('createPlan'))
+  // Create Plan -> End (TODO: connect to Phase 3 Budget tasks)
+  .connectTask('createPlan', (to) => to.condition('end'))
