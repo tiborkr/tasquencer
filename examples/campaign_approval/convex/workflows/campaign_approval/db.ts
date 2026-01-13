@@ -2,6 +2,24 @@ import type { DatabaseReader, DatabaseWriter } from '../../_generated/server'
 import type { Doc, Id } from '../../_generated/dataModel'
 
 // ============================================================================
+// Work Item Metadata Functions
+// ============================================================================
+
+/**
+ * Get campaign work items by aggregate (campaign) ID
+ * Used for routing decisions based on work item payload
+ */
+export async function getCampaignWorkItemsByAggregate(
+  db: DatabaseReader,
+  campaignId: Id<'campaigns'>,
+): Promise<Doc<'campaignWorkItems'>[]> {
+  return await db
+    .query('campaignWorkItems')
+    .withIndex('by_aggregateTableId', (q) => q.eq('aggregateTableId', campaignId))
+    .collect()
+}
+
+// ============================================================================
 // Campaign Functions (Aggregate Root)
 // ============================================================================
 

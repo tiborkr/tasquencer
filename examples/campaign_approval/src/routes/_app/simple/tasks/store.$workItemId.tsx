@@ -5,8 +5,6 @@ import { useConvexMutation } from '@convex-dev/react-query'
 import { api } from '@/convex/_generated/api'
 import type { Id } from '@/convex/_generated/dataModel'
 import { Button } from '@repo/ui/components/button'
-import { Label } from '@repo/ui/components/label'
-import { Textarea } from '@repo/ui/components/textarea'
 import {
   Card,
   CardContent,
@@ -22,14 +20,19 @@ import {
   Loader2,
   ListTodo,
   Play,
-  Target,
+  Send,
 } from 'lucide-react'
 
 export const Route = createFileRoute('/_app/simple/tasks/store/$workItemId')({
-  component: StoreCampaignTask,
+  component: SubmitRequestTask,
 })
 
-function StoreCampaignTask() {
+/**
+ * UI for the submitRequest work item
+ * This is the first task in Phase 1: Initiation
+ * User confirms their campaign request for intake review
+ */
+function SubmitRequestTask() {
   const { workItemId } = Route.useParams()
 
   return (
@@ -45,7 +48,6 @@ function TaskPageInner({
   workItemId: Id<'tasquencerWorkItems'>
 }) {
   const navigate = useNavigate()
-  const [objective, setObjective] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [isStarted, setIsStarted] = useState(false)
 
@@ -77,22 +79,17 @@ function TaskPageInner({
     setError(null)
     startMutation.mutate({
       workItemId,
-      args: { name: 'storeCampaign' },
+      args: { name: 'submitRequest' },
     })
   }
 
-  const handleComplete = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!objective.trim()) {
-      setError('Please enter an updated campaign objective')
-      return
-    }
+  const handleComplete = () => {
     setError(null)
     completeMutation.mutate({
       workItemId,
       args: {
-        name: 'storeCampaign',
-        payload: { objective: objective.trim() },
+        name: 'submitRequest',
+        payload: { confirmed: true },
       },
     })
   }
@@ -110,11 +107,11 @@ function TaskPageInner({
             </div>
             <div>
               <h1 className="text-2xl font-semibold tracking-tight">
-                Store Campaign
+                Submit Campaign Request
               </h1>
               <p className="text-sm text-muted-foreground">
                 {isStarted
-                  ? 'Update the campaign objective'
+                  ? 'Confirm your campaign request for review'
                   : 'Claim this task to get started'}
               </p>
             </div>
@@ -178,7 +175,7 @@ function TaskPageInner({
                       <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-medium flex-shrink-0">
                         2
                       </span>
-                      <span>You&apos;ll update the campaign objective</span>
+                      <span>Review and confirm your campaign request</span>
                     </li>
                     <li className="flex items-start gap-2">
                       <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-medium flex-shrink-0">
@@ -215,63 +212,64 @@ function TaskPageInner({
             <CardHeader className="border-b bg-muted/30 px-6 py-5">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
-                  <Target className="h-5 w-5" />
+                  <Send className="h-5 w-5" />
                 </div>
                 <div>
-                  <CardTitle className="text-lg">Update Objective</CardTitle>
+                  <CardTitle className="text-lg">Confirm Submission</CardTitle>
                   <CardDescription className="text-sm">
-                    Refine the campaign objective before review
+                    Submit your campaign request for intake review
                   </CardDescription>
                 </div>
               </div>
             </CardHeader>
-            <form onSubmit={handleComplete}>
-              <CardContent className="p-6">
-                <div className="space-y-4">
-                  {error && (
-                    <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3">
-                      <p className="text-sm text-destructive">{error}</p>
-                    </div>
-                  )}
-
-                  <div className="space-y-2">
-                    <Label htmlFor="objective" className="text-sm font-medium">
-                      Campaign Objective
-                    </Label>
-                    <Textarea
-                      id="objective"
-                      placeholder="Describe the campaign objective..."
-                      value={objective}
-                      onChange={(e) => setObjective(e.target.value)}
-                      disabled={isPending}
-                      rows={4}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Enter the refined campaign objective
-                    </p>
+            <CardContent className="p-6">
+              <div className="space-y-4">
+                {error && (
+                  <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3">
+                    <p className="text-sm text-destructive">{error}</p>
                   </div>
+                )}
 
-                  <Button
-                    type="submit"
-                    disabled={isPending}
-                    className="w-full"
-                    size="lg"
-                  >
-                    {isPending ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Completing...
-                      </>
-                    ) : (
-                      <>
-                        <Check className="mr-2 h-4 w-4" />
-                        Complete Task
-                      </>
-                    )}
-                  </Button>
+                <div className="rounded-lg border bg-muted/30 p-4">
+                  <h4 className="text-sm font-medium mb-2">
+                    By confirming, you agree that:
+                  </h4>
+                  <ul className="text-sm text-muted-foreground space-y-2">
+                    <li className="flex items-start gap-2">
+                      <Check className="h-4 w-4 text-green-500 flex-shrink-0 mt-0.5" />
+                      <span>Your campaign details are accurate and complete</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <Check className="h-4 w-4 text-green-500 flex-shrink-0 mt-0.5" />
+                      <span>The request will be reviewed by the marketing team</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <Check className="h-4 w-4 text-green-500 flex-shrink-0 mt-0.5" />
+                      <span>You may be asked to provide additional information</span>
+                    </li>
+                  </ul>
                 </div>
-              </CardContent>
-            </form>
+
+                <Button
+                  onClick={handleComplete}
+                  disabled={isPending}
+                  className="w-full"
+                  size="lg"
+                >
+                  {isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Submitting...
+                    </>
+                  ) : (
+                    <>
+                      <Check className="mr-2 h-4 w-4" />
+                      Confirm & Submit
+                    </>
+                  )}
+                </Button>
+              </div>
+            </CardContent>
           </Card>
         )}
       </div>

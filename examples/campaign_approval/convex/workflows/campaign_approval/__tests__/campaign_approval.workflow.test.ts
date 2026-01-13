@@ -2,10 +2,11 @@
  * Integration tests for campaign_approval workflow
  *
  * Test Coverage:
- * - Happy path: initialize, start, complete workflow
+ * - Happy path: initialize, submit request, intake review, assign owner
  * - Work item lifecycle
  * - Authorization
  * - Work queue
+ * - XOR routing based on intake review decision
  */
 
 import { describe, it, vi, beforeEach, afterEach, expect } from 'vitest'
@@ -47,8 +48,8 @@ afterEach(() => {
 })
 
 describe('Campaign Approval Workflow', () => {
-  describe('Happy Path', () => {
-    it('completes full campaign workflow from initialize to completion', async () => {
+  describe('Phase 1: Initiation - Happy Path', () => {
+    it('completes Phase 1 workflow from submit request through intake approval to owner assignment', async () => {
       const t = setup()
 
       await setupCampaignApprovalAuthorization(t)
@@ -73,12 +74,14 @@ describe('Campaign Approval Workflow', () => {
 
       const workflowId = campaigns[0].workflowId
 
-      // Verify the storeCampaign task is enabled via task states
+      // Verify the submitRequest task is enabled via task states
       const taskStates = await t.query(
         api.workflows.campaign_approval.api.campaignWorkflowTaskStates,
         { workflowId },
       )
-      expect(taskStates.storeCampaign).toBe('enabled')
+      expect(taskStates.submitRequest).toBe('enabled')
+      expect(taskStates.intakeReview).toBe('disabled')
+      expect(taskStates.assignOwner).toBe('disabled')
 
       // Get the work item from the work queue
       const workQueue = await t.query(
@@ -86,50 +89,129 @@ describe('Campaign Approval Workflow', () => {
         {},
       )
       expect(workQueue.length).toBe(1)
-      expect(workQueue[0].taskType).toBe('storeCampaign')
+      expect(workQueue[0].taskType).toBe('submitRequest')
 
-      const workItemId = workQueue[0].workItemId
+      const submitRequestWorkItemId = workQueue[0].workItemId
 
-      // Start the work item
+      // Start and complete the submitRequest work item
       await t.mutation(api.workflows.campaign_approval.api.startWorkItem, {
-        workItemId,
-        args: { name: 'storeCampaign' },
+        workItemId: submitRequestWorkItemId,
+        args: { name: 'submitRequest' },
       })
 
       await waitForFlush(t)
 
-      // Verify work item is started via task states
+      // Verify submitRequest is started
       const startedTaskStates = await t.query(
         api.workflows.campaign_approval.api.campaignWorkflowTaskStates,
         { workflowId },
       )
-      expect(startedTaskStates.storeCampaign).toBe('started')
+      expect(startedTaskStates.submitRequest).toBe('started')
 
-      // Complete the work item with an updated objective
+      // Complete submitRequest - confirming the campaign submission
       await t.mutation(api.workflows.campaign_approval.api.completeWorkItem, {
-        workItemId,
+        workItemId: submitRequestWorkItemId,
         args: {
-          name: 'storeCampaign',
-          payload: { objective: 'Updated campaign objective' },
+          name: 'submitRequest',
+          payload: { confirmed: true },
         },
       })
 
       await waitForFlush(t)
 
-      // Verify work item is completed via task states
-      const completedTaskStates = await t.query(
+      // Verify submitRequest completed and intakeReview is now enabled
+      const afterSubmitTaskStates = await t.query(
         api.workflows.campaign_approval.api.campaignWorkflowTaskStates,
         { workflowId },
       )
-      expect(completedTaskStates.storeCampaign).toBe('completed')
+      expect(afterSubmitTaskStates.submitRequest).toBe('completed')
+      expect(afterSubmitTaskStates.intakeReview).toBe('enabled')
 
-      // Verify the campaign objective was updated and status changed
-      const updatedCampaigns = await t.query(
+      // Verify campaign status changed to intake_review
+      const campaignsAfterSubmit = await t.query(
         api.workflows.campaign_approval.api.getCampaigns,
         {},
       )
-      expect(updatedCampaigns[0].objective).toBe('Updated campaign objective')
-      expect(updatedCampaigns[0].status).toBe('intake_review')
+      expect(campaignsAfterSubmit[0].status).toBe('intake_review')
+
+      // Get intakeReview work item
+      const intakeWorkQueue = await t.query(
+        api.workflows.campaign_approval.api.getCampaignWorkQueue,
+        {},
+      )
+      expect(intakeWorkQueue.length).toBe(1)
+      expect(intakeWorkQueue[0].taskType).toBe('intakeReview')
+
+      const intakeReviewWorkItemId = intakeWorkQueue[0].workItemId
+
+      // Start and complete intakeReview with 'approved' decision
+      await t.mutation(api.workflows.campaign_approval.api.startWorkItem, {
+        workItemId: intakeReviewWorkItemId,
+        args: { name: 'intakeReview' },
+      })
+
+      await waitForFlush(t)
+
+      await t.mutation(api.workflows.campaign_approval.api.completeWorkItem, {
+        workItemId: intakeReviewWorkItemId,
+        args: {
+          name: 'intakeReview',
+          payload: { decision: 'approved', reviewNotes: 'Looks good!' },
+        },
+      })
+
+      await waitForFlush(t)
+
+      // Verify intakeReview completed and assignOwner is enabled (approved path)
+      const afterIntakeTaskStates = await t.query(
+        api.workflows.campaign_approval.api.campaignWorkflowTaskStates,
+        { workflowId },
+      )
+      expect(afterIntakeTaskStates.intakeReview).toBe('completed')
+      expect(afterIntakeTaskStates.assignOwner).toBe('enabled')
+
+      // Get assignOwner work item
+      const assignWorkQueue = await t.query(
+        api.workflows.campaign_approval.api.getCampaignWorkQueue,
+        {},
+      )
+      expect(assignWorkQueue.length).toBe(1)
+      expect(assignWorkQueue[0].taskType).toBe('assignOwner')
+
+      const assignOwnerWorkItemId = assignWorkQueue[0].workItemId
+
+      // Start and complete assignOwner
+      await t.mutation(api.workflows.campaign_approval.api.startWorkItem, {
+        workItemId: assignOwnerWorkItemId,
+        args: { name: 'assignOwner' },
+      })
+
+      await waitForFlush(t)
+
+      await t.mutation(api.workflows.campaign_approval.api.completeWorkItem, {
+        workItemId: assignOwnerWorkItemId,
+        args: {
+          name: 'assignOwner',
+          payload: { ownerId: userId },
+        },
+      })
+
+      await waitForFlush(t)
+
+      // Verify Phase 1 completed - campaign should have owner and strategy status
+      const finalCampaigns = await t.query(
+        api.workflows.campaign_approval.api.getCampaigns,
+        {},
+      )
+      expect(finalCampaigns[0].ownerId).toBe(userId)
+      expect(finalCampaigns[0].status).toBe('strategy')
+
+      // Verify workflow reached end (for now - Phase 2 not implemented)
+      const finalTaskStates = await t.query(
+        api.workflows.campaign_approval.api.campaignWorkflowTaskStates,
+        { workflowId },
+      )
+      expect(finalTaskStates.assignOwner).toBe('completed')
     })
   })
 
@@ -154,7 +236,7 @@ describe('Campaign Approval Workflow', () => {
       )
 
       expect(workQueue.length).toBe(1)
-      expect(workQueue[0].taskType).toBe('storeCampaign')
+      expect(workQueue[0].taskType).toBe('submitRequest')
       expect(workQueue[0].status).toBe('pending')
     })
 
