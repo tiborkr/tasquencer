@@ -12,6 +12,7 @@ import {
   listCreativesByCampaignId,
   listKPIsByCampaignId,
   updateCampaign,
+  updateCampaignCreative,
 } from './db'
 import { CampaignWorkItemHelpers } from './helpers'
 import { authComponent } from '../../auth'
@@ -313,6 +314,36 @@ export const getCampaignCreatives = query({
   handler: async (ctx, args) => {
     await assertUserHasScope(ctx, 'campaign:read')
     return await listCreativesByCampaignId(ctx.db, args.campaignId)
+  },
+})
+
+/**
+ * Upload a creative asset file
+ *
+ * Updates a creative record with a storage reference from Convex file storage.
+ * The client should first upload the file to Convex storage to get the storageId,
+ * then call this mutation to associate it with the creative.
+ */
+export const uploadCreativeAsset = mutation({
+  args: {
+    creativeId: v.id('campaignCreatives'),
+    storageId: v.id('_storage'),
+  },
+  handler: async (ctx, args) => {
+    await assertUserHasScope(ctx, 'campaign:creative_write')
+
+    // Verify the creative exists
+    const creative = await ctx.db.get(args.creativeId)
+    if (!creative) {
+      throw new Error('CREATIVE_NOT_FOUND')
+    }
+
+    // Update the creative with the storage reference
+    await updateCampaignCreative(ctx.db, args.creativeId, {
+      storageId: args.storageId,
+    })
+
+    return { success: true }
   },
 })
 

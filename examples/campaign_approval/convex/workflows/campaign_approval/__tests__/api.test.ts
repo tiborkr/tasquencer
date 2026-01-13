@@ -226,6 +226,149 @@ describe('Campaign Approval API Endpoints', () => {
     })
   })
 
+  describe('uploadCreativeAsset', () => {
+    it('exports uploadCreativeAsset mutation', async () => {
+      // Verify the export exists
+      expect(api.workflows.campaign_approval.api.uploadCreativeAsset).toBeDefined()
+    })
+
+    it('updates creative with storage reference', async () => {
+      const t = setup()
+      await setupCampaignApprovalAuthorization(t)
+      const { userId } = await setupAuthenticatedCampaignUser(t)
+
+      // Create a campaign and creative via direct DB access
+      const { creativeId, storageId } = await t.run(async (ctx) => {
+        // Create workflow
+        const workflowId = await ctx.db.insert('tasquencerWorkflows', {
+          name: 'campaign_approval',
+          path: ['campaign_approval'],
+          versionName: 'v1',
+          executionMode: 'normal',
+          realizedPath: ['campaign_approval'],
+          state: 'initialized',
+        })
+
+        // Create campaign
+        const now = Date.now()
+        const campaignId = await ctx.db.insert('campaigns', {
+          workflowId,
+          name: 'Test Campaign',
+          objective: 'Test objective',
+          targetAudience: 'Test audience',
+          keyMessages: ['Message 1'],
+          channels: ['email'],
+          proposedStartDate: now + 7 * 24 * 60 * 60 * 1000,
+          proposedEndDate: now + 30 * 24 * 60 * 60 * 1000,
+          estimatedBudget: 10000,
+          requesterId: userId as any,
+          status: 'draft',
+          createdAt: now,
+          updatedAt: now,
+        })
+
+        // Create creative
+        const creativeId = await ctx.db.insert('campaignCreatives', {
+          campaignId,
+          workflowId,
+          assetType: 'ad',
+          name: 'Test Creative',
+          description: 'Test creative description',
+          version: 1,
+          createdBy: userId as any,
+          createdAt: now,
+          updatedAt: now,
+        })
+
+        // Create a mock storage entry (convex-test allows this)
+        const storageId = await ctx.storage.store(new Blob(['test content']))
+
+        return { creativeId, storageId }
+      })
+
+      // Call the uploadCreativeAsset mutation
+      const uploadMutation = api.workflows.campaign_approval.api.uploadCreativeAsset as any
+      const result = await t.mutation(uploadMutation, {
+        creativeId,
+        storageId,
+      })
+
+      expect(result).toEqual({ success: true })
+
+      // Verify the creative was updated with the storage ID
+      const updatedCreative = await t.run(async (ctx) => {
+        return await ctx.db.get(creativeId)
+      })
+
+      expect(updatedCreative?.storageId).toBe(storageId)
+    })
+
+    it('throws error when creative does not exist', async () => {
+      const t = setup()
+      await setupCampaignApprovalAuthorization(t)
+      const { userId } = await setupAuthenticatedCampaignUser(t)
+
+      // Create necessary entities and then delete the creative to get a valid but non-existent ID
+      const { deletedCreativeId, storageId } = await t.run(async (ctx) => {
+        // Create workflow
+        const workflowId = await ctx.db.insert('tasquencerWorkflows', {
+          name: 'campaign_approval',
+          path: ['campaign_approval'],
+          versionName: 'v1',
+          executionMode: 'normal',
+          realizedPath: ['campaign_approval'],
+          state: 'initialized',
+        })
+
+        // Create campaign
+        const now = Date.now()
+        const campaignId = await ctx.db.insert('campaigns', {
+          workflowId,
+          name: 'Test Campaign',
+          objective: 'Test objective',
+          targetAudience: 'Test audience',
+          keyMessages: ['Message 1'],
+          channels: ['email'],
+          proposedStartDate: now + 7 * 24 * 60 * 60 * 1000,
+          proposedEndDate: now + 30 * 24 * 60 * 60 * 1000,
+          estimatedBudget: 10000,
+          requesterId: userId as any,
+          status: 'draft',
+          createdAt: now,
+          updatedAt: now,
+        })
+
+        // Create creative and then delete it
+        const creativeId = await ctx.db.insert('campaignCreatives', {
+          campaignId,
+          workflowId,
+          assetType: 'ad',
+          name: 'Temp Creative',
+          description: '',
+          version: 1,
+          createdBy: userId as any,
+          createdAt: now,
+          updatedAt: now,
+        })
+        await ctx.db.delete(creativeId)
+
+        // Create a storage entry
+        const storageId = await ctx.storage.store(new Blob(['test content']))
+
+        return { deletedCreativeId: creativeId, storageId }
+      })
+
+      // Attempt to upload to non-existent creative
+      const uploadMutation = api.workflows.campaign_approval.api.uploadCreativeAsset as any
+      await expect(
+        t.mutation(uploadMutation, {
+          creativeId: deletedCreativeId,
+          storageId,
+        }),
+      ).rejects.toThrow('CREATIVE_NOT_FOUND')
+    })
+  })
+
   describe('Version Manager API Exports', () => {
     it('exports failWorkItem from version manager', async () => {
       // Verify the export exists
