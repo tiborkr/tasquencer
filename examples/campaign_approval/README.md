@@ -12,7 +12,7 @@ A simple workflow example demonstrating Tasquencer with Convex, Better Auth, and
 
 ## Workflow Architecture
 
-The LUcampaignUapproval workflow is a minimal example that demonstrates the core Tasquencer patterns:
+The campaignApproval workflow is a minimal example that demonstrates the core Tasquencer patterns:
 
 ```
 [start] → [storeUcampaignUapproval] → [end]
@@ -24,7 +24,7 @@ The LUcampaignUapproval workflow is a minimal example that demonstrates the core
 convex/workflows/campaign_approval/
 ├── definition.ts          # Version manager setup
 ├── workflows/
-│   └── LUcampaignUapproval.workflow.ts   # Workflow definition
+│   └── campaignApproval.workflow.ts   # Workflow definition
 ├── workItems/
 │   ├── storeUcampaignUapproval.workItem.ts  # Human task implementation
 │   └── authHelpers.ts     # Work item auth initialization
@@ -38,17 +38,17 @@ convex/workflows/campaign_approval/
 
 ### Workflow Definition
 
-**[LUcampaignUapproval.workflow.ts](convex/workflows/campaign_approval/workflows/LUcampaignUapproval.workflow.ts)**
+**[campaignApproval.workflow.ts](convex/workflows/campaign_approval/workflows/campaignApproval.workflow.ts)**
 
-The workflow initializes by creating a LUcampaignUapproval record with an empty message:
+The workflow initializes by creating a campaignApproval record with an empty message:
 
 ```typescript
-const LUcampaignUapprovalWorkflowActions = Builder.workflowActions().initialize(
+const campaignApprovalWorkflowActions = Builder.workflowActions().initialize(
   z.any(),
   async ({ mutationCtx, workflow }) => {
     const workflowId = await workflow.initialize()
 
-    // Create LUcampaignUapproval aggregate root with empty message
+    // Create campaignApproval aggregate root with empty message
     await insertUcampaignUapproval(mutationCtx.db, {
       workflowId,
       message: '',
@@ -57,8 +57,8 @@ const LUcampaignUapprovalWorkflowActions = Builder.workflowActions().initialize(
   },
 )
 
-export const LUcampaignUapprovalWorkflow = Builder.workflow('campaign_approval')
-  .withActions(LUcampaignUapprovalWorkflowActions)
+export const campaignApprovalWorkflow = Builder.workflow('campaign_approval')
+  .withActions(campaignApprovalWorkflowActions)
   .startCondition('start')
   .task('storeUcampaignUapproval', storeUcampaignUapprovalTask)
   .endCondition('end')
@@ -73,7 +73,7 @@ export const LUcampaignUapprovalWorkflow = Builder.workflow('campaign_approval')
 The `storeUcampaignUapproval` work item is a human task with claim-based assignment:
 
 1. **Start Action**: Claims the work item for the authenticated user
-2. **Complete Action**: Validates the user claimed the item, then updates the LUcampaignUapproval message
+2. **Complete Action**: Validates the user claimed the item, then updates the campaignApproval message
 
 ```typescript
 const storeUcampaignUapprovalActions = authService.builders.workItemActions
@@ -87,7 +87,7 @@ const storeUcampaignUapprovalActions = authService.builders.workItemActions
     storeWritePolicy,
     async ({ mutationCtx, workItem, parent }, payload) => {
       // Verify user claimed this item before completing
-      // Update LUcampaignUapproval message in database
+      // Update campaignApproval message in database
     },
   )
 ```
@@ -96,10 +96,10 @@ const storeUcampaignUapprovalActions = authService.builders.workItemActions
 
 **[scopes.ts](convex/workflows/campaign_approval/scopes.ts)**
 
-Two scopes control access to the LUcampaignUapproval workflow:
+Two scopes control access to the campaignApproval workflow:
 
-- `LUcampaignUapproval:staff` - Base scope for viewing LUcampaignUapprovals and work queue
-- `LUcampaignUapproval:write` - Permission to claim and complete LUcampaignUapproval tasks
+- `campaignApproval:staff` - Base scope for viewing campaignApprovals and work queue
+- `campaignApproval:write` - Permission to claim and complete campaignApproval tasks
 
 ### API Endpoints
 
@@ -107,10 +107,10 @@ Two scopes control access to the LUcampaignUapproval workflow:
 
 | Endpoint | Type | Description |
 |----------|------|-------------|
-| `initializeRootWorkflow` | Mutation | Start a new LUcampaignUapproval workflow |
+| `initializeRootWorkflow` | Mutation | Start a new campaignApproval workflow |
 | `startWorkItem` | Mutation | Claim and start a work item |
 | `completeWorkItem` | Mutation | Complete work item with message |
-| `getUcampaignUapprovals` | Query | List all LUcampaignUapprovals |
+| `getUcampaignUapprovals` | Query | List all campaignApprovals |
 | `getUcampaignUapprovalWorkQueue` | Query | Get available work items for user |
 | `claimUcampaignUapprovalWorkItem` | Mutation | Claim a work item |
 
@@ -122,10 +122,10 @@ The frontend uses TanStack Router with file-based routing and TanStack Query for
 
 | Route | Description |
 |-------|-------------|
-| `/simple` | List all LUcampaignUapprovals with stats |
-| `/simple/new` | Create new LUcampaignUapproval workflow |
+| `/simple` | List all campaignApprovals with stats |
+| `/simple/new` | Create new campaignApproval workflow |
 | `/simple/queue` | Work queue with claimable tasks |
-| `/simple/tasks/store/$workItemId` | Claim & complete a LUcampaignUapproval task |
+| `/simple/tasks/store/$workItemId` | Claim & complete a campaignApproval task |
 
 ### Data Flow Pattern
 
@@ -134,7 +134,7 @@ User Action (Click)
     ↓
 useMutation + useConvexMutation
     ↓
-Convex API (api.workflows.LUcampaignUapproval.api.*)
+Convex API (api.workflows.campaignApproval.api.*)
     ↓
 Tasquencer Workflow Engine
     ↓
@@ -149,7 +149,7 @@ useSuspenseQuery Re-render
 
 ```typescript
 const initializeMutation = useMutation({
-  mutationFn: useConvexMutation(api.workflows.LUcampaignUapproval.api.initializeRootWorkflow),
+  mutationFn: useConvexMutation(api.workflows.campaignApproval.api.initializeRootWorkflow),
   onSuccess: () => navigate({ to: '/simple/queue' }),
 })
 
@@ -161,7 +161,7 @@ initializeMutation.mutate({ payload: {} })
 
 ```typescript
 const completeMutation = useMutation({
-  mutationFn: useConvexMutation(api.workflows.LUcampaignUapproval.api.completeWorkItem),
+  mutationFn: useConvexMutation(api.workflows.campaignApproval.api.completeWorkItem),
 })
 
 // Complete with message payload
@@ -222,23 +222,23 @@ After registering your first user, run these Convex mutations from the CLI:
 # Create superadmin role and assign to your user
 npx convex run scaffold:scaffoldSuperadmin
 
-# Create LUcampaignUapproval workflow roles and groups
-npx convex run workflows:LUcampaignUapproval:authSetup
+# Create campaignApproval workflow roles and groups
+npx convex run workflows:campaignApproval:authSetup
 ```
 
 See the [Convex CLI documentation](https://docs.convex.dev/cli#run-convex-functions) for more details on running functions.
 
 ### 6. Assign User to UcampaignUapproval Team
 
-After running the setup mutations, assign your user to the `LUcampaignUapproval_team` group through the Admin UI at `/admin/groups` to grant access to the LUcampaignUapproval workflow.
+After running the setup mutations, assign your user to the `campaignApproval_team` group through the Admin UI at `/admin/groups` to grant access to the campaignApproval workflow.
 
 ## Usage
 
 1. Navigate to **Simple UcampaignUapproval > New UcampaignUapproval** to create a workflow
 2. Go to **Work Queue** to see pending tasks
 3. Click **Claim & Start** on a work item
-4. Enter a LUcampaignUapproval message and click **Complete Task**
-5. View completed LUcampaignUapprovals in **All UcampaignUapprovals**
+4. Enter a campaignApproval message and click **Complete Task**
+5. View completed campaignApprovals in **All UcampaignUapprovals**
 
 ## Admin Features
 
