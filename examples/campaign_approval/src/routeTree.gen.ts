@@ -28,9 +28,12 @@ import { Route as AppAuditTraceIdRouteImport } from './routes/_app/audit/$traceI
 import { Route as AppAdminUsersRouteImport } from './routes/_app/admin/users'
 import { Route as AppAdminRolesRouteImport } from './routes/_app/admin/roles'
 import { Route as AppAdminGroupsRouteImport } from './routes/_app/admin/groups'
+import { Route as AppCampaignsCampaignIdIndexRouteImport } from './routes/_app/campaigns/$campaignId.index'
 import { Route as AppAuditTraceIdIndexRouteImport } from './routes/_app/audit/$traceId.index'
 import { Route as AppAdminUsersIndexRouteImport } from './routes/_app/admin/users.index'
 import { Route as AppSimpleTasksWorkItemIdRouteImport } from './routes/_app/simple/tasks/$workItemId'
+import { Route as AppCampaignsCampaignIdCreativesRouteImport } from './routes/_app/campaigns/$campaignId.creatives'
+import { Route as AppCampaignsCampaignIdBudgetRouteImport } from './routes/_app/campaigns/$campaignId.budget'
 import { Route as AppAuditTraceIdVisualizerRouteImport } from './routes/_app/audit/$traceId.visualizer'
 import { Route as AppSimpleTasksStoreWorkItemIdRouteImport } from './routes/_app/simple/tasks/store.$workItemId'
 import { Route as AppAdminUsersUserIdAssignRouteImport } from './routes/_app/admin/users.$userId.assign'
@@ -129,6 +132,12 @@ const AppAdminGroupsRoute = AppAdminGroupsRouteImport.update({
   path: '/groups',
   getParentRoute: () => AppAdminRoute,
 } as any)
+const AppCampaignsCampaignIdIndexRoute =
+  AppCampaignsCampaignIdIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AppCampaignsCampaignIdRoute,
+  } as any)
 const AppAuditTraceIdIndexRoute = AppAuditTraceIdIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -144,6 +153,18 @@ const AppSimpleTasksWorkItemIdRoute =
     id: '/tasks/$workItemId',
     path: '/tasks/$workItemId',
     getParentRoute: () => AppSimpleRoute,
+  } as any)
+const AppCampaignsCampaignIdCreativesRoute =
+  AppCampaignsCampaignIdCreativesRouteImport.update({
+    id: '/creatives',
+    path: '/creatives',
+    getParentRoute: () => AppCampaignsCampaignIdRoute,
+  } as any)
+const AppCampaignsCampaignIdBudgetRoute =
+  AppCampaignsCampaignIdBudgetRouteImport.update({
+    id: '/budget',
+    path: '/budget',
+    getParentRoute: () => AppCampaignsCampaignIdRoute,
   } as any)
 const AppAuditTraceIdVisualizerRoute =
   AppAuditTraceIdVisualizerRouteImport.update({
@@ -175,7 +196,7 @@ export interface FileRoutesByFullPath {
   '/admin/roles': typeof AppAdminRolesRoute
   '/admin/users': typeof AppAdminUsersRouteWithChildren
   '/audit/$traceId': typeof AppAuditTraceIdRouteWithChildren
-  '/campaigns/$campaignId': typeof AppCampaignsCampaignIdRoute
+  '/campaigns/$campaignId': typeof AppCampaignsCampaignIdRouteWithChildren
   '/simple/new': typeof AppSimpleNewRoute
   '/simple/queue': typeof AppSimpleQueueRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -184,9 +205,12 @@ export interface FileRoutesByFullPath {
   '/campaigns/': typeof AppCampaignsIndexRoute
   '/simple/': typeof AppSimpleIndexRoute
   '/audit/$traceId/visualizer': typeof AppAuditTraceIdVisualizerRoute
+  '/campaigns/$campaignId/budget': typeof AppCampaignsCampaignIdBudgetRoute
+  '/campaigns/$campaignId/creatives': typeof AppCampaignsCampaignIdCreativesRoute
   '/simple/tasks/$workItemId': typeof AppSimpleTasksWorkItemIdRoute
   '/admin/users/': typeof AppAdminUsersIndexRoute
   '/audit/$traceId/': typeof AppAuditTraceIdIndexRoute
+  '/campaigns/$campaignId/': typeof AppCampaignsCampaignIdIndexRoute
   '/admin/users/$userId/assign': typeof AppAdminUsersUserIdAssignRoute
   '/simple/tasks/store/$workItemId': typeof AppSimpleTasksStoreWorkItemIdRoute
 }
@@ -195,7 +219,6 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/admin/groups': typeof AppAdminGroupsRoute
   '/admin/roles': typeof AppAdminRolesRoute
-  '/campaigns/$campaignId': typeof AppCampaignsCampaignIdRoute
   '/simple/new': typeof AppSimpleNewRoute
   '/simple/queue': typeof AppSimpleQueueRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -204,9 +227,12 @@ export interface FileRoutesByTo {
   '/campaigns': typeof AppCampaignsIndexRoute
   '/simple': typeof AppSimpleIndexRoute
   '/audit/$traceId/visualizer': typeof AppAuditTraceIdVisualizerRoute
+  '/campaigns/$campaignId/budget': typeof AppCampaignsCampaignIdBudgetRoute
+  '/campaigns/$campaignId/creatives': typeof AppCampaignsCampaignIdCreativesRoute
   '/simple/tasks/$workItemId': typeof AppSimpleTasksWorkItemIdRoute
   '/admin/users': typeof AppAdminUsersIndexRoute
   '/audit/$traceId': typeof AppAuditTraceIdIndexRoute
+  '/campaigns/$campaignId': typeof AppCampaignsCampaignIdIndexRoute
   '/admin/users/$userId/assign': typeof AppAdminUsersUserIdAssignRoute
   '/simple/tasks/store/$workItemId': typeof AppSimpleTasksStoreWorkItemIdRoute
 }
@@ -223,7 +249,7 @@ export interface FileRoutesById {
   '/_app/admin/roles': typeof AppAdminRolesRoute
   '/_app/admin/users': typeof AppAdminUsersRouteWithChildren
   '/_app/audit/$traceId': typeof AppAuditTraceIdRouteWithChildren
-  '/_app/campaigns/$campaignId': typeof AppCampaignsCampaignIdRoute
+  '/_app/campaigns/$campaignId': typeof AppCampaignsCampaignIdRouteWithChildren
   '/_app/simple/new': typeof AppSimpleNewRoute
   '/_app/simple/queue': typeof AppSimpleQueueRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -232,9 +258,12 @@ export interface FileRoutesById {
   '/_app/campaigns/': typeof AppCampaignsIndexRoute
   '/_app/simple/': typeof AppSimpleIndexRoute
   '/_app/audit/$traceId/visualizer': typeof AppAuditTraceIdVisualizerRoute
+  '/_app/campaigns/$campaignId/budget': typeof AppCampaignsCampaignIdBudgetRoute
+  '/_app/campaigns/$campaignId/creatives': typeof AppCampaignsCampaignIdCreativesRoute
   '/_app/simple/tasks/$workItemId': typeof AppSimpleTasksWorkItemIdRoute
   '/_app/admin/users/': typeof AppAdminUsersIndexRoute
   '/_app/audit/$traceId/': typeof AppAuditTraceIdIndexRoute
+  '/_app/campaigns/$campaignId/': typeof AppCampaignsCampaignIdIndexRoute
   '/_app/admin/users/$userId/assign': typeof AppAdminUsersUserIdAssignRoute
   '/_app/simple/tasks/store/$workItemId': typeof AppSimpleTasksStoreWorkItemIdRoute
 }
@@ -260,9 +289,12 @@ export interface FileRouteTypes {
     | '/campaigns/'
     | '/simple/'
     | '/audit/$traceId/visualizer'
+    | '/campaigns/$campaignId/budget'
+    | '/campaigns/$campaignId/creatives'
     | '/simple/tasks/$workItemId'
     | '/admin/users/'
     | '/audit/$traceId/'
+    | '/campaigns/$campaignId/'
     | '/admin/users/$userId/assign'
     | '/simple/tasks/store/$workItemId'
   fileRoutesByTo: FileRoutesByTo
@@ -271,7 +303,6 @@ export interface FileRouteTypes {
     | '/login'
     | '/admin/groups'
     | '/admin/roles'
-    | '/campaigns/$campaignId'
     | '/simple/new'
     | '/simple/queue'
     | '/api/auth/$'
@@ -280,9 +311,12 @@ export interface FileRouteTypes {
     | '/campaigns'
     | '/simple'
     | '/audit/$traceId/visualizer'
+    | '/campaigns/$campaignId/budget'
+    | '/campaigns/$campaignId/creatives'
     | '/simple/tasks/$workItemId'
     | '/admin/users'
     | '/audit/$traceId'
+    | '/campaigns/$campaignId'
     | '/admin/users/$userId/assign'
     | '/simple/tasks/store/$workItemId'
   id:
@@ -307,9 +341,12 @@ export interface FileRouteTypes {
     | '/_app/campaigns/'
     | '/_app/simple/'
     | '/_app/audit/$traceId/visualizer'
+    | '/_app/campaigns/$campaignId/budget'
+    | '/_app/campaigns/$campaignId/creatives'
     | '/_app/simple/tasks/$workItemId'
     | '/_app/admin/users/'
     | '/_app/audit/$traceId/'
+    | '/_app/campaigns/$campaignId/'
     | '/_app/admin/users/$userId/assign'
     | '/_app/simple/tasks/store/$workItemId'
   fileRoutesById: FileRoutesById
@@ -456,6 +493,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAdminGroupsRouteImport
       parentRoute: typeof AppAdminRoute
     }
+    '/_app/campaigns/$campaignId/': {
+      id: '/_app/campaigns/$campaignId/'
+      path: '/'
+      fullPath: '/campaigns/$campaignId/'
+      preLoaderRoute: typeof AppCampaignsCampaignIdIndexRouteImport
+      parentRoute: typeof AppCampaignsCampaignIdRoute
+    }
     '/_app/audit/$traceId/': {
       id: '/_app/audit/$traceId/'
       path: '/'
@@ -476,6 +520,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/simple/tasks/$workItemId'
       preLoaderRoute: typeof AppSimpleTasksWorkItemIdRouteImport
       parentRoute: typeof AppSimpleRoute
+    }
+    '/_app/campaigns/$campaignId/creatives': {
+      id: '/_app/campaigns/$campaignId/creatives'
+      path: '/creatives'
+      fullPath: '/campaigns/$campaignId/creatives'
+      preLoaderRoute: typeof AppCampaignsCampaignIdCreativesRouteImport
+      parentRoute: typeof AppCampaignsCampaignIdRoute
+    }
+    '/_app/campaigns/$campaignId/budget': {
+      id: '/_app/campaigns/$campaignId/budget'
+      path: '/budget'
+      fullPath: '/campaigns/$campaignId/budget'
+      preLoaderRoute: typeof AppCampaignsCampaignIdBudgetRouteImport
+      parentRoute: typeof AppCampaignsCampaignIdRoute
     }
     '/_app/audit/$traceId/visualizer': {
       id: '/_app/audit/$traceId/visualizer'
@@ -561,13 +619,31 @@ const AppAuditRouteWithChildren = AppAuditRoute._addFileChildren(
   AppAuditRouteChildren,
 )
 
+interface AppCampaignsCampaignIdRouteChildren {
+  AppCampaignsCampaignIdBudgetRoute: typeof AppCampaignsCampaignIdBudgetRoute
+  AppCampaignsCampaignIdCreativesRoute: typeof AppCampaignsCampaignIdCreativesRoute
+  AppCampaignsCampaignIdIndexRoute: typeof AppCampaignsCampaignIdIndexRoute
+}
+
+const AppCampaignsCampaignIdRouteChildren: AppCampaignsCampaignIdRouteChildren =
+  {
+    AppCampaignsCampaignIdBudgetRoute: AppCampaignsCampaignIdBudgetRoute,
+    AppCampaignsCampaignIdCreativesRoute: AppCampaignsCampaignIdCreativesRoute,
+    AppCampaignsCampaignIdIndexRoute: AppCampaignsCampaignIdIndexRoute,
+  }
+
+const AppCampaignsCampaignIdRouteWithChildren =
+  AppCampaignsCampaignIdRoute._addFileChildren(
+    AppCampaignsCampaignIdRouteChildren,
+  )
+
 interface AppCampaignsRouteChildren {
-  AppCampaignsCampaignIdRoute: typeof AppCampaignsCampaignIdRoute
+  AppCampaignsCampaignIdRoute: typeof AppCampaignsCampaignIdRouteWithChildren
   AppCampaignsIndexRoute: typeof AppCampaignsIndexRoute
 }
 
 const AppCampaignsRouteChildren: AppCampaignsRouteChildren = {
-  AppCampaignsCampaignIdRoute: AppCampaignsCampaignIdRoute,
+  AppCampaignsCampaignIdRoute: AppCampaignsCampaignIdRouteWithChildren,
   AppCampaignsIndexRoute: AppCampaignsIndexRoute,
 }
 
