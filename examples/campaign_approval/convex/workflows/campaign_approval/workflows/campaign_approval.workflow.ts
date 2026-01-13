@@ -39,6 +39,12 @@ import {
   qaTestTask,
   fixIssuesTask,
 } from '../workItems/technical'
+import {
+  preLaunchReviewTask,
+  addressConcernsTask,
+  launchApprovalTask,
+  internalCommsTask,
+} from '../workItems/launch'
 
 /**
  * Campaign request payload schema for workflow initialization
@@ -226,7 +232,55 @@ async function getQaTestDecision(
 }
 
 /**
- * Campaign Approval Workflow - Phases 1, 2, 3, 4 & 5
+ * Helper to get pre-launch review decision from work item metadata
+ * Used for XOR routing after pre-launch review
+ */
+async function getPreLaunchReviewDecision(
+  db: any,
+  workflowId: any,
+): Promise<boolean | null> {
+  const campaign = await getCampaignByWorkflowId(db, workflowId)
+  if (!campaign) return null
+
+  const workItems = await getCampaignWorkItemsByAggregate(db, campaign._id)
+
+  // Get the most recent preLaunchReview work item (for loop scenarios)
+  const reviewItems = workItems
+    .filter((wi) => wi.payload.type === 'preLaunchReview')
+    .sort((a, b) => b._creationTime - a._creationTime)
+
+  const reviewItem = reviewItems[0]
+  if (!reviewItem || reviewItem.payload.type !== 'preLaunchReview') return null
+
+  return reviewItem.payload.checklistComplete ?? null
+}
+
+/**
+ * Helper to get launch approval decision from work item metadata
+ * Used for XOR routing after launch approval
+ */
+async function getLaunchApprovalDecision(
+  db: any,
+  workflowId: any,
+): Promise<'approved' | 'concerns' | 'rejected' | null> {
+  const campaign = await getCampaignByWorkflowId(db, workflowId)
+  if (!campaign) return null
+
+  const workItems = await getCampaignWorkItemsByAggregate(db, campaign._id)
+
+  // Get the most recent launchApproval work item (for loop scenarios)
+  const approvalItems = workItems
+    .filter((wi) => wi.payload.type === 'launchApproval')
+    .sort((a, b) => b._creationTime - a._creationTime)
+
+  const approvalItem = approvalItems[0]
+  if (!approvalItem || approvalItem.payload.type !== 'launchApproval') return null
+
+  return approvalItem.payload.decision ?? null
+}
+
+/**
+ * Campaign Approval Workflow - Phases 1, 2, 3, 4, 5 & 6
  *
  * Phase 1: Initiation
  * start -> submitRequest -> intakeReview -> [XOR routing]
@@ -259,12 +313,25 @@ async function getQaTestDecision(
  *   - configAnalytics (campaign:ops)
  *   - setupMedia (campaign:media)
  * All three -> setupJoin (AND join) -> qaTest -> [XOR routing]
- *   - passed -> end (TODO: Phase 6 Launch)
+ *   - passed -> preLaunchReview (Phase 6)
  *   - failed -> fixIssues -> qaTest (loop)
+ *
+ * Phase 6: Launch
+ * preLaunchReview -> [XOR routing]
+ *   - readyForApproval -> launchApproval -> [XOR routing]
+ *       - approved -> internalComms -> end (TODO: Phase 7 Execution)
+ *       - concerns -> addressConcerns -> preLaunchReview (loop)
+ *       - rejected -> end
+ *   - not ready -> addressConcerns -> preLaunchReview (loop)
  *
  * Uses XOR split pattern with route() callback for dynamic path selection.
  * Uses AND split/join for parallel technical setup tasks.
+ *
+ * Note: With 27 tasks + 2 conditions, TypeScript hits type depth limits (TS2589).
+ * Using @ts-expect-error to suppress type checking during build. The workflow
+ * still validates types at runtime through Convex schema.
  */
+// @ts-expect-error TS2589: Type instantiation is excessively deep and possibly infinite (27+ workflow elements)
 export const campaignApprovalWorkflow = Builder.workflow('campaign_approval')
   .withActions(campaignApprovalWorkflowActions)
   // Conditions
@@ -307,6 +374,13 @@ export const campaignApprovalWorkflow = Builder.workflow('campaign_approval')
   .dummyTask('setupJoin', Builder.dummyTask().withJoinType('and'))
   .task('qaTest', qaTestTask)
   .task('fixIssues', fixIssuesTask)
+  // Phase 6: Launch Tasks
+  // Note: preLaunchReview uses XOR split to route based on readyForApproval
+  // Note: launchApproval uses XOR split to route based on decision
+  .task('preLaunchReview', preLaunchReviewTask)
+  .task('addressConcerns', addressConcernsTask)
+  .task('launchApproval', launchApprovalTask)
+  .task('internalComms', internalCommsTask)
   // Connections: Start -> Submit Request
   .connectCondition('start', (to) => to.task('submitRequest'))
   // Submit Request -> Intake Review
@@ -460,10 +534,10 @@ export const campaignApprovalWorkflow = Builder.workflow('campaign_approval')
   .connectTask('setupMedia', (to) => to.task('setupJoin'))
   // AND join -> QA Test
   .connectTask('setupJoin', (to) => to.task('qaTest'))
-  // QA Test -> XOR Split (routes to end or fixIssues)
+  // QA Test -> XOR Split (routes to Phase 6 preLaunchReview or fixIssues)
   .connectTask('qaTest', (to) =>
     to
-      .condition('end')
+      .task('preLaunchReview')
       .task('fixIssues')
       .route(async ({ route, mutationCtx, parent }) => {
         const decision = await getQaTestDecision(
@@ -472,8 +546,7 @@ export const campaignApprovalWorkflow = Builder.workflow('campaign_approval')
         )
 
         if (decision === 'passed') {
-          // TODO: Connect to Phase 6 Launch instead of end
-          return route.toCondition('end')
+          return route.toTask('preLaunchReview')
         }
         // failed or no decision -> fixIssues
         return route.toTask('fixIssues')
@@ -481,3 +554,48 @@ export const campaignApprovalWorkflow = Builder.workflow('campaign_approval')
   )
   // Fix Issues -> QA Test (loop back)
   .connectTask('fixIssues', (to) => to.task('qaTest'))
+  // Phase 6: Launch Connections
+  // Pre-Launch Review -> XOR Split (routes to launchApproval or addressConcerns)
+  .connectTask('preLaunchReview', (to) =>
+    to
+      .task('launchApproval')
+      .task('addressConcerns')
+      .route(async ({ route, mutationCtx, parent }) => {
+        const readyForApproval = await getPreLaunchReviewDecision(
+          mutationCtx.db,
+          parent.workflow.id,
+        )
+
+        if (readyForApproval === true) {
+          return route.toTask('launchApproval')
+        }
+        // not ready or no decision -> addressConcerns
+        return route.toTask('addressConcerns')
+      }),
+  )
+  // Address Concerns -> Pre-Launch Review (loop back)
+  .connectTask('addressConcerns', (to) => to.task('preLaunchReview'))
+  // Launch Approval -> XOR Split (routes to internalComms, addressConcerns, or end)
+  .connectTask('launchApproval', (to) =>
+    to
+      .task('internalComms')
+      .task('addressConcerns')
+      .condition('end')
+      .route(async ({ route, mutationCtx, parent }) => {
+        const decision = await getLaunchApprovalDecision(
+          mutationCtx.db,
+          parent.workflow.id,
+        )
+
+        if (decision === 'approved') {
+          return route.toTask('internalComms')
+        }
+        if (decision === 'concerns') {
+          return route.toTask('addressConcerns')
+        }
+        // rejected or no decision -> end
+        return route.toCondition('end')
+      }),
+  )
+  // Internal Comms -> end (TODO: Connect to Phase 7 Execution)
+  .connectTask('internalComms', (to) => to.condition('end'))
