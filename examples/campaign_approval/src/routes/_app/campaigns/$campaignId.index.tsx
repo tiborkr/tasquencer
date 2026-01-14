@@ -1,9 +1,9 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useMemo, useState } from 'react'
-import { useMutation } from '@tanstack/react-query'
-import { useConvexMutation } from '@convex-dev/react-query'
+import { useMutation, useSuspenseQuery } from '@tanstack/react-query'
+import { useConvexMutation, convexQuery } from '@convex-dev/react-query'
 import { api } from '@/convex/_generated/api'
-import type { Doc } from '@/convex/_generated/dataModel'
+import type { Doc, Id } from '@/convex/_generated/dataModel'
 import {
   Card,
   CardContent,
@@ -29,6 +29,10 @@ import {
   Ban,
   Wallet,
   Image,
+  ChevronRight,
+  Clock,
+  Play,
+  History,
 } from 'lucide-react'
 import { Route as ParentRoute } from './$campaignId'
 
@@ -85,6 +89,13 @@ function CampaignDetailIndex() {
   const { campaignData } = ParentRoute.useLoaderData()
   const [cancelError, setCancelError] = useState<string | null>(null)
 
+  // Fetch active work items for this campaign
+  const { data: activeWorkItems } = useSuspenseQuery(
+    convexQuery(api.workflows.campaign_approval.api.getCampaignWorkQueue, {
+      campaignId: campaignId as Id<'campaigns'>,
+    }),
+  )
+
   const cancelMutation = useMutation({
     mutationFn: useConvexMutation(
       api.workflows.campaign_approval.api.cancelCampaignWorkflow,
@@ -95,6 +106,19 @@ function CampaignDetailIndex() {
   })
 
   const { campaign, budget, kpis, workflowTaskStates } = campaignData
+
+  // Derive completed tasks from workflow task states
+  const completedTasks = useMemo(() => {
+    const completed: { name: string; phase: string }[] = []
+    for (const phase of WORKFLOW_PHASES) {
+      for (const taskName of phase.tasks) {
+        if (workflowTaskStates[taskName] === 'completed') {
+          completed.push({ name: taskName, phase: phase.name })
+        }
+      }
+    }
+    return completed
+  }, [workflowTaskStates])
 
   const handleCancel = () => {
     setCancelError(null)
@@ -318,6 +342,94 @@ function CampaignDetailIndex() {
         </Card>
       )}
 
+      {/* Active Tasks Section */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2">
+            <Play className="h-4 w-4 text-blue-500" />
+            <CardTitle className="text-base">Active Tasks</CardTitle>
+          </div>
+          <CardDescription>
+            {activeWorkItems.length === 0
+              ? 'No tasks currently waiting'
+              : `${activeWorkItems.length} task${activeWorkItems.length === 1 ? '' : 's'} waiting for action`}
+          </CardDescription>
+        </CardHeader>
+        {activeWorkItems.length > 0 && (
+          <CardContent className="pt-0">
+            <div className="space-y-2">
+              {activeWorkItems.map((item) => (
+                <div
+                  key={item._id}
+                  className="flex items-center justify-between rounded-lg border p-3 hover:bg-muted/50 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    {item.status === 'claimed' ? (
+                      <Clock className="h-4 w-4 text-blue-500" />
+                    ) : (
+                      <Circle className="h-4 w-4 text-amber-500" />
+                    )}
+                    <div>
+                      <p className="text-sm font-medium">{item.taskName}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {item.phase && (
+                          <Badge variant="outline" className="mr-2 text-[10px]">
+                            {item.phase}
+                          </Badge>
+                        )}
+                        {item.status === 'claimed' ? 'In progress' : 'Waiting to be claimed'}
+                      </p>
+                    </div>
+                  </div>
+                  <Button asChild size="sm" variant="outline">
+                    <Link
+                      to="/simple/tasks/$workItemId"
+                      params={{ workItemId: item.workItemId }}
+                    >
+                      {item.status === 'claimed' ? 'Continue' : 'Start'}
+                      <ChevronRight className="ml-1 h-3 w-3" />
+                    </Link>
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        )}
+      </Card>
+
+      {/* Completed Tasks Section */}
+      {completedTasks.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-2">
+              <History className="h-4 w-4 text-emerald-500" />
+              <CardTitle className="text-base">Completed Tasks</CardTitle>
+            </div>
+            <CardDescription>
+              {completedTasks.length} task{completedTasks.length === 1 ? '' : 's'} completed
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
+              {completedTasks.map((task) => (
+                <div
+                  key={task.name}
+                  className="flex items-center gap-2 rounded-lg border p-2 bg-muted/30"
+                >
+                  <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">
+                      {formatTaskName(task.name)}
+                    </p>
+                    <p className="text-xs text-muted-foreground">{task.phase}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Quick Actions */}
       <div className="flex items-center gap-2">
         <Button asChild variant="outline" size="sm">
@@ -329,6 +441,15 @@ function CampaignDetailIndex() {
       </div>
     </div>
   )
+}
+
+// Helper function to format task name for display
+function formatTaskName(taskName: string): string {
+  // Convert camelCase to Title Case with spaces
+  return taskName
+    .replace(/([A-Z])/g, ' $1')
+    .replace(/^./, (str) => str.toUpperCase())
+    .trim()
 }
 
 function CampaignStatusBadge({ status }: { status: string }) {
