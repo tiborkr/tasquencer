@@ -47,6 +47,7 @@ type TaskCategory =
   | 'approval' // Decision with approve/reject options
   | 'work' // Complete a deliverable
   | 'review' // Review with approve/revision options
+  | 'owner_assignment' // Assign current user as owner (assignOwner)
 
 /**
  * Task configuration for rendering
@@ -91,13 +92,14 @@ const TASK_CONFIGS: Record<string, TaskConfig> = {
     completionPayload: (data) => ({ decision: data.decision, feedback: data.notes || undefined }),
   },
   assignOwner: {
-    category: 'confirmation',
+    category: 'owner_assignment',
     title: 'Assign Campaign Owner',
     description: 'Assign a campaign manager to own this campaign',
     icon: FileText,
     phase: 1,
     confirmationLabel: 'I am taking ownership of this campaign',
-    completionPayload: () => ({ confirmed: true }),
+    // ownerId is populated from formData.ownerId (set from current user)
+    completionPayload: (data) => ({ ownerId: data.ownerId as string }),
   },
 
   // Phase 2: Strategy
@@ -461,6 +463,11 @@ function TaskPageInner({
   const [isStarted, setIsStarted] = useState(false)
   const [formData, setFormData] = useState<Record<string, unknown>>({})
 
+  // Fetch current user for owner assignment tasks
+  const { data: currentUser } = useSuspenseQuery(
+    convexQuery(api.auth.getCurrentUser, {}),
+  )
+
   // Fetch work item details
   const { data: workItemData } = useSuspenseQuery(
     convexQuery(api.workflows.campaign_approval.api.getWorkItem, { workItemId })
@@ -468,6 +475,14 @@ function TaskPageInner({
 
   const taskType = workItemData?.metadata?.taskType || 'submitRequest'
   const config = TASK_CONFIGS[taskType] || TASK_CONFIGS.submitRequest
+
+  // Pre-populate ownerId for owner_assignment category
+  const effectiveFormData = useMemo(() => {
+    if (config.category === 'owner_assignment' && currentUser?.userId) {
+      return { ...formData, ownerId: currentUser.userId }
+    }
+    return formData
+  }, [config.category, currentUser?.userId, formData])
 
   const Icon = config.icon
 
@@ -509,7 +524,7 @@ function TaskPageInner({
 
   const handleComplete = () => {
     setError(null)
-    const payload = config.completionPayload(formData)
+    const payload = config.completionPayload(effectiveFormData)
     completeMutation.mutate({
       workItemId,
       args: {
@@ -524,11 +539,12 @@ function TaskPageInner({
   // Check if form is valid for completion
   const isFormValid = useMemo(() => {
     if (config.category === 'confirmation') return true
+    if (config.category === 'owner_assignment') return !!effectiveFormData.ownerId
     if (config.category === 'approval' || config.category === 'review') {
-      return !!formData.decision
+      return !!effectiveFormData.decision
     }
     return true // work category doesn't require validation
-  }, [config.category, formData])
+  }, [config.category, effectiveFormData])
 
   return (
     <div className="p-6 lg:p-8 space-y-8">
@@ -754,7 +770,7 @@ function TaskFormCard({
           )}
 
           {/* Render form based on category */}
-          {config.category === 'confirmation' && (
+          {(config.category === 'confirmation' || config.category === 'owner_assignment') && (
             <ConfirmationForm config={config} />
           )}
 

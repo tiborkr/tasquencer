@@ -104,6 +104,7 @@ const campaignApprovalWorkflowActions = Builder.workflowActions().initialize(
 
 /**
  * Helper to get intake review decision from work item metadata
+ * Used for XOR routing after intake review (Phase 1)
  */
 async function getIntakeDecision(
   db: any,
@@ -113,7 +114,13 @@ async function getIntakeDecision(
   if (!campaign) return null
 
   const workItems = await getCampaignWorkItemsByAggregate(db, campaign._id)
-  const intakeItem = workItems.find((wi) => wi.payload.type === 'intakeReview')
+
+  // Get the most recent intakeReview work item (for loop scenarios)
+  const intakeItems = workItems
+    .filter((wi) => wi.payload.type === 'intakeReview')
+    .sort((a, b) => b._creationTime - a._creationTime)
+
+  const intakeItem = intakeItems[0]
   if (!intakeItem || intakeItem.payload.type !== 'intakeReview') return null
 
   return intakeItem.payload.decision ?? null
