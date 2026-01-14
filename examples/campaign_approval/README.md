@@ -2,6 +2,19 @@
 
 An enterprise marketing campaign approval workflow demonstrating Tasquencer with Convex, Better Auth, and React. This example shows how to build complex multi-phase human-in-the-loop workflows with role-based authorization, XOR/AND routing, and revision loops.
 
+## Overview
+
+This example implements a realistic enterprise marketing campaign approval process spanning 8 phases with 35 tasks. It demonstrates advanced workflow patterns including:
+
+- **XOR Routing**: Conditional branching based on approval decisions and budget thresholds
+- **AND Split/Join**: Parallel task execution (3 technical setup tasks running concurrently)
+- **Revision Loops**: Return to previous tasks when revisions are needed (creative review, legal review, QA)
+- **Human-in-the-Loop**: All tasks require human interaction with claim/start/complete lifecycle
+- **Role-Based Authorization**: 12 scopes, 10 roles, 10 groups controlling task access
+- **Budget-Based Routing**: Automatic routing to director vs executive approval based on amount
+
+The workflow tracks campaigns through initiation, strategy development, budget approval, creative production, technical setup, launch approval, execution monitoring, and closure with comprehensive audit trails.
+
 ## Tech Stack
 
 - **Backend**: Convex (serverless database & functions)
@@ -200,3 +213,66 @@ Assign your user to appropriate groups through `/admin/groups`:
 - `/admin/groups` - Group management and membership
 - `/admin/roles` - Role definitions and scope assignments
 - `/audit` - Workflow execution traces
+
+## Development
+
+### Running Tests
+
+```bash
+# Run all tests (workflow + database)
+pnpm test
+
+# Run with coverage
+pnpm test:coverage
+
+# Watch mode for development
+pnpm test:watch
+```
+
+### Database Schema
+
+The workflow uses 8 domain tables:
+
+| Table | Description |
+|-------|-------------|
+| `campaigns` | Core campaign record with status, dates, owner |
+| `campaignBudgets` | Budget breakdown by category |
+| `campaignCreatives` | Creative assets with storage references |
+| `campaignKPIs` | Key performance indicators with targets |
+| `campaignResearch` | Market research and audience analysis |
+| `campaignStrategy` | Channel strategy and creative approach |
+| `campaignTimeline` | Milestones and deadlines |
+| `campaignApprovals` | Approval records with decision history |
+
+### Work Item Lifecycle
+
+Each task follows the Tasquencer work item lifecycle:
+
+```
+[initialized] → claim → [claimed] → start → [started] → complete → [completed]
+```
+
+Work items are created when their task is enabled. Users must:
+1. **Claim** the work item (assigns it to them)
+2. **Start** the work item (begins execution)
+3. **Complete** with a payload (provides task-specific data)
+
+### Workflow Definition
+
+The workflow is defined in `convex/workflows/campaign_approval/workflows/campaign_approval.workflow.ts` using the Tasquencer builder API:
+
+```typescript
+const workflow = Builder.workflow('campaign_approval')
+  .condition('start')
+  .condition('end')
+  .condition('approved')
+  // ... conditions for routing
+  .task(submitRequestTask)
+  .task(intakeReviewTask)
+  // ... 35 tasks total
+  .connect('start').to.task('submitRequest')
+  .connect.task('submitRequest').to.condition('submitted')
+  .connect.condition('submitted').to.task('intakeReview')
+  // ... flow connections
+  .build()
+```
