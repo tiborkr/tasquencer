@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate, Link } from '@tanstack/react-router'
 import { Suspense, useState, useMemo } from 'react'
-import { useMutation, useSuspenseQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useSuspenseQuery } from '@tanstack/react-query'
 import { convexQuery, useConvexMutation } from '@convex-dev/react-query'
 import { api } from '@/convex/_generated/api'
 import type { Id } from '@/convex/_generated/dataModel'
@@ -564,13 +564,43 @@ function TaskPageInner({
   const taskType = workItemData?.metadata?.taskType || 'submitRequest'
   const config = TASK_CONFIGS[taskType] || TASK_CONFIGS.submitRequest
 
+  // Fetch campaign creatives for concepts/revision task types
+  const campaignId = workItemData?.campaign?._id
+  const needsCreatives = config.category === 'concepts' || config.category === 'revision' || config.category === 'legal_revision'
+  const { data: creatives } = useQuery({
+    ...convexQuery(api.workflows.campaign_approval.api.getCampaignCreatives, {
+      campaignId: campaignId as Id<'campaigns'>
+    }),
+    enabled: !!campaignId && needsCreatives,
+  })
+
   // Pre-populate ownerId for owner_assignment category
+  // Pre-populate assets for concepts/revision categories
   const effectiveFormData = useMemo(() => {
+    let data = { ...formData }
+
     if (config.category === 'owner_assignment' && currentUser?.userId) {
-      return { ...formData, ownerId: currentUser.userId }
+      data = { ...data, ownerId: currentUser.userId }
     }
-    return formData
-  }, [config.category, currentUser?.userId, formData])
+
+    // Pre-populate assets from database creatives (only if not already set by user)
+    if (needsCreatives && creatives && creatives.length > 0) {
+      if (config.category === 'concepts' && !formData.assets) {
+        data = {
+          ...data,
+          assets: creatives.map(c => ({ creativeId: c._id, storageId: c.storageId || '', notes: c.description || '' }))
+        }
+      } else if ((config.category === 'revision' || config.category === 'legal_revision') && !formData.revisedAssets) {
+        const fieldName = config.category === 'revision' ? 'revisedAssets' : 'revisedAssets'
+        data = {
+          ...data,
+          [fieldName]: creatives.map(c => ({ creativeId: c._id, storageId: c.storageId || '', revisionNotes: '', addressedIssue: '' }))
+        }
+      }
+    }
+
+    return data
+  }, [config.category, currentUser?.userId, formData, needsCreatives, creatives])
 
   const Icon = config.icon
 
@@ -807,7 +837,7 @@ function TaskPageInner({
             config={config}
             error={error}
             isPending={isPending}
-            formData={formData}
+            formData={effectiveFormData}
             setFormData={setFormData}
             isFormValid={isFormValid}
             onComplete={handleComplete}
@@ -1862,14 +1892,6 @@ function ConceptsForm({
 }) {
   const assets = (formData.assets as Array<{ creativeId: string; storageId?: string; notes?: string }>) || []
 
-  const addAsset = () => {
-    setFormData({ ...formData, assets: [...assets, { creativeId: `asset-${Date.now()}`, notes: '' }] })
-  }
-
-  const removeAsset = (index: number) => {
-    setFormData({ ...formData, assets: assets.filter((_, i) => i !== index) })
-  }
-
   const updateAsset = (index: number, field: string, value: string) => {
     const updated = assets.map((a, i) => (i === index ? { ...a, [field]: value } : a))
     setFormData({ ...formData, assets: updated })
@@ -1880,27 +1902,27 @@ function ConceptsForm({
       <div className="rounded-lg border bg-muted/30 p-4">
         <h4 className="text-sm font-medium mb-2">Creative Assets</h4>
         <p className="text-sm text-muted-foreground">
-          Add the creative assets you&apos;ve developed for this campaign.
+          Complete the creative assets defined in the brief. Add notes describing your work on each asset.
         </p>
       </div>
 
+      {assets.length === 0 && (
+        <div className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">
+          Loading creative assets...
+        </div>
+      )}
+
       {assets.map((asset, index) => (
-        <div key={index} className="rounded-lg border p-4 space-y-3">
+        <div key={asset.creativeId || index} className="rounded-lg border p-4 space-y-3">
           <div className="flex justify-between items-center">
             <span className="text-sm font-medium">Asset {index + 1}</span>
-            {assets.length > 1 && (
-              <Button variant="ghost" size="sm" onClick={() => removeAsset(index)}>
-                <Trash2 className="h-4 w-4 text-destructive" />
-              </Button>
-            )}
           </div>
           <div>
-            <Label className="text-xs">Asset ID <span className="text-destructive">*</span></Label>
+            <Label className="text-xs text-muted-foreground">Asset ID</Label>
             <Input
               value={asset.creativeId}
-              onChange={(e) => updateAsset(index, 'creativeId', e.target.value)}
-              placeholder="Asset identifier"
-              className="mt-1"
+              disabled
+              className="mt-1 bg-muted/50 font-mono text-xs"
             />
           </div>
           <div>
@@ -1908,17 +1930,13 @@ function ConceptsForm({
             <Textarea
               value={asset.notes || ''}
               onChange={(e) => updateAsset(index, 'notes', e.target.value)}
-              placeholder="Additional notes about this asset..."
+              placeholder="Describe the creative work completed for this asset..."
               className="mt-1"
               rows={2}
             />
           </div>
         </div>
       ))}
-
-      <Button variant="outline" onClick={addAsset} className="w-full">
-        <Plus className="mr-2 h-4 w-4" /> Add Asset
-      </Button>
     </div>
   )
 }
@@ -1932,14 +1950,6 @@ function RevisionForm({
 }) {
   const revisedAssets = (formData.revisedAssets as Array<{ creativeId: string; storageId?: string; revisionNotes: string }>) || []
 
-  const addAsset = () => {
-    setFormData({ ...formData, revisedAssets: [...revisedAssets, { creativeId: `asset-${Date.now()}`, revisionNotes: '' }] })
-  }
-
-  const removeAsset = (index: number) => {
-    setFormData({ ...formData, revisedAssets: revisedAssets.filter((_, i) => i !== index) })
-  }
-
   const updateAsset = (index: number, field: string, value: string) => {
     const updated = revisedAssets.map((a, i) => (i === index ? { ...a, [field]: value } : a))
     setFormData({ ...formData, revisedAssets: updated })
@@ -1950,27 +1960,27 @@ function RevisionForm({
       <div className="rounded-lg border bg-muted/30 p-4">
         <h4 className="text-sm font-medium mb-2">Revised Assets</h4>
         <p className="text-sm text-muted-foreground">
-          Document the assets you&apos;ve revised and the changes made.
+          Document the revisions made to each creative asset based on feedback.
         </p>
       </div>
 
+      {revisedAssets.length === 0 && (
+        <div className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">
+          Loading creative assets...
+        </div>
+      )}
+
       {revisedAssets.map((asset, index) => (
-        <div key={index} className="rounded-lg border p-4 space-y-3">
+        <div key={asset.creativeId || index} className="rounded-lg border p-4 space-y-3">
           <div className="flex justify-between items-center">
             <span className="text-sm font-medium">Revised Asset {index + 1}</span>
-            {revisedAssets.length > 1 && (
-              <Button variant="ghost" size="sm" onClick={() => removeAsset(index)}>
-                <Trash2 className="h-4 w-4 text-destructive" />
-              </Button>
-            )}
           </div>
           <div>
-            <Label className="text-xs">Asset ID <span className="text-destructive">*</span></Label>
+            <Label className="text-xs text-muted-foreground">Asset ID</Label>
             <Input
               value={asset.creativeId}
-              onChange={(e) => updateAsset(index, 'creativeId', e.target.value)}
-              placeholder="Asset identifier"
-              className="mt-1"
+              disabled
+              className="mt-1 bg-muted/50 font-mono text-xs"
             />
           </div>
           <div>
@@ -1978,17 +1988,13 @@ function RevisionForm({
             <Textarea
               value={asset.revisionNotes}
               onChange={(e) => updateAsset(index, 'revisionNotes', e.target.value)}
-              placeholder="Describe the changes made..."
+              placeholder="Describe the changes made to address feedback..."
               className="mt-1"
               rows={2}
             />
           </div>
         </div>
       ))}
-
-      <Button variant="outline" onClick={addAsset} className="w-full">
-        <Plus className="mr-2 h-4 w-4" /> Add Revised Asset
-      </Button>
     </div>
   )
 }
@@ -2121,14 +2127,6 @@ function LegalRevisionForm({
 }) {
   const revisedAssets = (formData.revisedAssets as Array<{ creativeId: string; storageId?: string; addressedIssue: string }>) || []
 
-  const addAsset = () => {
-    setFormData({ ...formData, revisedAssets: [...revisedAssets, { creativeId: `asset-${Date.now()}`, addressedIssue: '' }] })
-  }
-
-  const removeAsset = (index: number) => {
-    setFormData({ ...formData, revisedAssets: revisedAssets.filter((_, i) => i !== index) })
-  }
-
   const updateAsset = (index: number, field: string, value: string) => {
     const updated = revisedAssets.map((a, i) => (i === index ? { ...a, [field]: value } : a))
     setFormData({ ...formData, revisedAssets: updated })
@@ -2139,27 +2137,27 @@ function LegalRevisionForm({
       <div className="rounded-lg border bg-muted/30 p-4">
         <h4 className="text-sm font-medium mb-2">Legal Revisions</h4>
         <p className="text-sm text-muted-foreground">
-          Document the legal issues you&apos;ve addressed in each asset.
+          Document the legal issues you&apos;ve addressed in each creative asset.
         </p>
       </div>
 
+      {revisedAssets.length === 0 && (
+        <div className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">
+          Loading creative assets...
+        </div>
+      )}
+
       {revisedAssets.map((asset, index) => (
-        <div key={index} className="rounded-lg border p-4 space-y-3">
+        <div key={asset.creativeId || index} className="rounded-lg border p-4 space-y-3">
           <div className="flex justify-between items-center">
             <span className="text-sm font-medium">Asset {index + 1}</span>
-            {revisedAssets.length > 1 && (
-              <Button variant="ghost" size="sm" onClick={() => removeAsset(index)}>
-                <Trash2 className="h-4 w-4 text-destructive" />
-              </Button>
-            )}
           </div>
           <div>
-            <Label className="text-xs">Asset ID <span className="text-destructive">*</span></Label>
+            <Label className="text-xs text-muted-foreground">Asset ID</Label>
             <Input
               value={asset.creativeId}
-              onChange={(e) => updateAsset(index, 'creativeId', e.target.value)}
-              placeholder="Asset identifier"
-              className="mt-1"
+              disabled
+              className="mt-1 bg-muted/50 font-mono text-xs"
             />
           </div>
           <div>
@@ -2174,10 +2172,6 @@ function LegalRevisionForm({
           </div>
         </div>
       ))}
-
-      <Button variant="outline" onClick={addAsset} className="w-full">
-        <Plus className="mr-2 h-4 w-4" /> Add Revised Asset
-      </Button>
     </div>
   )
 }
