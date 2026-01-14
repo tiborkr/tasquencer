@@ -298,7 +298,7 @@ const TASK_CONFIGS: Record<string, TaskConfig> = {
       { value: 'passed', label: 'All Tests Passed', description: 'Campaign is ready for launch' },
       { value: 'failed', label: 'Tests Failed', description: 'Issues found that need fixing' },
     ],
-    completionPayload: (data) => ({ decision: data.decision, testResults: data.notes || undefined }),
+    completionPayload: (data) => ({ result: data.decision, testResults: data.notes || undefined }),
   },
   fixIssues: {
     category: 'confirmation',
@@ -318,7 +318,7 @@ const TASK_CONFIGS: Record<string, TaskConfig> = {
     icon: Megaphone,
     phase: 6,
     confirmationLabel: 'All pre-launch checks are complete',
-    completionPayload: () => ({ checklistComplete: true }),
+    completionPayload: () => ({ readyForApproval: true }),
   },
   addressConcerns: {
     category: 'confirmation',
