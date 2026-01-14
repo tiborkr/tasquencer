@@ -13,6 +13,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppSimpleRouteImport } from './routes/_app/simple'
+import { Route as AppHomepageRouteImport } from './routes/_app/homepage'
 import { Route as AppAuditRouteImport } from './routes/_app/audit'
 import { Route as AppAdminRouteImport } from './routes/_app/admin'
 import { Route as AppSimpleIndexRouteImport } from './routes/_app/simple/index'
@@ -27,7 +28,11 @@ import { Route as AppAdminRolesRouteImport } from './routes/_app/admin/roles'
 import { Route as AppAdminGroupsRouteImport } from './routes/_app/admin/groups'
 import { Route as AppAuditTraceIdIndexRouteImport } from './routes/_app/audit/$traceId.index'
 import { Route as AppAdminUsersIndexRouteImport } from './routes/_app/admin/users.index'
+import { Route as AppAdminRolesIndexRouteImport } from './routes/_app/admin/roles.index'
+import { Route as AppAdminGroupsIndexRouteImport } from './routes/_app/admin/groups.index'
 import { Route as AppAuditTraceIdVisualizerRouteImport } from './routes/_app/audit/$traceId.visualizer'
+import { Route as AppAdminRolesRoleIdRouteImport } from './routes/_app/admin/roles.$roleId'
+import { Route as AppAdminGroupsGroupIdRouteImport } from './routes/_app/admin/groups.$groupId'
 import { Route as AppSimpleTasksStoreWorkItemIdRouteImport } from './routes/_app/simple/tasks/store.$workItemId'
 import { Route as AppAdminUsersUserIdAssignRouteImport } from './routes/_app/admin/users.$userId.assign'
 
@@ -48,6 +53,11 @@ const IndexRoute = IndexRouteImport.update({
 const AppSimpleRoute = AppSimpleRouteImport.update({
   id: '/simple',
   path: '/simple',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppHomepageRoute = AppHomepageRouteImport.update({
+  id: '/homepage',
+  path: '/homepage',
   getParentRoute: () => AppRoute,
 } as any)
 const AppAuditRoute = AppAuditRouteImport.update({
@@ -120,12 +130,32 @@ const AppAdminUsersIndexRoute = AppAdminUsersIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppAdminUsersRoute,
 } as any)
+const AppAdminRolesIndexRoute = AppAdminRolesIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppAdminRolesRoute,
+} as any)
+const AppAdminGroupsIndexRoute = AppAdminGroupsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppAdminGroupsRoute,
+} as any)
 const AppAuditTraceIdVisualizerRoute =
   AppAuditTraceIdVisualizerRouteImport.update({
     id: '/visualizer',
     path: '/visualizer',
     getParentRoute: () => AppAuditTraceIdRoute,
   } as any)
+const AppAdminRolesRoleIdRoute = AppAdminRolesRoleIdRouteImport.update({
+  id: '/$roleId',
+  path: '/$roleId',
+  getParentRoute: () => AppAdminRolesRoute,
+} as any)
+const AppAdminGroupsGroupIdRoute = AppAdminGroupsGroupIdRouteImport.update({
+  id: '/$groupId',
+  path: '/$groupId',
+  getParentRoute: () => AppAdminGroupsRoute,
+} as any)
 const AppSimpleTasksStoreWorkItemIdRoute =
   AppSimpleTasksStoreWorkItemIdRouteImport.update({
     id: '/tasks/store/$workItemId',
@@ -144,9 +174,10 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/admin': typeof AppAdminRouteWithChildren
   '/audit': typeof AppAuditRouteWithChildren
+  '/homepage': typeof AppHomepageRoute
   '/simple': typeof AppSimpleRouteWithChildren
-  '/admin/groups': typeof AppAdminGroupsRoute
-  '/admin/roles': typeof AppAdminRolesRoute
+  '/admin/groups': typeof AppAdminGroupsRouteWithChildren
+  '/admin/roles': typeof AppAdminRolesRouteWithChildren
   '/admin/users': typeof AppAdminUsersRouteWithChildren
   '/audit/$traceId': typeof AppAuditTraceIdRouteWithChildren
   '/simple/new': typeof AppSimpleNewRoute
@@ -155,7 +186,11 @@ export interface FileRoutesByFullPath {
   '/admin/': typeof AppAdminIndexRoute
   '/audit/': typeof AppAuditIndexRoute
   '/simple/': typeof AppSimpleIndexRoute
+  '/admin/groups/$groupId': typeof AppAdminGroupsGroupIdRoute
+  '/admin/roles/$roleId': typeof AppAdminRolesRoleIdRoute
   '/audit/$traceId/visualizer': typeof AppAuditTraceIdVisualizerRoute
+  '/admin/groups/': typeof AppAdminGroupsIndexRoute
+  '/admin/roles/': typeof AppAdminRolesIndexRoute
   '/admin/users/': typeof AppAdminUsersIndexRoute
   '/audit/$traceId/': typeof AppAuditTraceIdIndexRoute
   '/admin/users/$userId/assign': typeof AppAdminUsersUserIdAssignRoute
@@ -164,15 +199,18 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
-  '/admin/groups': typeof AppAdminGroupsRoute
-  '/admin/roles': typeof AppAdminRolesRoute
+  '/homepage': typeof AppHomepageRoute
   '/simple/new': typeof AppSimpleNewRoute
   '/simple/queue': typeof AppSimpleQueueRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/admin': typeof AppAdminIndexRoute
   '/audit': typeof AppAuditIndexRoute
   '/simple': typeof AppSimpleIndexRoute
+  '/admin/groups/$groupId': typeof AppAdminGroupsGroupIdRoute
+  '/admin/roles/$roleId': typeof AppAdminRolesRoleIdRoute
   '/audit/$traceId/visualizer': typeof AppAuditTraceIdVisualizerRoute
+  '/admin/groups': typeof AppAdminGroupsIndexRoute
+  '/admin/roles': typeof AppAdminRolesIndexRoute
   '/admin/users': typeof AppAdminUsersIndexRoute
   '/audit/$traceId': typeof AppAuditTraceIdIndexRoute
   '/admin/users/$userId/assign': typeof AppAdminUsersUserIdAssignRoute
@@ -185,9 +223,10 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/_app/admin': typeof AppAdminRouteWithChildren
   '/_app/audit': typeof AppAuditRouteWithChildren
+  '/_app/homepage': typeof AppHomepageRoute
   '/_app/simple': typeof AppSimpleRouteWithChildren
-  '/_app/admin/groups': typeof AppAdminGroupsRoute
-  '/_app/admin/roles': typeof AppAdminRolesRoute
+  '/_app/admin/groups': typeof AppAdminGroupsRouteWithChildren
+  '/_app/admin/roles': typeof AppAdminRolesRouteWithChildren
   '/_app/admin/users': typeof AppAdminUsersRouteWithChildren
   '/_app/audit/$traceId': typeof AppAuditTraceIdRouteWithChildren
   '/_app/simple/new': typeof AppSimpleNewRoute
@@ -196,7 +235,11 @@ export interface FileRoutesById {
   '/_app/admin/': typeof AppAdminIndexRoute
   '/_app/audit/': typeof AppAuditIndexRoute
   '/_app/simple/': typeof AppSimpleIndexRoute
+  '/_app/admin/groups/$groupId': typeof AppAdminGroupsGroupIdRoute
+  '/_app/admin/roles/$roleId': typeof AppAdminRolesRoleIdRoute
   '/_app/audit/$traceId/visualizer': typeof AppAuditTraceIdVisualizerRoute
+  '/_app/admin/groups/': typeof AppAdminGroupsIndexRoute
+  '/_app/admin/roles/': typeof AppAdminRolesIndexRoute
   '/_app/admin/users/': typeof AppAdminUsersIndexRoute
   '/_app/audit/$traceId/': typeof AppAuditTraceIdIndexRoute
   '/_app/admin/users/$userId/assign': typeof AppAdminUsersUserIdAssignRoute
@@ -209,6 +252,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/admin'
     | '/audit'
+    | '/homepage'
     | '/simple'
     | '/admin/groups'
     | '/admin/roles'
@@ -220,7 +264,11 @@ export interface FileRouteTypes {
     | '/admin/'
     | '/audit/'
     | '/simple/'
+    | '/admin/groups/$groupId'
+    | '/admin/roles/$roleId'
     | '/audit/$traceId/visualizer'
+    | '/admin/groups/'
+    | '/admin/roles/'
     | '/admin/users/'
     | '/audit/$traceId/'
     | '/admin/users/$userId/assign'
@@ -229,15 +277,18 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/login'
-    | '/admin/groups'
-    | '/admin/roles'
+    | '/homepage'
     | '/simple/new'
     | '/simple/queue'
     | '/api/auth/$'
     | '/admin'
     | '/audit'
     | '/simple'
+    | '/admin/groups/$groupId'
+    | '/admin/roles/$roleId'
     | '/audit/$traceId/visualizer'
+    | '/admin/groups'
+    | '/admin/roles'
     | '/admin/users'
     | '/audit/$traceId'
     | '/admin/users/$userId/assign'
@@ -249,6 +300,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/_app/admin'
     | '/_app/audit'
+    | '/_app/homepage'
     | '/_app/simple'
     | '/_app/admin/groups'
     | '/_app/admin/roles'
@@ -260,7 +312,11 @@ export interface FileRouteTypes {
     | '/_app/admin/'
     | '/_app/audit/'
     | '/_app/simple/'
+    | '/_app/admin/groups/$groupId'
+    | '/_app/admin/roles/$roleId'
     | '/_app/audit/$traceId/visualizer'
+    | '/_app/admin/groups/'
+    | '/_app/admin/roles/'
     | '/_app/admin/users/'
     | '/_app/audit/$traceId/'
     | '/_app/admin/users/$userId/assign'
@@ -302,6 +358,13 @@ declare module '@tanstack/react-router' {
       path: '/simple'
       fullPath: '/simple'
       preLoaderRoute: typeof AppSimpleRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/homepage': {
+      id: '/_app/homepage'
+      path: '/homepage'
+      fullPath: '/homepage'
+      preLoaderRoute: typeof AppHomepageRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/audit': {
@@ -402,12 +465,40 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAdminUsersIndexRouteImport
       parentRoute: typeof AppAdminUsersRoute
     }
+    '/_app/admin/roles/': {
+      id: '/_app/admin/roles/'
+      path: '/'
+      fullPath: '/admin/roles/'
+      preLoaderRoute: typeof AppAdminRolesIndexRouteImport
+      parentRoute: typeof AppAdminRolesRoute
+    }
+    '/_app/admin/groups/': {
+      id: '/_app/admin/groups/'
+      path: '/'
+      fullPath: '/admin/groups/'
+      preLoaderRoute: typeof AppAdminGroupsIndexRouteImport
+      parentRoute: typeof AppAdminGroupsRoute
+    }
     '/_app/audit/$traceId/visualizer': {
       id: '/_app/audit/$traceId/visualizer'
       path: '/visualizer'
       fullPath: '/audit/$traceId/visualizer'
       preLoaderRoute: typeof AppAuditTraceIdVisualizerRouteImport
       parentRoute: typeof AppAuditTraceIdRoute
+    }
+    '/_app/admin/roles/$roleId': {
+      id: '/_app/admin/roles/$roleId'
+      path: '/$roleId'
+      fullPath: '/admin/roles/$roleId'
+      preLoaderRoute: typeof AppAdminRolesRoleIdRouteImport
+      parentRoute: typeof AppAdminRolesRoute
+    }
+    '/_app/admin/groups/$groupId': {
+      id: '/_app/admin/groups/$groupId'
+      path: '/$groupId'
+      fullPath: '/admin/groups/$groupId'
+      preLoaderRoute: typeof AppAdminGroupsGroupIdRouteImport
+      parentRoute: typeof AppAdminGroupsRoute
     }
     '/_app/simple/tasks/store/$workItemId': {
       id: '/_app/simple/tasks/store/$workItemId'
@@ -426,6 +517,34 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AppAdminGroupsRouteChildren {
+  AppAdminGroupsGroupIdRoute: typeof AppAdminGroupsGroupIdRoute
+  AppAdminGroupsIndexRoute: typeof AppAdminGroupsIndexRoute
+}
+
+const AppAdminGroupsRouteChildren: AppAdminGroupsRouteChildren = {
+  AppAdminGroupsGroupIdRoute: AppAdminGroupsGroupIdRoute,
+  AppAdminGroupsIndexRoute: AppAdminGroupsIndexRoute,
+}
+
+const AppAdminGroupsRouteWithChildren = AppAdminGroupsRoute._addFileChildren(
+  AppAdminGroupsRouteChildren,
+)
+
+interface AppAdminRolesRouteChildren {
+  AppAdminRolesRoleIdRoute: typeof AppAdminRolesRoleIdRoute
+  AppAdminRolesIndexRoute: typeof AppAdminRolesIndexRoute
+}
+
+const AppAdminRolesRouteChildren: AppAdminRolesRouteChildren = {
+  AppAdminRolesRoleIdRoute: AppAdminRolesRoleIdRoute,
+  AppAdminRolesIndexRoute: AppAdminRolesIndexRoute,
+}
+
+const AppAdminRolesRouteWithChildren = AppAdminRolesRoute._addFileChildren(
+  AppAdminRolesRouteChildren,
+)
+
 interface AppAdminUsersRouteChildren {
   AppAdminUsersIndexRoute: typeof AppAdminUsersIndexRoute
   AppAdminUsersUserIdAssignRoute: typeof AppAdminUsersUserIdAssignRoute
@@ -441,15 +560,15 @@ const AppAdminUsersRouteWithChildren = AppAdminUsersRoute._addFileChildren(
 )
 
 interface AppAdminRouteChildren {
-  AppAdminGroupsRoute: typeof AppAdminGroupsRoute
-  AppAdminRolesRoute: typeof AppAdminRolesRoute
+  AppAdminGroupsRoute: typeof AppAdminGroupsRouteWithChildren
+  AppAdminRolesRoute: typeof AppAdminRolesRouteWithChildren
   AppAdminUsersRoute: typeof AppAdminUsersRouteWithChildren
   AppAdminIndexRoute: typeof AppAdminIndexRoute
 }
 
 const AppAdminRouteChildren: AppAdminRouteChildren = {
-  AppAdminGroupsRoute: AppAdminGroupsRoute,
-  AppAdminRolesRoute: AppAdminRolesRoute,
+  AppAdminGroupsRoute: AppAdminGroupsRouteWithChildren,
+  AppAdminRolesRoute: AppAdminRolesRouteWithChildren,
   AppAdminUsersRoute: AppAdminUsersRouteWithChildren,
   AppAdminIndexRoute: AppAdminIndexRoute,
 }
@@ -507,12 +626,14 @@ const AppSimpleRouteWithChildren = AppSimpleRoute._addFileChildren(
 interface AppRouteChildren {
   AppAdminRoute: typeof AppAdminRouteWithChildren
   AppAuditRoute: typeof AppAuditRouteWithChildren
+  AppHomepageRoute: typeof AppHomepageRoute
   AppSimpleRoute: typeof AppSimpleRouteWithChildren
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppAdminRoute: AppAdminRouteWithChildren,
   AppAuditRoute: AppAuditRouteWithChildren,
+  AppHomepageRoute: AppHomepageRoute,
   AppSimpleRoute: AppSimpleRouteWithChildren,
 }
 
