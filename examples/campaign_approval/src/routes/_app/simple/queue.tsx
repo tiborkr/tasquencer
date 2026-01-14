@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { Suspense, useMemo } from 'react'
+import { Suspense, useMemo, useState } from 'react'
 import { useSuspenseQuery } from '@tanstack/react-query'
 import { convexQuery } from '@convex-dev/react-query'
 import { api } from '@/convex/_generated/api'
@@ -22,6 +22,13 @@ import { Button } from '@repo/ui/components/button'
 import { Badge } from '@repo/ui/components/badge'
 import { Separator } from '@repo/ui/components/separator'
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@repo/ui/components/select'
+import {
   ListTodo,
   ArrowLeft,
   Hash,
@@ -30,6 +37,8 @@ import {
   Inbox,
   ChevronRight,
   Plus,
+  Filter,
+  Layers,
 } from 'lucide-react'
 
 export const Route = createFileRoute('/_app/simple/queue')({
@@ -44,8 +53,48 @@ function CampaignQueue() {
   )
 }
 
+type WorkflowPhase =
+  | 'initiation'
+  | 'strategy'
+  | 'budget'
+  | 'creative'
+  | 'technical'
+  | 'launch'
+  | 'execution'
+  | 'closure'
+
+const PHASE_OPTIONS: { value: WorkflowPhase | 'all'; label: string }[] = [
+  { value: 'all', label: 'All Phases' },
+  { value: 'initiation', label: '1. Initiation' },
+  { value: 'strategy', label: '2. Strategy' },
+  { value: 'budget', label: '3. Budget' },
+  { value: 'creative', label: '4. Creative' },
+  { value: 'technical', label: '5. Technical' },
+  { value: 'launch', label: '6. Launch' },
+  { value: 'execution', label: '7. Execution' },
+  { value: 'closure', label: '8. Closure' },
+]
+
+const PHASE_COLORS: Record<WorkflowPhase, string> = {
+  initiation: 'bg-slate-100 dark:bg-slate-900/30 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-800',
+  strategy: 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800',
+  budget: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
+  creative: 'bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-300 border-pink-200 dark:border-pink-800',
+  technical: 'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-300 border-cyan-200 dark:border-cyan-800',
+  launch: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 border-orange-200 dark:border-orange-800',
+  execution: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800',
+  closure: 'bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 border-violet-200 dark:border-violet-800',
+}
+
 function QueuePageInner() {
-  const q = convexQuery(api.workflows.campaign_approval.api.getCampaignWorkQueue, {})
+  // Filter state
+  const [phaseFilter, setPhaseFilter] = useState<WorkflowPhase | 'all'>('all')
+  const [groupByPhase, setGroupByPhase] = useState(false)
+
+  // Fetch with API filter when phase is selected
+  const q = convexQuery(api.workflows.campaign_approval.api.getCampaignWorkQueue, {
+    ...(phaseFilter !== 'all' && { phase: phaseFilter }),
+  })
   const { data: workItems } = useSuspenseQuery(q)
 
   // Calculate stats
@@ -54,6 +103,18 @@ function QueuePageInner() {
     const claimed = workItems.filter((w) => w.status === 'claimed').length
     return { total: workItems.length, pending, claimed }
   }, [workItems])
+
+  // Group items by phase if enabled
+  const groupedWorkItems = useMemo(() => {
+    if (!groupByPhase) return null
+    const groups: Record<string, typeof workItems> = {}
+    for (const item of workItems) {
+      const phase = item.phase || 'unknown'
+      if (!groups[phase]) groups[phase] = []
+      groups[phase].push(item)
+    }
+    return groups
+  }, [workItems, groupByPhase])
 
   return (
     <div className="p-6 lg:p-8 space-y-8">
@@ -123,6 +184,45 @@ function QueuePageInner() {
         </div>
       </div>
 
+      {/* Filters Row */}
+      <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2">
+          <Filter className="h-4 w-4 text-muted-foreground" />
+          <Select
+            value={phaseFilter}
+            onValueChange={(v) => setPhaseFilter(v as WorkflowPhase | 'all')}
+          >
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Filter by phase" />
+            </SelectTrigger>
+            <SelectContent>
+              {PHASE_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <Button
+          variant={groupByPhase ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setGroupByPhase(!groupByPhase)}
+        >
+          <Layers className="mr-2 h-4 w-4" />
+          Group by Phase
+        </Button>
+        {phaseFilter !== 'all' && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setPhaseFilter('all')}
+          >
+            Clear filter
+          </Button>
+        )}
+      </div>
+
       {/* Work Items Table */}
       <Card className="overflow-hidden">
         <CardHeader className="border-b bg-muted/30 px-6 py-4">
@@ -133,7 +233,7 @@ function QueuePageInner() {
             <div>
               <CardTitle className="text-base">Available Tasks</CardTitle>
               <CardDescription className="text-xs">
-                Claim a task to start working on it
+                {workItems.length} task{workItems.length === 1 ? '' : 's'} waiting
               </CardDescription>
             </div>
           </div>
@@ -155,6 +255,28 @@ function QueuePageInner() {
                 </Link>
               </Button>
             </div>
+          ) : groupByPhase && groupedWorkItems ? (
+            <div className="divide-y">
+              {Object.entries(groupedWorkItems).map(([phase, items]) => (
+                <div key={phase}>
+                  <div className="px-6 py-3 bg-muted/30 flex items-center gap-2">
+                    <Badge className={PHASE_COLORS[phase as WorkflowPhase] || ''}>
+                      {PHASE_OPTIONS.find((p) => p.value === phase)?.label || phase}
+                    </Badge>
+                    <span className="text-xs text-muted-foreground">
+                      {items.length} task{items.length === 1 ? '' : 's'}
+                    </span>
+                  </div>
+                  <Table>
+                    <TableBody>
+                      {items.map((item, index) => (
+                        <WorkItemRow key={item._id} item={item} index={index} />
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              ))}
+            </div>
           ) : (
             <Table>
               <TableHeader>
@@ -165,6 +287,9 @@ function QueuePageInner() {
                   </TableHead>
                   <TableHead className="h-11 px-6 text-xs font-medium uppercase tracking-wider text-muted-foreground">
                     Task
+                  </TableHead>
+                  <TableHead className="h-11 px-6 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Phase
                   </TableHead>
                   <TableHead className="h-11 px-6 text-xs font-medium uppercase tracking-wider text-muted-foreground">
                     Status
@@ -179,59 +304,7 @@ function QueuePageInner() {
               </TableHeader>
               <TableBody>
                 {workItems.map((item, index) => (
-                  <TableRow key={item._id} className="group transition-colors">
-                    <TableCell className="px-6 py-4 text-muted-foreground">
-                      <Badge
-                        variant="outline"
-                        className="font-mono text-xs tabular-nums"
-                      >
-                        {index + 1}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="px-6 py-4">
-                      <span className="font-medium">{item.taskName}</span>
-                    </TableCell>
-                    <TableCell className="px-6 py-4">
-                      <Badge
-                        className={
-                          item.status === 'pending'
-                            ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800'
-                            : item.status === 'claimed'
-                              ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800'
-                              : ''
-                        }
-                      >
-                        {item.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="px-6 py-4 text-muted-foreground">
-                      <span className="font-mono text-xs">
-                        {new Date(item._creationTime).toLocaleDateString()}
-                      </span>
-                    </TableCell>
-                    <TableCell className="px-6 py-4 text-right">
-                      <Button
-                        asChild
-                        size="sm"
-                        variant={
-                          item.status === 'pending' ? 'default' : 'outline'
-                        }
-                        className="group/btn gap-1.5 transition-all"
-                      >
-                        <Link
-                          to="/simple/tasks/$workItemId"
-                          params={{ workItemId: item.workItemId }}
-                        >
-                          <span>
-                            {item.status === 'pending'
-                              ? 'Claim & Start'
-                              : 'Continue'}
-                          </span>
-                          <ChevronRight className="h-3.5 w-3.5 opacity-50 group-hover/btn:opacity-100 transition-opacity" />
-                        </Link>
-                      </Button>
-                    </TableCell>
-                  </TableRow>
+                  <WorkItemRow key={item._id} item={item} index={index} showPhase />
                 ))}
               </TableBody>
             </Table>
@@ -239,6 +312,86 @@ function QueuePageInner() {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+interface WorkItemRowProps {
+  item: {
+    _id: string
+    _creationTime: number
+    workItemId: string
+    taskName: string
+    status: string
+    phase?: string | null
+  }
+  index: number
+  showPhase?: boolean
+}
+
+function WorkItemRow({ item, index, showPhase }: WorkItemRowProps) {
+  return (
+    <TableRow className="group transition-colors">
+      <TableCell className="px-6 py-4 text-muted-foreground">
+        <Badge
+          variant="outline"
+          className="font-mono text-xs tabular-nums"
+        >
+          {index + 1}
+        </Badge>
+      </TableCell>
+      <TableCell className="px-6 py-4">
+        <span className="font-medium">{item.taskName}</span>
+      </TableCell>
+      {showPhase && (
+        <TableCell className="px-6 py-4">
+          {item.phase && (
+            <Badge className={PHASE_COLORS[item.phase as WorkflowPhase] || 'bg-muted'}>
+              {item.phase}
+            </Badge>
+          )}
+        </TableCell>
+      )}
+      <TableCell className="px-6 py-4">
+        <Badge
+          className={
+            item.status === 'pending'
+              ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800'
+              : item.status === 'claimed'
+                ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800'
+                : ''
+          }
+        >
+          {item.status}
+        </Badge>
+      </TableCell>
+      <TableCell className="px-6 py-4 text-muted-foreground">
+        <span className="font-mono text-xs">
+          {new Date(item._creationTime).toLocaleDateString()}
+        </span>
+      </TableCell>
+      <TableCell className="px-6 py-4 text-right">
+        <Button
+          asChild
+          size="sm"
+          variant={
+            item.status === 'pending' ? 'default' : 'outline'
+          }
+          className="group/btn gap-1.5 transition-all"
+        >
+          <Link
+            to="/simple/tasks/$workItemId"
+            params={{ workItemId: item.workItemId }}
+          >
+            <span>
+              {item.status === 'pending'
+                ? 'Claim & Start'
+                : 'Continue'}
+            </span>
+            <ChevronRight className="h-3.5 w-3.5 opacity-50 group-hover/btn:opacity-100 transition-opacity" />
+          </Link>
+        </Button>
+      </TableCell>
+    </TableRow>
   )
 }
 
