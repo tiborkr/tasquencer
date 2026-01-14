@@ -441,6 +441,16 @@ export const getCampaignCreatives = query({
   },
 })
 
+export const getCampaignKPIs = query({
+  args: {
+    campaignId: v.id('campaigns'),
+  },
+  handler: async (ctx, args) => {
+    await assertUserHasScope(ctx, 'campaign:read')
+    return await listKPIsByCampaignId(ctx.db, args.campaignId)
+  },
+})
+
 /**
  * Upload a creative asset file
  *

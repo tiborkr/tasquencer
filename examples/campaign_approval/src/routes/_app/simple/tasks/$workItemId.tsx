@@ -115,7 +115,7 @@ const TASK_CONFIGS: Record<string, TaskConfig> = {
       { value: 'rejected', label: 'Reject', description: 'Campaign does not meet requirements' },
       { value: 'needs_changes', label: 'Request Changes', description: 'Requester needs to update campaign details' },
     ],
-    completionPayload: (data) => ({ decision: data.decision, feedback: data.notes || undefined }),
+    completionPayload: (data) => ({ decision: data.decision, reviewNotes: data.notes || undefined }),
   },
   assignOwner: {
     category: 'owner_assignment',
@@ -406,7 +406,7 @@ const TASK_CONFIGS: Record<string, TaskConfig> = {
       { value: 'concerns', label: 'Has Concerns', description: 'Issues need to be addressed first' },
       { value: 'rejected', label: 'Reject Launch', description: 'Campaign cannot proceed' },
     ],
-    completionPayload: (data) => ({ decision: data.decision, approvalNotes: data.notes || undefined }),
+    completionPayload: (data) => ({ decision: data.decision, approverNotes: data.notes || undefined }),
   },
   internalComms: {
     category: 'confirmation',
@@ -426,7 +426,7 @@ const TASK_CONFIGS: Record<string, TaskConfig> = {
     icon: Megaphone,
     phase: 7,
     confirmationLabel: 'Campaign has been launched',
-    completionPayload: () => ({ launchConfirmed: true }),
+    completionPayload: () => ({ launchedAt: Date.now() }),
   },
   monitorPerformance: {
     category: 'work',
@@ -435,7 +435,7 @@ const TASK_CONFIGS: Record<string, TaskConfig> = {
     icon: BarChart3,
     phase: 7,
     workLabel: 'Performance Notes',
-    completionPayload: (data) => ({ performanceNotes: data.notes || '' }),
+    completionPayload: () => ({ overallStatus: 'healthy' }),
   },
   ongoingOptimization: {
     category: 'approval',
@@ -447,7 +447,7 @@ const TASK_CONFIGS: Record<string, TaskConfig> = {
       { value: 'continue', label: 'Continue Campaign', description: 'Keep running and monitoring' },
       { value: 'end', label: 'End Campaign', description: 'Move to closure phase' },
     ],
-    completionPayload: (data) => ({ decision: data.decision, optimizationNotes: data.notes || undefined }),
+    completionPayload: (data) => ({ decision: data.decision }),
   },
 
   // Phase 8: Closure
@@ -603,8 +603,18 @@ function TaskPageInner({
     enabled: !!campaignId && needsCreatives,
   })
 
+  // Fetch KPIs for analysis category
+  const needsKPIs = config.category === 'analysis'
+  const { data: kpis } = useQuery({
+    ...convexQuery(api.workflows.campaign_approval.api.getCampaignKPIs, {
+      campaignId: campaignId as Id<'campaigns'>
+    }),
+    enabled: !!campaignId && needsKPIs,
+  })
+
   // Pre-populate ownerId for owner_assignment category
   // Pre-populate assets for concepts/revision categories
+  // Pre-populate kpiResults for analysis category
   const effectiveFormData = useMemo(() => {
     let data = { ...formData }
 
@@ -619,17 +629,36 @@ function TaskPageInner({
           ...data,
           assets: creatives.map(c => ({ creativeId: c._id, storageId: c.storageId, notes: c.description || '' }))
         }
-      } else if ((config.category === 'revision' || config.category === 'legal_revision') && !formData.revisedAssets) {
-        const fieldName = config.category === 'revision' ? 'revisedAssets' : 'revisedAssets'
+      } else if (config.category === 'revision' && !formData.revisedAssets) {
         data = {
           ...data,
-          [fieldName]: creatives.map(c => ({ creativeId: c._id, storageId: c.storageId, revisionNotes: '', addressedIssue: '' }))
+          revisedAssets: creatives.map(c => ({ creativeId: c._id, storageId: c.storageId, revisionNotes: '' }))
+        }
+      } else if (config.category === 'legal_revision' && !formData.revisedAssets) {
+        data = {
+          ...data,
+          revisedAssets: creatives.map(c => ({ creativeId: c._id, storageId: c.storageId, addressedIssue: '' }))
         }
       }
     }
 
+    // Pre-populate KPI results from database KPIs (only if not already set by user)
+    if (needsKPIs && kpis && kpis.length > 0 && !formData.kpiResults) {
+      data = {
+        ...data,
+        kpiResults: kpis.map(k => ({
+          kpiId: k._id,
+          metric: k.metric,
+          target: k.targetValue,
+          actual: 0,
+          percentAchieved: 0,
+          analysis: ''
+        }))
+      }
+    }
+
     return data
-  }, [config.category, currentUser?.userId, formData, needsCreatives, creatives])
+  }, [config.category, currentUser?.userId, formData, needsCreatives, creatives, needsKPIs, kpis])
 
   const Icon = config.icon
 
@@ -1069,11 +1098,11 @@ function TaskFormCard({
           )}
 
           {config.category === 'concepts' && (
-            <ConceptsForm formData={formData} setFormData={setFormData} />
+            <ConceptsForm formData={effectiveFormData} setFormData={setFormData} />
           )}
 
           {config.category === 'revision' && (
-            <RevisionForm formData={formData} setFormData={setFormData} />
+            <RevisionForm formData={effectiveFormData} setFormData={setFormData} />
           )}
 
           {config.category === 'legal_review' && (
@@ -1081,7 +1110,7 @@ function TaskFormCard({
           )}
 
           {config.category === 'legal_revision' && (
-            <LegalRevisionForm formData={formData} setFormData={setFormData} />
+            <LegalRevisionForm formData={effectiveFormData} setFormData={setFormData} />
           )}
 
           {config.category === 'end_campaign' && (
@@ -1093,7 +1122,7 @@ function TaskFormCard({
           )}
 
           {config.category === 'analysis' && (
-            <AnalysisForm formData={formData} setFormData={setFormData} />
+            <AnalysisForm formData={effectiveFormData} setFormData={setFormData} />
           )}
 
           {config.category === 'presentation' && (
@@ -2677,35 +2706,15 @@ function AnalysisForm({
 
       <div>
         <Label className="text-sm font-medium">KPI Results</Label>
+        <p className="text-xs text-muted-foreground mt-1">Fill in actual values and analysis for each KPI defined during planning</p>
         <div className="mt-2 space-y-3">
           {kpiResults.map((kpi, index) => (
-            <div key={index} className="rounded-lg border p-3 space-y-2">
-              <div className="flex justify-between">
-                <span className="text-xs font-medium">KPI {index + 1}</span>
-                <Button variant="ghost" size="sm" onClick={() => {
-                  setFormData({ ...formData, kpiResults: kpiResults.filter((_, i) => i !== index) })
-                }}>
-                  <Trash2 className="h-3 w-3 text-destructive" />
-                </Button>
+            <div key={kpi.kpiId || index} className="rounded-lg border p-3 space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-xs font-medium">{kpi.metric || `KPI ${index + 1}`}</span>
+                <span className="text-xs text-muted-foreground">Target: {kpi.target}</span>
               </div>
               <div className="grid grid-cols-2 gap-2">
-                <Input
-                  value={kpi.metric}
-                  onChange={(e) => {
-                    const updated = kpiResults.map((k, i) => (i === index ? { ...k, metric: e.target.value } : k))
-                    setFormData({ ...formData, kpiResults: updated })
-                  }}
-                  placeholder="Metric name"
-                />
-                <Input
-                  type="number"
-                  value={kpi.target}
-                  onChange={(e) => {
-                    const updated = kpiResults.map((k, i) => (i === index ? { ...k, target: parseFloat(e.target.value) || 0 } : k))
-                    setFormData({ ...formData, kpiResults: updated })
-                  }}
-                  placeholder="Target"
-                />
                 <Input
                   type="number"
                   value={kpi.actual}
@@ -2713,7 +2722,7 @@ function AnalysisForm({
                     const updated = kpiResults.map((k, i) => (i === index ? { ...k, actual: parseFloat(e.target.value) || 0 } : k))
                     setFormData({ ...formData, kpiResults: updated })
                   }}
-                  placeholder="Actual"
+                  placeholder="Actual value"
                 />
                 <Input
                   type="number"
@@ -2731,14 +2740,14 @@ function AnalysisForm({
                   const updated = kpiResults.map((k, i) => (i === index ? { ...k, analysis: e.target.value } : k))
                   setFormData({ ...formData, kpiResults: updated })
                 }}
-                placeholder="Analysis"
+                placeholder="Analysis of this KPI's performance"
                 rows={2}
               />
             </div>
           ))}
-          <Button variant="outline" onClick={() => setFormData({ ...formData, kpiResults: [...kpiResults, { kpiId: `kpi-${Date.now()}`, metric: '', target: 0, actual: 0, percentAchieved: 0, analysis: '' }] })} className="w-full">
-            <Plus className="mr-2 h-4 w-4" /> Add KPI Result
-          </Button>
+          {kpiResults.length === 0 && (
+            <p className="text-sm text-muted-foreground text-center py-4">No KPIs defined for this campaign</p>
+          )}
         </div>
       </div>
     </div>
