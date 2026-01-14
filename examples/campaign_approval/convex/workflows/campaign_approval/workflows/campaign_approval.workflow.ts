@@ -145,6 +145,7 @@ const BUDGET_APPROVAL_THRESHOLD = 50000
 /**
  * Helper to get budget approval decision from work item metadata
  * Checks both director and executive approval work items
+ * Uses loop-safe pattern to get most recent decision in revision loops
  */
 async function getBudgetApprovalDecision(
   db: any,
@@ -155,20 +156,24 @@ async function getBudgetApprovalDecision(
 
   const workItems = await getCampaignWorkItemsByAggregate(db, campaign._id)
 
-  // Check director approval first
-  const directorItem = workItems.find(
-    (wi) => wi.payload.type === 'directorApproval',
-  )
+  // Get the most recent directorApproval work item (for revision loops)
+  const directorItems = workItems
+    .filter((wi) => wi.payload.type === 'directorApproval')
+    .sort((a, b) => b._creationTime - a._creationTime)
+
+  const directorItem = directorItems[0]
   if (directorItem && directorItem.payload.type === 'directorApproval') {
     if (directorItem.payload.decision) {
       return directorItem.payload.decision
     }
   }
 
-  // Check executive approval
-  const executiveItem = workItems.find(
-    (wi) => wi.payload.type === 'executiveApproval',
-  )
+  // Get the most recent executiveApproval work item (for revision loops)
+  const executiveItems = workItems
+    .filter((wi) => wi.payload.type === 'executiveApproval')
+    .sort((a, b) => b._creationTime - a._creationTime)
+
+  const executiveItem = executiveItems[0]
   if (executiveItem && executiveItem.payload.type === 'executiveApproval') {
     if (executiveItem.payload.decision) {
       return executiveItem.payload.decision

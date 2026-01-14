@@ -984,6 +984,281 @@ describe('Campaign Approval Workflow', () => {
       expect(afterRevisionTaskStates.directorApproval).toBe('completed')
       expect(afterRevisionTaskStates.developBudget).toBe('enabled') // Loop back
     })
+
+    it('uses most recent decision after full revision cycle (director path)', async () => {
+      // This test validates the loop-safe pattern in getBudgetApprovalDecision()
+      // Multiple directorApproval work items exist after revision - must use most recent decision
+      const t = setup()
+
+      await setupCampaignApprovalAuthorization(t)
+      const { userId } = await setupAuthenticatedCampaignUser(t)
+
+      await t.mutation(initializeRootWorkflowMutation, {
+        payload: createTestCampaignPayload(userId, { estimatedBudget: 30000 }),
+      })
+      await waitForFlush(t)
+
+      const campaignsResult = await t.query(
+        api.workflows.campaign_approval.api.getCampaigns,
+        {},
+      )
+      const workflowId = campaignsResult.campaigns[0].workflowId
+
+      // Complete Phase 1 and Phase 2
+      await completePhase1And2(t, userId)
+
+      // First developBudget
+      let workQueue = await t.query(
+        api.workflows.campaign_approval.api.getCampaignWorkQueue,
+        {},
+      )
+      let workItemId = workQueue[0].workItemId
+
+      await t.mutation(api.workflows.campaign_approval.api.startWorkItem, {
+        workItemId,
+        args: { name: 'developBudget' },
+      })
+      await waitForFlush(t)
+      await t.mutation(api.workflows.campaign_approval.api.completeWorkItem, {
+        workItemId,
+        args: {
+          name: 'developBudget',
+          payload: {
+            totalAmount: 30000,
+            mediaSpend: 15000,
+            creativeProduction: 8000,
+            technologyTools: 3000,
+            agencyFees: 2000,
+            eventCosts: 1000,
+            contingency: 1000,
+            justification: 'Initial budget',
+          },
+        },
+      })
+      await waitForFlush(t)
+
+      // First director approval - request revision
+      workQueue = await t.query(
+        api.workflows.campaign_approval.api.getCampaignWorkQueue,
+        {},
+      )
+      workItemId = workQueue[0].workItemId
+
+      await t.mutation(api.workflows.campaign_approval.api.startWorkItem, {
+        workItemId,
+        args: { name: 'directorApproval' },
+      })
+      await waitForFlush(t)
+      await t.mutation(api.workflows.campaign_approval.api.completeWorkItem, {
+        workItemId,
+        args: {
+          name: 'directorApproval',
+          payload: { decision: 'revision_requested', approvalNotes: 'Need more contingency' },
+        },
+      })
+      await waitForFlush(t)
+
+      // Second developBudget (after revision)
+      workQueue = await t.query(
+        api.workflows.campaign_approval.api.getCampaignWorkQueue,
+        {},
+      )
+      expect(workQueue[0].taskType).toBe('developBudget')
+      workItemId = workQueue[0].workItemId
+
+      await t.mutation(api.workflows.campaign_approval.api.startWorkItem, {
+        workItemId,
+        args: { name: 'developBudget' },
+      })
+      await waitForFlush(t)
+      await t.mutation(api.workflows.campaign_approval.api.completeWorkItem, {
+        workItemId,
+        args: {
+          name: 'developBudget',
+          payload: {
+            totalAmount: 32000,
+            mediaSpend: 15000,
+            creativeProduction: 8000,
+            technologyTools: 3000,
+            agencyFees: 2000,
+            eventCosts: 1000,
+            contingency: 3000, // Increased contingency
+            justification: 'Revised with more contingency',
+          },
+        },
+      })
+      await waitForFlush(t)
+
+      // Second director approval - APPROVE this time
+      workQueue = await t.query(
+        api.workflows.campaign_approval.api.getCampaignWorkQueue,
+        {},
+      )
+      expect(workQueue[0].taskType).toBe('directorApproval')
+      workItemId = workQueue[0].workItemId
+
+      await t.mutation(api.workflows.campaign_approval.api.startWorkItem, {
+        workItemId,
+        args: { name: 'directorApproval' },
+      })
+      await waitForFlush(t)
+      await t.mutation(api.workflows.campaign_approval.api.completeWorkItem, {
+        workItemId,
+        args: {
+          name: 'directorApproval',
+          payload: { decision: 'approved', approvalNotes: 'Approved after revision' },
+        },
+      })
+      await waitForFlush(t)
+
+      // Verify secureResources is enabled (proving the most recent 'approved' decision was used)
+      const afterSecondApprovalTaskStates = await t.query(
+        api.workflows.campaign_approval.api.campaignWorkflowTaskStates,
+        { workflowId },
+      )
+      expect(afterSecondApprovalTaskStates.directorApproval).toBe('completed')
+      expect(afterSecondApprovalTaskStates.secureResources).toBe('enabled')
+      // If the old 'revision_requested' decision was read, developBudget would be enabled instead
+      expect(afterSecondApprovalTaskStates.developBudget).toBe('completed')
+    })
+
+    it('uses most recent decision after full revision cycle (executive path)', async () => {
+      // Same test but with executive approval path (budget >= $50k)
+      const t = setup()
+
+      await setupCampaignApprovalAuthorization(t)
+      const { userId } = await setupAuthenticatedCampaignUser(t)
+
+      await t.mutation(initializeRootWorkflowMutation, {
+        payload: createTestCampaignPayload(userId, { estimatedBudget: 75000 }),
+      })
+      await waitForFlush(t)
+
+      const campaignsResult = await t.query(
+        api.workflows.campaign_approval.api.getCampaigns,
+        {},
+      )
+      const workflowId = campaignsResult.campaigns[0].workflowId
+
+      // Complete Phase 1 and Phase 2
+      await completePhase1And2(t, userId)
+
+      // First developBudget
+      let workQueue = await t.query(
+        api.workflows.campaign_approval.api.getCampaignWorkQueue,
+        {},
+      )
+      let workItemId = workQueue[0].workItemId
+
+      await t.mutation(api.workflows.campaign_approval.api.startWorkItem, {
+        workItemId,
+        args: { name: 'developBudget' },
+      })
+      await waitForFlush(t)
+      await t.mutation(api.workflows.campaign_approval.api.completeWorkItem, {
+        workItemId,
+        args: {
+          name: 'developBudget',
+          payload: {
+            totalAmount: 75000,
+            mediaSpend: 40000,
+            creativeProduction: 20000,
+            technologyTools: 5000,
+            agencyFees: 5000,
+            eventCosts: 2500,
+            contingency: 2500,
+            justification: 'High-budget campaign',
+          },
+        },
+      })
+      await waitForFlush(t)
+
+      // Verify executive approval path is taken (>= $50k)
+      workQueue = await t.query(
+        api.workflows.campaign_approval.api.getCampaignWorkQueue,
+        {},
+      )
+      expect(workQueue[0].taskType).toBe('executiveApproval')
+      workItemId = workQueue[0].workItemId
+
+      // First executive approval - request revision
+      await t.mutation(api.workflows.campaign_approval.api.startWorkItem, {
+        workItemId,
+        args: { name: 'executiveApproval' },
+      })
+      await waitForFlush(t)
+      await t.mutation(api.workflows.campaign_approval.api.completeWorkItem, {
+        workItemId,
+        args: {
+          name: 'executiveApproval',
+          payload: { decision: 'revision_requested', approvalNotes: 'Reduce media spend' },
+        },
+      })
+      await waitForFlush(t)
+
+      // Second developBudget (after revision)
+      workQueue = await t.query(
+        api.workflows.campaign_approval.api.getCampaignWorkQueue,
+        {},
+      )
+      expect(workQueue[0].taskType).toBe('developBudget')
+      workItemId = workQueue[0].workItemId
+
+      await t.mutation(api.workflows.campaign_approval.api.startWorkItem, {
+        workItemId,
+        args: { name: 'developBudget' },
+      })
+      await waitForFlush(t)
+      await t.mutation(api.workflows.campaign_approval.api.completeWorkItem, {
+        workItemId,
+        args: {
+          name: 'developBudget',
+          payload: {
+            totalAmount: 70000, // Slightly reduced
+            mediaSpend: 35000, // Reduced media spend
+            creativeProduction: 20000,
+            technologyTools: 5000,
+            agencyFees: 5000,
+            eventCosts: 2500,
+            contingency: 2500,
+            justification: 'Revised with reduced media spend',
+          },
+        },
+      })
+      await waitForFlush(t)
+
+      // Second executive approval - APPROVE this time
+      workQueue = await t.query(
+        api.workflows.campaign_approval.api.getCampaignWorkQueue,
+        {},
+      )
+      expect(workQueue[0].taskType).toBe('executiveApproval')
+      workItemId = workQueue[0].workItemId
+
+      await t.mutation(api.workflows.campaign_approval.api.startWorkItem, {
+        workItemId,
+        args: { name: 'executiveApproval' },
+      })
+      await waitForFlush(t)
+      await t.mutation(api.workflows.campaign_approval.api.completeWorkItem, {
+        workItemId,
+        args: {
+          name: 'executiveApproval',
+          payload: { decision: 'approved', approvalNotes: 'Approved after revision' },
+        },
+      })
+      await waitForFlush(t)
+
+      // Verify secureResources is enabled (proving the most recent 'approved' decision was used)
+      const afterSecondApprovalTaskStates = await t.query(
+        api.workflows.campaign_approval.api.campaignWorkflowTaskStates,
+        { workflowId },
+      )
+      expect(afterSecondApprovalTaskStates.executiveApproval).toBe('completed')
+      expect(afterSecondApprovalTaskStates.secureResources).toBe('enabled')
+      // If the old 'revision_requested' decision was read, developBudget would be enabled instead
+      expect(afterSecondApprovalTaskStates.developBudget).toBe('completed')
+    })
   })
 
   describe('Phase 4: Creative Development - Happy Path', () => {
