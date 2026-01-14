@@ -531,6 +531,34 @@ const PHASE_NAMES: Record<number, string> = {
   8: 'Closure',
 }
 
+/**
+ * Parse Zod validation errors from error message and extract field-level errors
+ */
+function parseFieldErrors(errorMessage: string): Record<string, string> {
+  const fieldErrors: Record<string, string> = {}
+
+  // Try to extract ZodError JSON from the message
+  const zodMatch = errorMessage.match(/ZodError:\s*(\[[\s\S]*\])/)
+  if (!zodMatch) return fieldErrors
+
+  try {
+    const zodErrors = JSON.parse(zodMatch[1]) as Array<{
+      path: (string | number)[]
+      message: string
+    }>
+
+    for (const err of zodErrors) {
+      // Convert path array to dot-notation string (e.g., ["deliverables", 1, "description"] -> "deliverables.1.description")
+      const pathKey = err.path.join('.')
+      fieldErrors[pathKey] = err.message
+    }
+  } catch {
+    // If parsing fails, return empty errors
+  }
+
+  return fieldErrors
+}
+
 function GenericTaskPage() {
   const { workItemId } = Route.useParams()
 
@@ -548,6 +576,7 @@ function TaskPageInner({
 }) {
   const navigate = useNavigate()
   const [error, setError] = useState<string | null>(null)
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [isStarted, setIsStarted] = useState(false)
   const [formData, setFormData] = useState<Record<string, unknown>>({})
 
@@ -616,7 +645,9 @@ function TaskPageInner({
       setIsStarted(true)
     },
     onError: (err) => {
-      setError(err.message || 'Failed to start work item')
+      const message = err.message || 'Failed to start work item'
+      setError(message)
+      setFieldErrors(parseFieldErrors(message))
     },
   })
 
@@ -628,12 +659,15 @@ function TaskPageInner({
       navigate({ to: '/simple/queue' })
     },
     onError: (err) => {
-      setError(err.message || 'Failed to complete work item')
+      const message = err.message || 'Failed to complete work item'
+      setError(message)
+      setFieldErrors(parseFieldErrors(message))
     },
   })
 
   const handleStart = () => {
     setError(null)
+    setFieldErrors({})
     startMutation.mutate({
       workItemId,
       args: { name: taskType },
@@ -642,6 +676,7 @@ function TaskPageInner({
 
   const handleComplete = () => {
     setError(null)
+    setFieldErrors({})
     const payload = config.completionPayload(effectiveFormData)
     completeMutation.mutate({
       workItemId,
@@ -836,6 +871,7 @@ function TaskPageInner({
           <TaskFormCard
             config={config}
             error={error}
+            fieldErrors={fieldErrors}
             isPending={isPending}
             formData={effectiveFormData}
             setFormData={setFormData}
@@ -935,6 +971,7 @@ function ClaimCard({
 function TaskFormCard({
   config,
   error,
+  fieldErrors,
   isPending,
   formData,
   setFormData,
@@ -943,12 +980,15 @@ function TaskFormCard({
 }: {
   config: TaskConfig
   error: string | null
+  fieldErrors: Record<string, string>
   isPending: boolean
   formData: Record<string, unknown>
   setFormData: (data: Record<string, unknown>) => void
   isFormValid: boolean
   onComplete: () => void
 }) {
+  const hasFieldErrors = Object.keys(fieldErrors).length > 0
+
   return (
     <Card className="overflow-hidden">
       <CardHeader className="border-b bg-muted/30 px-6 py-5">
@@ -966,9 +1006,17 @@ function TaskFormCard({
       </CardHeader>
       <CardContent className="p-6">
         <div className="space-y-4">
-          {error && (
+          {error && !hasFieldErrors && (
             <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3">
               <p className="text-sm text-destructive">{error}</p>
+            </div>
+          )}
+
+          {hasFieldErrors && (
+            <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3">
+              <p className="text-sm text-destructive font-medium">
+                Please fix the validation errors below
+              </p>
             </div>
           )}
 
@@ -1017,7 +1065,7 @@ function TaskFormCard({
           )}
 
           {config.category === 'brief' && (
-            <BriefForm formData={formData} setFormData={setFormData} />
+            <BriefForm formData={formData} setFormData={setFormData} fieldErrors={fieldErrors} />
           )}
 
           {config.category === 'concepts' && (
@@ -1702,12 +1750,32 @@ function BudgetForm({
 
 // ============= Phase 4 Forms =============
 
+/**
+ * Inline field error display component
+ */
+function FieldError({ message }: { message?: string }) {
+  if (!message) return null
+  return (
+    <p className="mt-1 text-xs text-destructive">{message}</p>
+  )
+}
+
+/**
+ * Helper to get field error for a path
+ */
+function getFieldError(fieldErrors: Record<string, string>, ...pathParts: (string | number)[]): string | undefined {
+  const key = pathParts.join('.')
+  return fieldErrors[key]
+}
+
 function BriefForm({
   formData,
   setFormData,
+  fieldErrors = {},
 }: {
   formData: Record<string, unknown>
   setFormData: (data: Record<string, unknown>) => void
+  fieldErrors?: Record<string, string>
 }) {
   const keyMessages = (formData.keyMessages as string[]) || []
   const deliverables = (formData.deliverables as Array<{ type: string; description: string }>) || []
@@ -1726,9 +1794,10 @@ function BriefForm({
           placeholder="Describe the creative objectives..."
           value={(formData.objectives as string) || ''}
           onChange={(e) => setFormData({ ...formData, objectives: e.target.value })}
-          className="mt-2"
+          className={`mt-2 ${getFieldError(fieldErrors, 'objectives') ? 'border-destructive' : ''}`}
           rows={2}
         />
+        <FieldError message={getFieldError(fieldErrors, 'objectives')} />
       </div>
 
       <div>
@@ -1740,33 +1809,39 @@ function BriefForm({
           placeholder="Describe the target audience..."
           value={(formData.targetAudience as string) || ''}
           onChange={(e) => setFormData({ ...formData, targetAudience: e.target.value })}
-          className="mt-2"
+          className={`mt-2 ${getFieldError(fieldErrors, 'targetAudience') ? 'border-destructive' : ''}`}
           rows={2}
         />
+        <FieldError message={getFieldError(fieldErrors, 'targetAudience')} />
       </div>
 
       <div>
         <Label className="text-sm font-medium">
           Key Messages <span className="text-destructive">*</span>
         </Label>
+        <FieldError message={getFieldError(fieldErrors, 'keyMessages')} />
         <div className="mt-2 space-y-2">
           {keyMessages.map((msg, index) => (
-            <div key={index} className="flex gap-2">
-              <Input
-                value={msg}
-                onChange={(e) => {
-                  const updated = keyMessages.map((m, i) => (i === index ? e.target.value : m))
-                  setFormData({ ...formData, keyMessages: updated })
-                }}
-                placeholder={`Key message ${index + 1}`}
-              />
-              {keyMessages.length > 1 && (
-                <Button variant="ghost" size="icon" onClick={() => {
-                  setFormData({ ...formData, keyMessages: keyMessages.filter((_, i) => i !== index) })
-                }}>
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
-              )}
+            <div key={index}>
+              <div className="flex gap-2">
+                <Input
+                  value={msg}
+                  onChange={(e) => {
+                    const updated = keyMessages.map((m, i) => (i === index ? e.target.value : m))
+                    setFormData({ ...formData, keyMessages: updated })
+                  }}
+                  placeholder={`Key message ${index + 1}`}
+                  className={getFieldError(fieldErrors, 'keyMessages', index) ? 'border-destructive' : ''}
+                />
+                {keyMessages.length > 1 && (
+                  <Button variant="ghost" size="icon" onClick={() => {
+                    setFormData({ ...formData, keyMessages: keyMessages.filter((_, i) => i !== index) })
+                  }}>
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                )}
+              </div>
+              <FieldError message={getFieldError(fieldErrors, 'keyMessages', index)} />
             </div>
           ))}
           <Button variant="outline" onClick={() => setFormData({ ...formData, keyMessages: [...keyMessages, ''] })} className="w-full">
@@ -1784,53 +1859,66 @@ function BriefForm({
           placeholder="Describe the tone and style..."
           value={(formData.toneAndStyle as string) || ''}
           onChange={(e) => setFormData({ ...formData, toneAndStyle: e.target.value })}
-          className="mt-2"
+          className={`mt-2 ${getFieldError(fieldErrors, 'toneAndStyle') ? 'border-destructive' : ''}`}
           rows={2}
         />
+        <FieldError message={getFieldError(fieldErrors, 'toneAndStyle')} />
       </div>
 
       <div>
         <Label className="text-sm font-medium">
           Deliverables <span className="text-destructive">*</span>
         </Label>
-        <div className="mt-2 space-y-2">
+        <FieldError message={getFieldError(fieldErrors, 'deliverables')} />
+        <div className="mt-2 space-y-3">
           {deliverables.map((d, index) => (
-            <div key={index} className="flex gap-2 items-end">
-              <div className="w-1/3">
-                <Select
-                  value={d.type}
-                  onValueChange={(value) => {
-                    const updated = deliverables.map((x, i) => (i === index ? { ...x, type: value } : x))
-                    setFormData({ ...formData, deliverables: updated })
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {deliverableTypes.map((t) => (
-                      <SelectItem key={t} value={t}>{t.replace('_', ' ')}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            <div key={index} className="space-y-1">
+              <div className="flex gap-2 items-end">
+                <div className="w-1/3">
+                  <Select
+                    value={d.type}
+                    onValueChange={(value) => {
+                      const updated = deliverables.map((x, i) => (i === index ? { ...x, type: value } : x))
+                      setFormData({ ...formData, deliverables: updated })
+                    }}
+                  >
+                    <SelectTrigger className={getFieldError(fieldErrors, 'deliverables', index, 'type') ? 'border-destructive' : ''}>
+                      <SelectValue placeholder="Type *" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {deliverableTypes.map((t) => (
+                        <SelectItem key={t} value={t}>{t.replace('_', ' ')}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex-1">
+                  <Input
+                    value={d.description}
+                    onChange={(e) => {
+                      const updated = deliverables.map((x, i) => (i === index ? { ...x, description: e.target.value } : x))
+                      setFormData({ ...formData, deliverables: updated })
+                    }}
+                    placeholder="Description (required)"
+                    className={getFieldError(fieldErrors, 'deliverables', index, 'description') ? 'border-destructive' : ''}
+                  />
+                </div>
+                {deliverables.length > 1 && (
+                  <Button variant="ghost" size="icon" onClick={() => {
+                    setFormData({ ...formData, deliverables: deliverables.filter((_, i) => i !== index) })
+                  }}>
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                )}
               </div>
-              <div className="flex-1">
-                <Input
-                  value={d.description}
-                  onChange={(e) => {
-                    const updated = deliverables.map((x, i) => (i === index ? { ...x, description: e.target.value } : x))
-                    setFormData({ ...formData, deliverables: updated })
-                  }}
-                  placeholder="Description"
-                />
+              <div className="flex gap-2">
+                <div className="w-1/3">
+                  <FieldError message={getFieldError(fieldErrors, 'deliverables', index, 'type')} />
+                </div>
+                <div className="flex-1">
+                  <FieldError message={getFieldError(fieldErrors, 'deliverables', index, 'description')} />
+                </div>
               </div>
-              {deliverables.length > 1 && (
-                <Button variant="ghost" size="icon" onClick={() => {
-                  setFormData({ ...formData, deliverables: deliverables.filter((_, i) => i !== index) })
-                }}>
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
-              )}
             </div>
           ))}
           <Button variant="outline" onClick={() => setFormData({ ...formData, deliverables: [...deliverables, { type: '', description: '' }] })} className="w-full">
