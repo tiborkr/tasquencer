@@ -395,7 +395,12 @@ const UI_PAYLOADS = {
   assignOwner: (ownerId: string) => ({ ownerId }),
 
   // Phase 2: Strategy
-  conductResearch: (notes: string) => ({ findings: notes || '' }),
+  conductResearch: (audienceAnalysis: string, competitiveInsights: string, historicalLearnings: string, marketTimingNotes?: string) => ({
+    audienceAnalysis,
+    competitiveInsights,
+    historicalLearnings,
+    marketTimingNotes: marketTimingNotes || undefined,
+  }),
   defineMetrics: () => ({ confirmed: true }),
   developStrategy: (notes: string) => ({ strategyDocument: notes || '' }),
   createPlan: (notes: string) => ({ planDocument: notes || '' }),
@@ -502,12 +507,14 @@ describe('UI-API Contract: Payload Validation', () => {
   })
 
   describe('Phase 2: Strategy', () => {
-    it('conductResearch: UI payload DOES NOT match backend schema (demo-limited)', () => {
-      const uiPayload = UI_PAYLOADS.conductResearch('Some research findings')
+    it('conductResearch: UI payload matches backend schema (FIXED)', () => {
+      const uiPayload = UI_PAYLOADS.conductResearch(
+        'Target audience is 25-45 professionals',
+        'Competitors focus on price, we differentiate on quality',
+        'Previous campaigns had 3% conversion rate'
+      )
       const result = conductResearchSchema.safeParse(uiPayload)
-      // Backend requires: audienceAnalysis, competitiveInsights, historicalLearnings
-      // UI sends: { findings: string }
-      expect(result.success).toBe(false)
+      expect(result.success).toBe(true)
     })
 
     it('defineMetrics: UI payload DOES NOT match backend schema (demo-limited)', () => {
@@ -762,8 +769,9 @@ describe('UI-API Contract: Payload Validation', () => {
  * CONTRACT SUMMARY
  * ============================================================================
  *
- * COMPATIBLE - Simple UI Works (19 of 35 tasks = 54%):
+ * COMPATIBLE - Simple UI Works (20 of 35 tasks = 57%):
  * Phase 1: submitRequest ✓, intakeReview ✓, assignOwner ✓
+ * Phase 2: conductResearch ✓ (FIXED - added research form with 3 fields)
  * Phase 3: directorApproval ✓, executiveApproval ✓, secureResources ✓
  * Phase 4: internalReview ✓
  * Phase 5: buildInfra ✓, configAnalytics ✓, setupMedia ✓, qaTest ✓ (FIXED), fixIssues ✓
@@ -778,12 +786,13 @@ describe('UI-API Contract: Payload Validation', () => {
  * FIELD NAME MISMATCHES - ALL FIXED:
  * - qaTest: FIXED - UI now sends "result" (was "decision")
  * - preLaunchReview: FIXED - UI now sends "readyForApproval" (was "checklistComplete")
+ * - conductResearch: FIXED - UI now has proper research form with all required fields
  *
- * SCHEMA MISMATCHES - Demo-Limited (16 tasks):
+ * SCHEMA MISMATCHES - Demo-Limited (15 tasks):
  * These tasks have complex schemas requiring specific data structures.
  * The simple UI sends simplified payloads that won't pass validation.
  *
- * Phase 2: conductResearch, defineMetrics, developStrategy, createPlan
+ * Phase 2: defineMetrics, developStrategy, createPlan
  * Phase 3: developBudget
  * Phase 4: createBrief, developConcepts, reviseAssets, legalReview, legalRevise,
  *          finalApproval

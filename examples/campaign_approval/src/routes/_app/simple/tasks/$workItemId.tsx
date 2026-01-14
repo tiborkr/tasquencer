@@ -48,6 +48,7 @@ type TaskCategory =
   | 'work' // Complete a deliverable
   | 'review' // Review with approve/revision options
   | 'owner_assignment' // Assign current user as owner (assignOwner)
+  | 'research' // Research task with 3 required analysis fields
 
 /**
  * Task configuration for rendering
@@ -104,13 +105,17 @@ const TASK_CONFIGS: Record<string, TaskConfig> = {
 
   // Phase 2: Strategy
   conductResearch: {
-    category: 'work',
+    category: 'research',
     title: 'Conduct Research',
     description: 'Analyze audience, competitors, and market trends',
     icon: FileText,
     phase: 2,
-    workLabel: 'Research Findings',
-    completionPayload: (data) => ({ findings: data.notes || '' }),
+    completionPayload: (data) => ({
+      audienceAnalysis: (data.audienceAnalysis as string) || '',
+      competitiveInsights: (data.competitiveInsights as string) || '',
+      historicalLearnings: (data.historicalLearnings as string) || '',
+      marketTimingNotes: (data.marketTimingNotes as string) || undefined,
+    }),
   },
   defineMetrics: {
     category: 'confirmation',
@@ -543,6 +548,13 @@ function TaskPageInner({
     if (config.category === 'approval' || config.category === 'review') {
       return !!effectiveFormData.decision
     }
+    if (config.category === 'research') {
+      return !!(
+        effectiveFormData.audienceAnalysis &&
+        effectiveFormData.competitiveInsights &&
+        effectiveFormData.historicalLearnings
+      )
+    }
     return true // work category doesn't require validation
   }, [config.category, effectiveFormData])
 
@@ -790,6 +802,13 @@ function TaskFormCard({
             />
           )}
 
+          {config.category === 'research' && (
+            <ResearchForm
+              formData={formData}
+              setFormData={setFormData}
+            />
+          )}
+
           <Button
             onClick={onComplete}
             disabled={isPending || !isFormValid}
@@ -926,6 +945,81 @@ function WorkForm({
           onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
           className="mt-2"
           rows={5}
+        />
+      </div>
+    </div>
+  )
+}
+
+function ResearchForm({
+  formData,
+  setFormData,
+}: {
+  formData: Record<string, unknown>
+  setFormData: (data: Record<string, unknown>) => void
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="rounded-lg border bg-muted/30 p-4">
+        <h4 className="text-sm font-medium mb-2">Research Requirements:</h4>
+        <p className="text-sm text-muted-foreground">
+          Complete all required analysis sections below to document your research findings.
+        </p>
+      </div>
+
+      <div>
+        <Label htmlFor="audienceAnalysis" className="text-sm font-medium">
+          Audience Analysis <span className="text-destructive">*</span>
+        </Label>
+        <Textarea
+          id="audienceAnalysis"
+          placeholder="Describe target audience demographics, behaviors, and preferences..."
+          value={(formData.audienceAnalysis as string) || ''}
+          onChange={(e) => setFormData({ ...formData, audienceAnalysis: e.target.value })}
+          className="mt-2"
+          rows={3}
+        />
+      </div>
+
+      <div>
+        <Label htmlFor="competitiveInsights" className="text-sm font-medium">
+          Competitive Insights <span className="text-destructive">*</span>
+        </Label>
+        <Textarea
+          id="competitiveInsights"
+          placeholder="Summarize competitor campaigns, positioning, and market gaps..."
+          value={(formData.competitiveInsights as string) || ''}
+          onChange={(e) => setFormData({ ...formData, competitiveInsights: e.target.value })}
+          className="mt-2"
+          rows={3}
+        />
+      </div>
+
+      <div>
+        <Label htmlFor="historicalLearnings" className="text-sm font-medium">
+          Historical Learnings <span className="text-destructive">*</span>
+        </Label>
+        <Textarea
+          id="historicalLearnings"
+          placeholder="Document insights from past campaigns and what worked or didn't..."
+          value={(formData.historicalLearnings as string) || ''}
+          onChange={(e) => setFormData({ ...formData, historicalLearnings: e.target.value })}
+          className="mt-2"
+          rows={3}
+        />
+      </div>
+
+      <div>
+        <Label htmlFor="marketTimingNotes" className="text-sm font-medium">
+          Market Timing Notes <span className="text-muted-foreground">(optional)</span>
+        </Label>
+        <Textarea
+          id="marketTimingNotes"
+          placeholder="Notes on seasonality, market conditions, or timing considerations..."
+          value={(formData.marketTimingNotes as string) || ''}
+          onChange={(e) => setFormData({ ...formData, marketTimingNotes: e.target.value })}
+          className="mt-2"
+          rows={2}
         />
       </div>
     </div>
