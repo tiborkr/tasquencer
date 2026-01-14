@@ -856,4 +856,641 @@ describe('Domain Layer - db.ts', () => {
       })
     })
   })
+
+  describe('Research Functions', () => {
+    describe('insertCampaignResearch', () => {
+      it('creates research record with all fields', async () => {
+        const t = setup()
+
+        const result = await t.run(async (ctx) => {
+          const requesterId = await ctx.db.insert('users', {})
+          const workflowId = await createTestWorkflow(ctx.db)
+          const campaignData = createTestCampaignData(workflowId, requesterId)
+          const campaignId = await ctx.db.insert('campaigns', campaignData)
+          const now = Date.now()
+
+          const researchId = await ctx.db.insert('campaignResearch', {
+            campaignId,
+            audienceAnalysis: 'Target audience is 25-35 tech professionals',
+            competitiveLandscape: 'Main competitors are Company A and Company B',
+            historicalInsights: 'Previous campaigns had 15% conversion rate',
+            recommendations: 'Focus on LinkedIn and tech blogs',
+            createdBy: requesterId,
+            createdAt: now,
+            updatedAt: now,
+          })
+
+          const research = await ctx.db.get(researchId)
+          return { research, campaignId, requesterId }
+        })
+
+        expect(result.research).not.toBeNull()
+        expect(result.research?.campaignId).toBe(result.campaignId)
+        expect(result.research?.audienceAnalysis).toBe('Target audience is 25-35 tech professionals')
+        expect(result.research?.competitiveLandscape).toBe('Main competitors are Company A and Company B')
+        expect(result.research?.createdBy).toBe(result.requesterId)
+      })
+    })
+
+    describe('getCampaignResearchByCampaignId', () => {
+      it('retrieves research by campaign ID', async () => {
+        const t = setup()
+
+        const result = await t.run(async (ctx) => {
+          const requesterId = await ctx.db.insert('users', {})
+          const workflowId = await createTestWorkflow(ctx.db)
+          const campaignData = createTestCampaignData(workflowId, requesterId)
+          const campaignId = await ctx.db.insert('campaigns', campaignData)
+          const now = Date.now()
+
+          await ctx.db.insert('campaignResearch', {
+            campaignId,
+            audienceAnalysis: 'Test audience analysis',
+            createdBy: requesterId,
+            createdAt: now,
+            updatedAt: now,
+          })
+
+          const research = await ctx.db
+            .query('campaignResearch')
+            .withIndex('by_campaign_id', (q) => q.eq('campaignId', campaignId))
+            .unique()
+
+          return { research, campaignId }
+        })
+
+        expect(result.research).not.toBeNull()
+        expect(result.research?.campaignId).toBe(result.campaignId)
+      })
+
+      it('returns null when no research exists', async () => {
+        const t = setup()
+
+        const result = await t.run(async (ctx) => {
+          const requesterId = await ctx.db.insert('users', {})
+          const workflowId = await createTestWorkflow(ctx.db)
+          const campaignData = createTestCampaignData(workflowId, requesterId)
+          const campaignId = await ctx.db.insert('campaigns', campaignData)
+
+          const research = await ctx.db
+            .query('campaignResearch')
+            .withIndex('by_campaign_id', (q) => q.eq('campaignId', campaignId))
+            .unique()
+
+          return research
+        })
+
+        expect(result).toBeNull()
+      })
+    })
+
+    describe('updateCampaignResearch', () => {
+      it('updates research fields', async () => {
+        const t = setup()
+
+        const result = await t.run(async (ctx) => {
+          const requesterId = await ctx.db.insert('users', {})
+          const workflowId = await createTestWorkflow(ctx.db)
+          const campaignData = createTestCampaignData(workflowId, requesterId)
+          const campaignId = await ctx.db.insert('campaigns', campaignData)
+          const now = Date.now()
+
+          const researchId = await ctx.db.insert('campaignResearch', {
+            campaignId,
+            audienceAnalysis: 'Initial analysis',
+            createdBy: requesterId,
+            createdAt: now,
+            updatedAt: now,
+          })
+
+          await ctx.db.patch(researchId, {
+            audienceAnalysis: 'Updated analysis with more detail',
+            recommendations: 'New recommendations added',
+            updatedAt: Date.now(),
+          })
+
+          const research = await ctx.db.get(researchId)
+          return research
+        })
+
+        expect(result?.audienceAnalysis).toBe('Updated analysis with more detail')
+        expect(result?.recommendations).toBe('New recommendations added')
+      })
+    })
+  })
+
+  describe('Strategy Functions', () => {
+    describe('insertCampaignStrategy', () => {
+      it('creates strategy record with all fields', async () => {
+        const t = setup()
+
+        const result = await t.run(async (ctx) => {
+          const requesterId = await ctx.db.insert('users', {})
+          const workflowId = await createTestWorkflow(ctx.db)
+          const campaignData = createTestCampaignData(workflowId, requesterId)
+          const campaignId = await ctx.db.insert('campaigns', campaignData)
+          const now = Date.now()
+
+          const strategyId = await ctx.db.insert('campaignStrategy', {
+            campaignId,
+            channelStrategy: 'Multi-channel approach focusing on digital',
+            creativeApproach: 'Bold, modern visuals with data-driven messaging',
+            customerJourney: 'Awareness → Interest → Consideration → Purchase',
+            segmentation: 'Enterprise vs SMB segments',
+            tactics: [
+              { name: 'LinkedIn Ads', description: 'Targeted B2B ads', channel: 'social' },
+              { name: 'Email Nurture', description: 'Drip campaign sequence', channel: 'email' },
+            ],
+            createdBy: requesterId,
+            createdAt: now,
+            updatedAt: now,
+          })
+
+          const strategy = await ctx.db.get(strategyId)
+          return { strategy, campaignId, requesterId }
+        })
+
+        expect(result.strategy).not.toBeNull()
+        expect(result.strategy?.campaignId).toBe(result.campaignId)
+        expect(result.strategy?.channelStrategy).toBe('Multi-channel approach focusing on digital')
+        expect(result.strategy?.tactics?.length).toBe(2)
+      })
+    })
+
+    describe('getCampaignStrategyByCampaignId', () => {
+      it('retrieves strategy by campaign ID', async () => {
+        const t = setup()
+
+        const result = await t.run(async (ctx) => {
+          const requesterId = await ctx.db.insert('users', {})
+          const workflowId = await createTestWorkflow(ctx.db)
+          const campaignData = createTestCampaignData(workflowId, requesterId)
+          const campaignId = await ctx.db.insert('campaigns', campaignData)
+          const now = Date.now()
+
+          await ctx.db.insert('campaignStrategy', {
+            campaignId,
+            channelStrategy: 'Digital-first strategy',
+            creativeApproach: 'Minimalist design',
+            createdBy: requesterId,
+            createdAt: now,
+            updatedAt: now,
+          })
+
+          const strategy = await ctx.db
+            .query('campaignStrategy')
+            .withIndex('by_campaign_id', (q) => q.eq('campaignId', campaignId))
+            .unique()
+
+          return { strategy, campaignId }
+        })
+
+        expect(result.strategy).not.toBeNull()
+        expect(result.strategy?.channelStrategy).toBe('Digital-first strategy')
+      })
+    })
+
+    describe('updateCampaignStrategy', () => {
+      it('updates strategy fields including tactics array', async () => {
+        const t = setup()
+
+        const result = await t.run(async (ctx) => {
+          const requesterId = await ctx.db.insert('users', {})
+          const workflowId = await createTestWorkflow(ctx.db)
+          const campaignData = createTestCampaignData(workflowId, requesterId)
+          const campaignId = await ctx.db.insert('campaigns', campaignData)
+          const now = Date.now()
+
+          const strategyId = await ctx.db.insert('campaignStrategy', {
+            campaignId,
+            channelStrategy: 'Initial strategy',
+            creativeApproach: 'Initial approach',
+            createdBy: requesterId,
+            createdAt: now,
+            updatedAt: now,
+          })
+
+          await ctx.db.patch(strategyId, {
+            channelStrategy: 'Revised omnichannel strategy',
+            tactics: [
+              { name: 'New Tactic', description: 'Added after review', channel: 'paid_ads' },
+            ],
+            updatedAt: Date.now(),
+          })
+
+          const strategy = await ctx.db.get(strategyId)
+          return strategy
+        })
+
+        expect(result?.channelStrategy).toBe('Revised omnichannel strategy')
+        expect(result?.tactics?.length).toBe(1)
+        expect(result?.tactics?.[0].name).toBe('New Tactic')
+      })
+    })
+  })
+
+  describe('Timeline Functions', () => {
+    describe('insertCampaignMilestone', () => {
+      it('creates milestone record', async () => {
+        const t = setup()
+
+        const result = await t.run(async (ctx) => {
+          const requesterId = await ctx.db.insert('users', {})
+          const workflowId = await createTestWorkflow(ctx.db)
+          const campaignData = createTestCampaignData(workflowId, requesterId)
+          const campaignId = await ctx.db.insert('campaigns', campaignData)
+          const now = Date.now()
+
+          const milestoneId = await ctx.db.insert('campaignTimeline', {
+            campaignId,
+            milestoneName: 'Creative Approval',
+            targetDate: now + 14 * 24 * 60 * 60 * 1000,
+            status: 'pending' as const,
+            notes: 'All creative assets must be approved',
+            createdAt: now,
+            updatedAt: now,
+          })
+
+          const milestone = await ctx.db.get(milestoneId)
+          return { milestone, campaignId }
+        })
+
+        expect(result.milestone).not.toBeNull()
+        expect(result.milestone?.milestoneName).toBe('Creative Approval')
+        expect(result.milestone?.status).toBe('pending')
+      })
+    })
+
+    describe('listMilestonesByCampaignId', () => {
+      it('lists all milestones for a campaign', async () => {
+        const t = setup()
+
+        const result = await t.run(async (ctx) => {
+          const requesterId = await ctx.db.insert('users', {})
+          const workflowId = await createTestWorkflow(ctx.db)
+          const campaignData = createTestCampaignData(workflowId, requesterId)
+          const campaignId = await ctx.db.insert('campaigns', campaignData)
+          const now = Date.now()
+
+          await ctx.db.insert('campaignTimeline', {
+            campaignId,
+            milestoneName: 'Strategy Complete',
+            targetDate: now + 7 * 24 * 60 * 60 * 1000,
+            status: 'completed' as const,
+            createdAt: now,
+            updatedAt: now,
+          })
+
+          await ctx.db.insert('campaignTimeline', {
+            campaignId,
+            milestoneName: 'Budget Approved',
+            targetDate: now + 14 * 24 * 60 * 60 * 1000,
+            status: 'in_progress' as const,
+            createdAt: now,
+            updatedAt: now,
+          })
+
+          await ctx.db.insert('campaignTimeline', {
+            campaignId,
+            milestoneName: 'Campaign Launch',
+            targetDate: now + 30 * 24 * 60 * 60 * 1000,
+            status: 'pending' as const,
+            createdAt: now,
+            updatedAt: now,
+          })
+
+          const milestones = await ctx.db
+            .query('campaignTimeline')
+            .withIndex('by_campaign_id', (q) => q.eq('campaignId', campaignId))
+            .collect()
+
+          return { milestones, campaignId }
+        })
+
+        expect(result.milestones.length).toBe(3)
+        expect(result.milestones.every((m) => m.campaignId === result.campaignId)).toBe(true)
+      })
+    })
+
+    describe('updateCampaignMilestone', () => {
+      it('updates milestone status and actual date', async () => {
+        const t = setup()
+
+        const result = await t.run(async (ctx) => {
+          const requesterId = await ctx.db.insert('users', {})
+          const workflowId = await createTestWorkflow(ctx.db)
+          const campaignData = createTestCampaignData(workflowId, requesterId)
+          const campaignId = await ctx.db.insert('campaigns', campaignData)
+          const now = Date.now()
+
+          const milestoneId = await ctx.db.insert('campaignTimeline', {
+            campaignId,
+            milestoneName: 'Strategy Complete',
+            targetDate: now + 7 * 24 * 60 * 60 * 1000,
+            status: 'pending' as const,
+            createdAt: now,
+            updatedAt: now,
+          })
+
+          await ctx.db.patch(milestoneId, {
+            status: 'completed' as const,
+            actualDate: now + 5 * 24 * 60 * 60 * 1000,
+            notes: 'Completed 2 days early',
+            updatedAt: Date.now(),
+          })
+
+          const milestone = await ctx.db.get(milestoneId)
+          return milestone
+        })
+
+        expect(result?.status).toBe('completed')
+        expect(result?.actualDate).toBeDefined()
+        expect(result?.notes).toBe('Completed 2 days early')
+      })
+
+      it('marks milestone as delayed', async () => {
+        const t = setup()
+
+        const result = await t.run(async (ctx) => {
+          const requesterId = await ctx.db.insert('users', {})
+          const workflowId = await createTestWorkflow(ctx.db)
+          const campaignData = createTestCampaignData(workflowId, requesterId)
+          const campaignId = await ctx.db.insert('campaigns', campaignData)
+          const now = Date.now()
+
+          const milestoneId = await ctx.db.insert('campaignTimeline', {
+            campaignId,
+            milestoneName: 'Budget Approved',
+            targetDate: now - 2 * 24 * 60 * 60 * 1000,
+            status: 'in_progress' as const,
+            createdAt: now - 7 * 24 * 60 * 60 * 1000,
+            updatedAt: now - 7 * 24 * 60 * 60 * 1000,
+          })
+
+          await ctx.db.patch(milestoneId, {
+            status: 'delayed' as const,
+            notes: 'Pending additional approvals',
+            updatedAt: Date.now(),
+          })
+
+          const milestone = await ctx.db.get(milestoneId)
+          return milestone
+        })
+
+        expect(result?.status).toBe('delayed')
+      })
+    })
+
+    describe('deleteCampaignMilestone', () => {
+      it('removes a milestone', async () => {
+        const t = setup()
+
+        const result = await t.run(async (ctx) => {
+          const requesterId = await ctx.db.insert('users', {})
+          const workflowId = await createTestWorkflow(ctx.db)
+          const campaignData = createTestCampaignData(workflowId, requesterId)
+          const campaignId = await ctx.db.insert('campaigns', campaignData)
+          const now = Date.now()
+
+          const milestoneId = await ctx.db.insert('campaignTimeline', {
+            campaignId,
+            milestoneName: 'Cancelled Milestone',
+            targetDate: now + 30 * 24 * 60 * 60 * 1000,
+            status: 'pending' as const,
+            createdAt: now,
+            updatedAt: now,
+          })
+
+          await ctx.db.delete(milestoneId)
+
+          const milestone = await ctx.db.get(milestoneId)
+          return milestone
+        })
+
+        expect(result).toBeNull()
+      })
+    })
+  })
+
+  describe('Approvals Functions', () => {
+    describe('insertCampaignApproval', () => {
+      it('creates approval audit record', async () => {
+        const t = setup()
+
+        const result = await t.run(async (ctx) => {
+          const requesterId = await ctx.db.insert('users', {})
+          const approverId = await ctx.db.insert('users', {})
+          const workflowId = await createTestWorkflow(ctx.db)
+          const campaignData = createTestCampaignData(workflowId, requesterId)
+          const campaignId = await ctx.db.insert('campaigns', campaignData)
+          const now = Date.now()
+
+          const approvalId = await ctx.db.insert('campaignApprovals', {
+            campaignId,
+            approvalType: 'intake' as const,
+            decision: 'approved' as const,
+            approvedBy: approverId,
+            comments: 'Campaign meets all criteria for approval',
+            createdAt: now,
+          })
+
+          const approval = await ctx.db.get(approvalId)
+          return { approval, campaignId, approverId }
+        })
+
+        expect(result.approval).not.toBeNull()
+        expect(result.approval?.campaignId).toBe(result.campaignId)
+        expect(result.approval?.approvalType).toBe('intake')
+        expect(result.approval?.decision).toBe('approved')
+        expect(result.approval?.approvedBy).toBe(result.approverId)
+      })
+    })
+
+    describe('listApprovalsByCampaignId', () => {
+      it('lists all approvals for a campaign in descending order', async () => {
+        const t = setup()
+
+        const result = await t.run(async (ctx) => {
+          const requesterId = await ctx.db.insert('users', {})
+          const approverId = await ctx.db.insert('users', {})
+          const workflowId = await createTestWorkflow(ctx.db)
+          const campaignData = createTestCampaignData(workflowId, requesterId)
+          const campaignId = await ctx.db.insert('campaigns', campaignData)
+          const now = Date.now()
+
+          await ctx.db.insert('campaignApprovals', {
+            campaignId,
+            approvalType: 'intake' as const,
+            decision: 'approved' as const,
+            approvedBy: approverId,
+            createdAt: now,
+          })
+
+          await ctx.db.insert('campaignApprovals', {
+            campaignId,
+            approvalType: 'budget' as const,
+            decision: 'approved' as const,
+            approvedBy: approverId,
+            createdAt: now + 1000,
+          })
+
+          await ctx.db.insert('campaignApprovals', {
+            campaignId,
+            approvalType: 'creative' as const,
+            decision: 'changes_requested' as const,
+            approvedBy: approverId,
+            comments: 'Logo needs revision',
+            createdAt: now + 2000,
+          })
+
+          const approvals = await ctx.db
+            .query('campaignApprovals')
+            .withIndex('by_campaign_id', (q) => q.eq('campaignId', campaignId))
+            .order('desc')
+            .collect()
+
+          return { approvals, campaignId }
+        })
+
+        expect(result.approvals.length).toBe(3)
+        expect(result.approvals.every((a) => a.campaignId === result.campaignId)).toBe(true)
+        // Most recent first
+        expect(result.approvals[0].approvalType).toBe('creative')
+      })
+    })
+
+    describe('listApprovalsByType', () => {
+      it('filters approvals by type across campaigns', async () => {
+        const t = setup()
+
+        const result = await t.run(async (ctx) => {
+          const requesterId = await ctx.db.insert('users', {})
+          const approverId = await ctx.db.insert('users', {})
+          const workflowId = await createTestWorkflow(ctx.db)
+          const campaignData = createTestCampaignData(workflowId, requesterId)
+          const campaignId = await ctx.db.insert('campaigns', campaignData)
+          const now = Date.now()
+
+          // Create multiple approval types
+          await ctx.db.insert('campaignApprovals', {
+            campaignId,
+            approvalType: 'budget' as const,
+            decision: 'approved' as const,
+            approvedBy: approverId,
+            createdAt: now,
+          })
+
+          await ctx.db.insert('campaignApprovals', {
+            campaignId,
+            approvalType: 'legal' as const,
+            decision: 'approved' as const,
+            approvedBy: approverId,
+            createdAt: now + 1000,
+          })
+
+          await ctx.db.insert('campaignApprovals', {
+            campaignId,
+            approvalType: 'budget' as const,
+            decision: 'rejected' as const,
+            approvedBy: approverId,
+            comments: 'Over budget limit',
+            createdAt: now + 2000,
+          })
+
+          const budgetApprovals = await ctx.db
+            .query('campaignApprovals')
+            .withIndex('by_approval_type', (q) => q.eq('approvalType', 'budget'))
+            .order('desc')
+            .collect()
+
+          return budgetApprovals
+        })
+
+        expect(result.length).toBe(2)
+        expect(result.every((a) => a.approvalType === 'budget')).toBe(true)
+      })
+    })
+
+    describe('getMostRecentApproval', () => {
+      it('returns most recent approval of specified type', async () => {
+        const t = setup()
+
+        const result = await t.run(async (ctx) => {
+          const requesterId = await ctx.db.insert('users', {})
+          const approverId = await ctx.db.insert('users', {})
+          const workflowId = await createTestWorkflow(ctx.db)
+          const campaignData = createTestCampaignData(workflowId, requesterId)
+          const campaignId = await ctx.db.insert('campaigns', campaignData)
+          const now = Date.now()
+
+          // First budget approval (rejected)
+          await ctx.db.insert('campaignApprovals', {
+            campaignId,
+            approvalType: 'budget' as const,
+            decision: 'rejected' as const,
+            approvedBy: approverId,
+            comments: 'Initial rejection',
+            createdAt: now,
+          })
+
+          // Second budget approval (approved after revision)
+          await ctx.db.insert('campaignApprovals', {
+            campaignId,
+            approvalType: 'budget' as const,
+            decision: 'approved' as const,
+            approvedBy: approverId,
+            comments: 'Approved after budget revision',
+            createdAt: now + 5000,
+          })
+
+          // Different type
+          await ctx.db.insert('campaignApprovals', {
+            campaignId,
+            approvalType: 'legal' as const,
+            decision: 'approved' as const,
+            approvedBy: approverId,
+            createdAt: now + 3000,
+          })
+
+          const approvals = await ctx.db
+            .query('campaignApprovals')
+            .withIndex('by_campaign_id', (q) => q.eq('campaignId', campaignId))
+            .order('desc')
+            .collect()
+
+          const mostRecentBudget = approvals.find((a) => a.approvalType === 'budget')
+
+          return { mostRecentBudget, campaignId }
+        })
+
+        expect(result.mostRecentBudget).not.toBeNull()
+        expect(result.mostRecentBudget?.decision).toBe('approved')
+        expect(result.mostRecentBudget?.comments).toBe('Approved after budget revision')
+      })
+
+      it('returns null when no approval of type exists', async () => {
+        const t = setup()
+
+        const result = await t.run(async (ctx) => {
+          const requesterId = await ctx.db.insert('users', {})
+          const workflowId = await createTestWorkflow(ctx.db)
+          const campaignData = createTestCampaignData(workflowId, requesterId)
+          const campaignId = await ctx.db.insert('campaigns', campaignData)
+
+          const approvals = await ctx.db
+            .query('campaignApprovals')
+            .withIndex('by_campaign_id', (q) => q.eq('campaignId', campaignId))
+            .order('desc')
+            .collect()
+
+          const launchApproval = approvals.find((a) => a.approvalType === 'launch')
+
+          return launchApproval
+        })
+
+        // Convex serializes undefined to null in JSON
+        expect(result).toBeNull()
+      })
+    })
+  })
 })

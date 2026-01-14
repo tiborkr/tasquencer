@@ -393,3 +393,207 @@ export async function updateCampaignKPI(
 ): Promise<void> {
   await db.patch(kpiId, updates)
 }
+
+// ============================================================================
+// Research Functions (Phase 2)
+// ============================================================================
+
+/**
+ * Insert a new research record
+ */
+export async function insertCampaignResearch(
+  db: DatabaseWriter,
+  research: Omit<Doc<'campaignResearch'>, '_id' | '_creationTime'>,
+): Promise<Id<'campaignResearch'>> {
+  return await db.insert('campaignResearch', research)
+}
+
+/**
+ * Get research by campaign ID
+ */
+export async function getCampaignResearchByCampaignId(
+  db: DatabaseReader,
+  campaignId: Id<'campaigns'>,
+): Promise<Doc<'campaignResearch'> | null> {
+  return await db
+    .query('campaignResearch')
+    .withIndex('by_campaign_id', (q) => q.eq('campaignId', campaignId))
+    .unique()
+}
+
+/**
+ * Update campaign research
+ */
+export async function updateCampaignResearch(
+  db: DatabaseWriter,
+  researchId: Id<'campaignResearch'>,
+  updates: Partial<
+    Omit<Doc<'campaignResearch'>, '_id' | '_creationTime' | 'campaignId' | 'createdBy'>
+  >,
+): Promise<void> {
+  await db.patch(researchId, { ...updates, updatedAt: Date.now() })
+}
+
+// ============================================================================
+// Strategy Functions (Phase 2)
+// ============================================================================
+
+/**
+ * Insert a new strategy record
+ */
+export async function insertCampaignStrategy(
+  db: DatabaseWriter,
+  strategy: Omit<Doc<'campaignStrategy'>, '_id' | '_creationTime'>,
+): Promise<Id<'campaignStrategy'>> {
+  return await db.insert('campaignStrategy', strategy)
+}
+
+/**
+ * Get strategy by campaign ID
+ */
+export async function getCampaignStrategyByCampaignId(
+  db: DatabaseReader,
+  campaignId: Id<'campaigns'>,
+): Promise<Doc<'campaignStrategy'> | null> {
+  return await db
+    .query('campaignStrategy')
+    .withIndex('by_campaign_id', (q) => q.eq('campaignId', campaignId))
+    .unique()
+}
+
+/**
+ * Update campaign strategy
+ */
+export async function updateCampaignStrategy(
+  db: DatabaseWriter,
+  strategyId: Id<'campaignStrategy'>,
+  updates: Partial<
+    Omit<Doc<'campaignStrategy'>, '_id' | '_creationTime' | 'campaignId' | 'createdBy'>
+  >,
+): Promise<void> {
+  await db.patch(strategyId, { ...updates, updatedAt: Date.now() })
+}
+
+// ============================================================================
+// Timeline Functions (Phase 2)
+// ============================================================================
+
+/**
+ * Milestone status type
+ */
+export type MilestoneStatus = 'pending' | 'in_progress' | 'completed' | 'delayed'
+
+/**
+ * Insert a new timeline milestone
+ */
+export async function insertCampaignMilestone(
+  db: DatabaseWriter,
+  milestone: Omit<Doc<'campaignTimeline'>, '_id' | '_creationTime'>,
+): Promise<Id<'campaignTimeline'>> {
+  return await db.insert('campaignTimeline', milestone)
+}
+
+/**
+ * List milestones by campaign ID
+ */
+export async function listMilestonesByCampaignId(
+  db: DatabaseReader,
+  campaignId: Id<'campaigns'>,
+): Promise<Doc<'campaignTimeline'>[]> {
+  return await db
+    .query('campaignTimeline')
+    .withIndex('by_campaign_id', (q) => q.eq('campaignId', campaignId))
+    .collect()
+}
+
+/**
+ * Update milestone
+ */
+export async function updateCampaignMilestone(
+  db: DatabaseWriter,
+  milestoneId: Id<'campaignTimeline'>,
+  updates: Partial<
+    Omit<Doc<'campaignTimeline'>, '_id' | '_creationTime' | 'campaignId'>
+  >,
+): Promise<void> {
+  await db.patch(milestoneId, { ...updates, updatedAt: Date.now() })
+}
+
+/**
+ * Delete a milestone
+ */
+export async function deleteCampaignMilestone(
+  db: DatabaseWriter,
+  milestoneId: Id<'campaignTimeline'>,
+): Promise<void> {
+  await db.delete(milestoneId)
+}
+
+// ============================================================================
+// Approvals Functions (Audit Trail)
+// ============================================================================
+
+/**
+ * Approval type for categorizing approval decisions
+ */
+export type ApprovalType = 'intake' | 'budget' | 'creative' | 'legal' | 'launch'
+
+/**
+ * Approval decision values
+ */
+export type ApprovalDecision = 'approved' | 'rejected' | 'changes_requested'
+
+/**
+ * Insert a new approval record
+ */
+export async function insertCampaignApproval(
+  db: DatabaseWriter,
+  approval: Omit<Doc<'campaignApprovals'>, '_id' | '_creationTime'>,
+): Promise<Id<'campaignApprovals'>> {
+  return await db.insert('campaignApprovals', approval)
+}
+
+/**
+ * List approvals by campaign ID
+ */
+export async function listApprovalsByCampaignId(
+  db: DatabaseReader,
+  campaignId: Id<'campaigns'>,
+): Promise<Doc<'campaignApprovals'>[]> {
+  return await db
+    .query('campaignApprovals')
+    .withIndex('by_campaign_id', (q) => q.eq('campaignId', campaignId))
+    .order('desc')
+    .collect()
+}
+
+/**
+ * List approvals by type
+ */
+export async function listApprovalsByType(
+  db: DatabaseReader,
+  approvalType: ApprovalType,
+): Promise<Doc<'campaignApprovals'>[]> {
+  return await db
+    .query('campaignApprovals')
+    .withIndex('by_approval_type', (q) => q.eq('approvalType', approvalType))
+    .order('desc')
+    .collect()
+}
+
+/**
+ * Get most recent approval for a campaign and type
+ */
+export async function getMostRecentApproval(
+  db: DatabaseReader,
+  campaignId: Id<'campaigns'>,
+  approvalType: ApprovalType,
+): Promise<Doc<'campaignApprovals'> | null> {
+  const approvals = await db
+    .query('campaignApprovals')
+    .withIndex('by_campaign_id', (q) => q.eq('campaignId', campaignId))
+    .order('desc')
+    .collect()
+
+  return approvals.find(a => a.approvalType === approvalType) ?? null
+}

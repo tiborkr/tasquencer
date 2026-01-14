@@ -127,6 +127,104 @@ const campaignKPIs = defineTable({
 }).index('by_campaign_id', ['campaignId'])
 
 /**
+ * campaignResearch - Research findings from Phase 2 strategy development
+ * Contains audience analysis, competitive insights, and historical learnings
+ */
+const campaignResearch = defineTable({
+  campaignId: v.id('campaigns'),
+  audienceAnalysis: v.optional(v.string()),
+  competitiveLandscape: v.optional(v.string()),
+  historicalInsights: v.optional(v.string()),
+  recommendations: v.optional(v.string()),
+  createdBy: v.id('users'),
+  createdAt: v.number(),
+  updatedAt: v.number(),
+}).index('by_campaign_id', ['campaignId'])
+
+/**
+ * campaignStrategy - Strategy document from Phase 2
+ * Contains channel strategy, creative approach, and customer journey
+ */
+const campaignStrategy = defineTable({
+  campaignId: v.id('campaigns'),
+  channelStrategy: v.string(),
+  creativeApproach: v.string(),
+  customerJourney: v.optional(v.string()),
+  segmentation: v.optional(v.string()),
+  tactics: v.optional(v.array(v.object({
+    name: v.string(),
+    description: v.string(),
+    channel: v.string(),
+  }))),
+  createdBy: v.id('users'),
+  createdAt: v.number(),
+  updatedAt: v.number(),
+}).index('by_campaign_id', ['campaignId'])
+
+/**
+ * Milestone status for timeline tracking
+ */
+export const milestoneStatus = v.union(
+  v.literal('pending'),
+  v.literal('in_progress'),
+  v.literal('completed'),
+  v.literal('delayed'),
+)
+
+/**
+ * campaignTimeline - Milestones and timeline from Phase 2 planning
+ * Each record is one milestone in the campaign timeline
+ */
+const campaignTimeline = defineTable({
+  campaignId: v.id('campaigns'),
+  milestoneName: v.string(),
+  targetDate: v.number(),
+  actualDate: v.optional(v.number()),
+  status: milestoneStatus,
+  notes: v.optional(v.string()),
+  createdAt: v.number(),
+  updatedAt: v.number(),
+})
+  .index('by_campaign_id', ['campaignId'])
+  .index('by_target_date', ['targetDate'])
+
+/**
+ * Approval type for audit trail
+ */
+export const approvalType = v.union(
+  v.literal('intake'),
+  v.literal('budget'),
+  v.literal('creative'),
+  v.literal('legal'),
+  v.literal('launch'),
+)
+
+/**
+ * Approval decision values
+ */
+export const approvalDecision = v.union(
+  v.literal('approved'),
+  v.literal('rejected'),
+  v.literal('changes_requested'),
+)
+
+/**
+ * campaignApprovals - Audit trail for all approval decisions
+ * Records every approval gate decision for compliance and history
+ */
+const campaignApprovals = defineTable({
+  campaignId: v.id('campaigns'),
+  approvalType: approvalType,
+  decision: approvalDecision,
+  approvedBy: v.id('users'),
+  comments: v.optional(v.string()),
+  createdAt: v.number(),
+})
+  .index('by_campaign_id', ['campaignId'])
+  .index('by_approval_type', ['approvalType'])
+  .index('by_decision', ['decision'])
+
+/**
  * Work item payload types for all 35 workflow tasks
  */
 
@@ -438,5 +536,9 @@ export default {
   campaignBudgets,
   campaignCreatives,
   campaignKPIs,
+  campaignResearch,
+  campaignStrategy,
+  campaignTimeline,
+  campaignApprovals,
   campaignWorkItems,
 }
