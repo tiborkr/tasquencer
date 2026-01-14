@@ -37,7 +37,8 @@ function SimpleIndex() {
 
 function CampaignsPageInner() {
   const q = convexQuery(api.workflows.campaign_approval.api.getCampaigns, {})
-  const { data: campaigns } = useSuspenseQuery(q)
+  const { data: campaignsResult } = useSuspenseQuery(q)
+  const campaigns = campaignsResult.campaigns
 
   // Calculate stats
   const stats = useMemo(() => {

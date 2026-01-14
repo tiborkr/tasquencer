@@ -79,6 +79,135 @@ export async function listCampaigns(
 }
 
 /**
+ * Campaign status type
+ */
+export type CampaignStatus =
+  | 'draft'
+  | 'intake_review'
+  | 'strategy'
+  | 'budget_approval'
+  | 'creative_development'
+  | 'technical_setup'
+  | 'pre_launch'
+  | 'active'
+  | 'completed'
+  | 'cancelled'
+
+/**
+ * Filter options for listing campaigns
+ */
+export interface CampaignFilterOptions {
+  status?: CampaignStatus
+  ownerId?: Id<'users'>
+  requesterId?: Id<'users'>
+  limit?: number
+  cursor?: string // JSON stringified cursor for pagination
+}
+
+/**
+ * Paginated result for campaigns
+ */
+export interface PaginatedCampaignsResult {
+  campaigns: Doc<'campaigns'>[]
+  nextCursor: string | null
+  hasMore: boolean
+}
+
+/**
+ * List campaigns with optional filters and pagination
+ *
+ * Supports filtering by status, ownerId, and requesterId.
+ * Supports cursor-based pagination with limit.
+ *
+ * Filter priority (if multiple specified):
+ * 1. ownerId (uses by_owner_id index)
+ * 2. requesterId (uses by_requester_id index)
+ * 3. Full table scan (if no indexed filter)
+ *
+ * Status is always filtered in memory after the initial query.
+ */
+export async function listCampaignsWithFilters(
+  db: DatabaseReader,
+  options: CampaignFilterOptions = {},
+): Promise<PaginatedCampaignsResult> {
+  const { status, ownerId, requesterId, limit = 50, cursor } = options
+
+  // Parse cursor if provided
+  let startAfterTime: number | undefined
+  let startAfterId: Id<'campaigns'> | undefined
+  if (cursor) {
+    try {
+      const parsed = JSON.parse(cursor) as {
+        time: number
+        id: Id<'campaigns'>
+      }
+      startAfterTime = parsed.time
+      startAfterId = parsed.id
+    } catch {
+      // Invalid cursor, ignore
+    }
+  }
+
+  // Fetch campaigns using the most specific index available
+  let campaigns: Doc<'campaigns'>[]
+
+  if (ownerId) {
+    // Use by_owner_id index
+    campaigns = await db
+      .query('campaigns')
+      .withIndex('by_owner_id', (q) => q.eq('ownerId', ownerId))
+      .order('desc')
+      .collect()
+  } else if (requesterId) {
+    // Use by_requester_id index
+    campaigns = await db
+      .query('campaigns')
+      .withIndex('by_requester_id', (q) => q.eq('requesterId', requesterId))
+      .order('desc')
+      .collect()
+  } else {
+    // Full table scan
+    campaigns = await db.query('campaigns').order('desc').collect()
+  }
+
+  // Apply status filter in memory
+  if (status) {
+    campaigns = campaigns.filter((c) => c.status === status)
+  }
+
+  // Apply cursor-based pagination
+  if (startAfterTime !== undefined && startAfterId) {
+    const cursorIndex = campaigns.findIndex(
+      (c) =>
+        c._creationTime === startAfterTime && c._id === startAfterId,
+    )
+    if (cursorIndex >= 0) {
+      campaigns = campaigns.slice(cursorIndex + 1)
+    }
+  }
+
+  // Apply limit and determine if there are more
+  const hasMore = campaigns.length > limit
+  const paginatedCampaigns = campaigns.slice(0, limit)
+
+  // Create next cursor from the last item
+  const lastCampaign = paginatedCampaigns[paginatedCampaigns.length - 1]
+  const nextCursor =
+    hasMore && lastCampaign
+      ? JSON.stringify({
+          time: lastCampaign._creationTime,
+          id: lastCampaign._id,
+        })
+      : null
+
+  return {
+    campaigns: paginatedCampaigns,
+    nextCursor,
+    hasMore,
+  }
+}
+
+/**
  * List campaigns by requester ID
  */
 export async function listCampaignsByRequester(

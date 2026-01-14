@@ -67,8 +67,8 @@ describe('Campaign Approval API Endpoints', () => {
       })
       await waitForFlush(t)
 
-      const campaigns = await t.query(api.workflows.campaign_approval.api.getCampaigns, {})
-      const campaignId = campaigns[0]._id
+      const campaignsResult = await t.query(api.workflows.campaign_approval.api.getCampaigns, {})
+      const campaignId = campaignsResult.campaigns[0]._id
 
       // Get campaign with details
       const result = await t.query(api.workflows.campaign_approval.api.getCampaignWithDetails, {
@@ -130,8 +130,8 @@ describe('Campaign Approval API Endpoints', () => {
       })
       await waitForFlush(t)
 
-      const campaigns = await t.query(api.workflows.campaign_approval.api.getCampaigns, {})
-      const campaignId = campaigns[0]._id
+      const campaignsResult = await t.query(api.workflows.campaign_approval.api.getCampaigns, {})
+      const campaignId = campaignsResult.campaigns[0]._id
 
       // Budget hasn't been created yet
       const budget = await t.query(api.workflows.campaign_approval.api.getCampaignBudget, {
@@ -154,8 +154,8 @@ describe('Campaign Approval API Endpoints', () => {
       })
       await waitForFlush(t)
 
-      const campaigns = await t.query(api.workflows.campaign_approval.api.getCampaigns, {})
-      const campaignId = campaigns[0]._id
+      const campaignsResult = await t.query(api.workflows.campaign_approval.api.getCampaigns, {})
+      const campaignId = campaignsResult.campaigns[0]._id
 
       // No creatives exist yet
       const creatives = await t.query(api.workflows.campaign_approval.api.getCampaignCreatives, {
@@ -209,8 +209,8 @@ describe('Campaign Approval API Endpoints', () => {
       })
       await waitForFlush(t)
 
-      const campaigns = await t.query(api.workflows.campaign_approval.api.getCampaigns, {})
-      const workflowId = campaigns[0].workflowId
+      const campaignsResult = await t.query(api.workflows.campaign_approval.api.getCampaigns, {})
+      const workflowId = campaignsResult.campaigns[0].workflowId
 
       // Cancel the campaign workflow using the custom mutation
       const cancelMutation = api.workflows.campaign_approval.api.cancelCampaignWorkflow as any
@@ -221,8 +221,8 @@ describe('Campaign Approval API Endpoints', () => {
       await waitForFlush(t)
 
       // Verify campaign status is cancelled
-      const updatedCampaigns = await t.query(api.workflows.campaign_approval.api.getCampaigns, {})
-      expect(updatedCampaigns[0].status).toBe('cancelled')
+      const updatedCampaignsResult = await t.query(api.workflows.campaign_approval.api.getCampaigns, {})
+      expect(updatedCampaignsResult.campaigns[0].status).toBe('cancelled')
     })
   })
 
@@ -366,6 +366,148 @@ describe('Campaign Approval API Endpoints', () => {
           storageId,
         }),
       ).rejects.toThrow('CREATIVE_NOT_FOUND')
+    })
+  })
+
+  describe('getCampaigns - Filter and Pagination', () => {
+    it('returns paginated result structure', async () => {
+      const t = setup()
+      await setupCampaignApprovalAuthorization(t)
+      const { userId } = await setupAuthenticatedCampaignUser(t)
+
+      // Create campaign
+      await t.mutation(initializeRootWorkflowMutation, {
+        payload: createTestCampaignPayload(userId),
+      })
+      await waitForFlush(t)
+
+      const result = await t.query(api.workflows.campaign_approval.api.getCampaigns, {})
+
+      expect(result).toHaveProperty('campaigns')
+      expect(result).toHaveProperty('nextCursor')
+      expect(result).toHaveProperty('hasMore')
+      expect(Array.isArray(result.campaigns)).toBe(true)
+      expect(result.campaigns.length).toBe(1)
+      expect(result.hasMore).toBe(false)
+      expect(result.nextCursor).toBeNull()
+    })
+
+    it('filters campaigns by status', async () => {
+      const t = setup()
+      await setupCampaignApprovalAuthorization(t)
+      const { userId } = await setupAuthenticatedCampaignUser(t)
+
+      // Create campaign (starts in draft status)
+      await t.mutation(initializeRootWorkflowMutation, {
+        payload: createTestCampaignPayload(userId),
+      })
+      await waitForFlush(t)
+
+      // Filter by draft status should return the campaign
+      const draftResult = await t.query(api.workflows.campaign_approval.api.getCampaigns, {
+        status: 'draft',
+      })
+      expect(draftResult.campaigns.length).toBe(1)
+
+      // Filter by completed status should return empty
+      const completedResult = await t.query(api.workflows.campaign_approval.api.getCampaigns, {
+        status: 'completed',
+      })
+      expect(completedResult.campaigns.length).toBe(0)
+    })
+
+    it('filters campaigns by requesterId', async () => {
+      const t = setup()
+      await setupCampaignApprovalAuthorization(t)
+      const { userId } = await setupAuthenticatedCampaignUser(t)
+
+      // Create campaign
+      await t.mutation(initializeRootWorkflowMutation, {
+        payload: createTestCampaignPayload(userId),
+      })
+      await waitForFlush(t)
+
+      // Filter by requester should return the campaign
+      const result = await t.query(api.workflows.campaign_approval.api.getCampaigns, {
+        requesterId: userId as any,
+      })
+      expect(result.campaigns.length).toBe(1)
+      expect(result.campaigns[0].requesterId).toBe(userId)
+    })
+
+    it('respects limit parameter', async () => {
+      const t = setup()
+      await setupCampaignApprovalAuthorization(t)
+      const { userId } = await setupAuthenticatedCampaignUser(t)
+
+      // Create multiple campaigns
+      await t.mutation(initializeRootWorkflowMutation, {
+        payload: createTestCampaignPayload(userId, { name: 'Campaign 1' }),
+      })
+      await waitForFlush(t)
+      await t.mutation(initializeRootWorkflowMutation, {
+        payload: createTestCampaignPayload(userId, { name: 'Campaign 2' }),
+      })
+      await waitForFlush(t)
+      await t.mutation(initializeRootWorkflowMutation, {
+        payload: createTestCampaignPayload(userId, { name: 'Campaign 3' }),
+      })
+      await waitForFlush(t)
+
+      // Request with limit of 2
+      const result = await t.query(api.workflows.campaign_approval.api.getCampaigns, {
+        limit: 2,
+      })
+
+      expect(result.campaigns.length).toBe(2)
+      expect(result.hasMore).toBe(true)
+      expect(result.nextCursor).not.toBeNull()
+    })
+  })
+
+  describe('getCampaignWorkQueue - Filter Parameters', () => {
+    it('filters work queue by phase', async () => {
+      const t = setup()
+      await setupCampaignApprovalAuthorization(t)
+      const { userId } = await setupAuthenticatedCampaignUser(t)
+
+      // Create campaign (submitRequest is in 'initiation' phase)
+      await t.mutation(initializeRootWorkflowMutation, {
+        payload: createTestCampaignPayload(userId),
+      })
+      await waitForFlush(t)
+
+      // Filter by initiation phase should return the submitRequest task
+      const initiationResult = await t.query(api.workflows.campaign_approval.api.getCampaignWorkQueue, {
+        phase: 'initiation',
+      })
+      expect(initiationResult.length).toBe(1)
+      expect(initiationResult[0].taskType).toBe('submitRequest')
+      expect(initiationResult[0].phase).toBe('initiation')
+
+      // Filter by strategy phase should return empty
+      const strategyResult = await t.query(api.workflows.campaign_approval.api.getCampaignWorkQueue, {
+        phase: 'strategy',
+      })
+      expect(strategyResult.length).toBe(0)
+    })
+
+    it('includes phase field in work queue items', async () => {
+      const t = setup()
+      await setupCampaignApprovalAuthorization(t)
+      const { userId } = await setupAuthenticatedCampaignUser(t)
+
+      // Create campaign
+      await t.mutation(initializeRootWorkflowMutation, {
+        payload: createTestCampaignPayload(userId),
+      })
+      await waitForFlush(t)
+
+      const workQueue = await t.query(api.workflows.campaign_approval.api.getCampaignWorkQueue, {})
+
+      expect(workQueue.length).toBe(1)
+      expect(workQueue[0]).toHaveProperty('phase')
+      expect(workQueue[0].phase).toBe('initiation')
     })
   })
 

@@ -68,16 +68,16 @@ describe('Campaign Approval Workflow', () => {
       await waitForFlush(t)
 
       // Get the campaign to find the workflow ID
-      const campaigns = await t.query(
+      const campaignsResult = await t.query(
         api.workflows.campaign_approval.api.getCampaigns,
         {},
       )
-      expect(campaigns.length).toBe(1)
-      expect(campaigns[0].name).toBe('Test Campaign')
-      expect(campaigns[0].objective).toBe('Test objective for campaign')
-      expect(campaigns[0].status).toBe('draft')
+      expect(campaignsResult.campaigns.length).toBe(1)
+      expect(campaignsResult.campaigns[0].name).toBe('Test Campaign')
+      expect(campaignsResult.campaigns[0].objective).toBe('Test objective for campaign')
+      expect(campaignsResult.campaigns[0].status).toBe('draft')
 
-      const workflowId = campaigns[0].workflowId
+      const workflowId = campaignsResult.campaigns[0].workflowId
 
       // Verify the submitRequest task is enabled via task states
       const taskStates = await t.query(
@@ -133,11 +133,11 @@ describe('Campaign Approval Workflow', () => {
       expect(afterSubmitTaskStates.intakeReview).toBe('enabled')
 
       // Verify campaign status changed to intake_review
-      const campaignsAfterSubmit = await t.query(
+      const campaignsAfterSubmitResult = await t.query(
         api.workflows.campaign_approval.api.getCampaigns,
         {},
       )
-      expect(campaignsAfterSubmit[0].status).toBe('intake_review')
+      expect(campaignsAfterSubmitResult.campaigns[0].status).toBe('intake_review')
 
       // Get intakeReview work item
       const intakeWorkQueue = await t.query(
@@ -204,12 +204,12 @@ describe('Campaign Approval Workflow', () => {
       await waitForFlush(t)
 
       // Verify Phase 1 completed - campaign should have owner and strategy status
-      const finalCampaigns = await t.query(
+      const finalCampaignsResult = await t.query(
         api.workflows.campaign_approval.api.getCampaigns,
         {},
       )
-      expect(finalCampaigns[0].ownerId).toBe(userId)
-      expect(finalCampaigns[0].status).toBe('strategy')
+      expect(finalCampaignsResult.campaigns[0].ownerId).toBe(userId)
+      expect(finalCampaignsResult.campaigns[0].status).toBe('strategy')
 
       // Verify workflow reached end (for now - Phase 2 not implemented)
       const finalTaskStates = await t.query(
@@ -334,17 +334,17 @@ describe('Campaign Approval Workflow', () => {
       await waitForFlush(t)
 
       // Get the campaign
-      const campaigns = await t.query(
+      const campaignsResult = await t.query(
         api.workflows.campaign_approval.api.getCampaigns,
         {},
       )
 
       const campaign = await t.query(api.workflows.campaign_approval.api.getCampaign, {
-        workflowId: campaigns[0].workflowId,
+        workflowId: campaignsResult.campaigns[0].workflowId,
       })
 
       expect(campaign).not.toBeNull()
-      expect(campaign?.workflowId).toBe(campaigns[0].workflowId)
+      expect(campaign?.workflowId).toBe(campaignsResult.campaigns[0].workflowId)
       expect(campaign?.name).toBe('Test Campaign')
       expect(campaign?.estimatedBudget).toBe(10000)
     })
@@ -363,11 +363,11 @@ describe('Campaign Approval Workflow', () => {
       })
       await waitForFlush(t)
 
-      const campaigns = await t.query(
+      const campaignsResult = await t.query(
         api.workflows.campaign_approval.api.getCampaigns,
         {},
       )
-      const workflowId = campaigns[0].workflowId
+      const workflowId = campaignsResult.campaigns[0].workflowId
 
       // Complete submitRequest
       const workQueue = await t.query(
@@ -433,11 +433,11 @@ describe('Campaign Approval Workflow', () => {
       })
       await waitForFlush(t)
 
-      const campaigns = await t.query(
+      const campaignsResult = await t.query(
         api.workflows.campaign_approval.api.getCampaigns,
         {},
       )
-      const workflowId = campaigns[0].workflowId
+      const workflowId = campaignsResult.campaigns[0].workflowId
 
       // Complete submitRequest first time
       let workQueue = await t.query(
@@ -503,11 +503,11 @@ describe('Campaign Approval Workflow', () => {
       })
       await waitForFlush(t)
 
-      const campaigns = await t.query(
+      const campaignsResult = await t.query(
         api.workflows.campaign_approval.api.getCampaigns,
         {},
       )
-      const workflowId = campaigns[0].workflowId
+      const workflowId = campaignsResult.campaigns[0].workflowId
 
       // Complete Phase 1
       let workQueue = await t.query(
@@ -708,11 +708,11 @@ describe('Campaign Approval Workflow', () => {
       expect(taskStates.developBudget).toBe('enabled')
 
       // Verify campaign status updated to budget_approval
-      const finalCampaigns = await t.query(
+      const finalCampaignsResult = await t.query(
         api.workflows.campaign_approval.api.getCampaigns,
         {},
       )
-      expect(finalCampaigns[0].status).toBe('budget_approval')
+      expect(finalCampaignsResult.campaigns[0].status).toBe('budget_approval')
     })
   })
 
@@ -729,11 +729,11 @@ describe('Campaign Approval Workflow', () => {
       })
       await waitForFlush(t)
 
-      const campaigns = await t.query(
+      const campaignsResult = await t.query(
         api.workflows.campaign_approval.api.getCampaigns,
         {},
       )
-      const workflowId = campaigns[0].workflowId
+      const workflowId = campaignsResult.campaigns[0].workflowId
 
       // Complete Phase 1 and Phase 2 (abbreviated for this test)
       await completePhase1And2(t, userId)
@@ -823,11 +823,11 @@ describe('Campaign Approval Workflow', () => {
       })
       await waitForFlush(t)
 
-      const campaigns = await t.query(
+      const campaignsResult = await t.query(
         api.workflows.campaign_approval.api.getCampaigns,
         {},
       )
-      const workflowId = campaigns[0].workflowId
+      const workflowId = campaignsResult.campaigns[0].workflowId
 
       // Complete Phase 1 and Phase 2
       await completePhase1And2(t, userId)
@@ -916,11 +916,11 @@ describe('Campaign Approval Workflow', () => {
       })
       await waitForFlush(t)
 
-      const campaigns = await t.query(
+      const campaignsResult = await t.query(
         api.workflows.campaign_approval.api.getCampaigns,
         {},
       )
-      const workflowId = campaigns[0].workflowId
+      const workflowId = campaignsResult.campaigns[0].workflowId
 
       // Complete Phase 1 and Phase 2
       await completePhase1And2(t, userId)
@@ -999,11 +999,11 @@ describe('Campaign Approval Workflow', () => {
       })
       await waitForFlush(t)
 
-      const campaigns = await t.query(
+      const campaignsResult = await t.query(
         api.workflows.campaign_approval.api.getCampaigns,
         {},
       )
-      const workflowId = campaigns[0].workflowId
+      const workflowId = campaignsResult.campaigns[0].workflowId
 
       // Complete Phase 1, 2, and 3
       await completePhase1And2(t, userId)
@@ -1050,11 +1050,11 @@ describe('Campaign Approval Workflow', () => {
       await waitForFlush(t)
 
       // Verify campaign status updated
-      const campaignsAfterBrief = await t.query(
+      const campaignsAfterBriefResult = await t.query(
         api.workflows.campaign_approval.api.getCampaigns,
         {},
       )
-      expect(campaignsAfterBrief[0].status).toBe('creative_development')
+      expect(campaignsAfterBriefResult.campaigns[0].status).toBe('creative_development')
 
       // developConcepts should be enabled
       taskStates = await t.query(
@@ -1198,11 +1198,11 @@ describe('Campaign Approval Workflow', () => {
       await waitForFlush(t)
 
       // Verify Phase 4 complete and campaign status updated
-      const finalCampaigns = await t.query(
+      const finalCampaignsResult = await t.query(
         api.workflows.campaign_approval.api.getCampaigns,
         {},
       )
-      expect(finalCampaigns[0].status).toBe('technical_setup')
+      expect(finalCampaignsResult.campaigns[0].status).toBe('technical_setup')
 
       taskStates = await t.query(
         api.workflows.campaign_approval.api.campaignWorkflowTaskStates,
@@ -1224,11 +1224,11 @@ describe('Campaign Approval Workflow', () => {
       })
       await waitForFlush(t)
 
-      const campaigns = await t.query(
+      const campaignsResult = await t.query(
         api.workflows.campaign_approval.api.getCampaigns,
         {},
       )
-      const workflowId = campaigns[0].workflowId
+      const workflowId = campaignsResult.campaigns[0].workflowId
 
       // Complete Phase 1, 2, and 3
       await completePhase1And2(t, userId)
@@ -1381,11 +1381,11 @@ describe('Campaign Approval Workflow', () => {
       })
       await waitForFlush(t)
 
-      const campaigns = await t.query(
+      const campaignsResult = await t.query(
         api.workflows.campaign_approval.api.getCampaigns,
         {},
       )
-      const workflowId = campaigns[0].workflowId
+      const workflowId = campaignsResult.campaigns[0].workflowId
 
       // Complete Phases 1-4
       await completePhase1And2(t, userId)
@@ -1513,11 +1513,11 @@ describe('Campaign Approval Workflow', () => {
       await waitForFlush(t)
 
       // Verify campaign status and workflow completion
-      const finalCampaigns = await t.query(
+      const finalCampaignsResult = await t.query(
         api.workflows.campaign_approval.api.getCampaigns,
         {},
       )
-      expect(finalCampaigns[0].status).toBe('pre_launch')
+      expect(finalCampaignsResult.campaigns[0].status).toBe('pre_launch')
 
       taskStates = await t.query(
         api.workflows.campaign_approval.api.campaignWorkflowTaskStates,
@@ -1540,11 +1540,11 @@ describe('Campaign Approval Workflow', () => {
       })
       await waitForFlush(t)
 
-      const campaigns = await t.query(
+      const campaignsResult = await t.query(
         api.workflows.campaign_approval.api.getCampaigns,
         {},
       )
-      const workflowId = campaigns[0].workflowId
+      const workflowId = campaignsResult.campaigns[0].workflowId
 
       // Complete Phases 1-4
       await completePhase1And2(t, userId)
@@ -1677,11 +1677,11 @@ describe('Campaign Approval Workflow', () => {
       })
       await waitForFlush(t)
 
-      const campaigns = await t.query(
+      const campaignsResult = await t.query(
         api.workflows.campaign_approval.api.getCampaigns,
         {},
       )
-      const workflowId = campaigns[0].workflowId
+      const workflowId = campaignsResult.campaigns[0].workflowId
 
       // Complete Phases 1-5
       await completePhase1And2(t, userId)
@@ -1797,11 +1797,11 @@ describe('Campaign Approval Workflow', () => {
       await waitForFlush(t)
 
       // Verify Phase 6 complete and campaign status is active
-      const finalCampaigns = await t.query(
+      const finalCampaignsResult = await t.query(
         api.workflows.campaign_approval.api.getCampaigns,
         {},
       )
-      expect(finalCampaigns[0].status).toBe('active')
+      expect(finalCampaignsResult.campaigns[0].status).toBe('active')
 
       taskStates = await t.query(
         api.workflows.campaign_approval.api.campaignWorkflowTaskStates,
@@ -1823,11 +1823,11 @@ describe('Campaign Approval Workflow', () => {
       })
       await waitForFlush(t)
 
-      const campaigns = await t.query(
+      const campaignsResult = await t.query(
         api.workflows.campaign_approval.api.getCampaigns,
         {},
       )
-      const workflowId = campaigns[0].workflowId
+      const workflowId = campaignsResult.campaigns[0].workflowId
 
       // Complete Phases 1-5
       await completePhase1And2(t, userId)
@@ -1917,11 +1917,11 @@ describe('Campaign Approval Workflow', () => {
       })
       await waitForFlush(t)
 
-      const campaigns = await t.query(
+      const campaignsResult = await t.query(
         api.workflows.campaign_approval.api.getCampaigns,
         {},
       )
-      const workflowId = campaigns[0].workflowId
+      const workflowId = campaignsResult.campaigns[0].workflowId
 
       // Complete Phases 1-5
       await completePhase1And2(t, userId)
@@ -2031,11 +2031,11 @@ describe('Campaign Approval Workflow', () => {
       })
       await waitForFlush(t)
 
-      const campaigns = await t.query(
+      const campaignsResult = await t.query(
         api.workflows.campaign_approval.api.getCampaigns,
         {},
       )
-      const workflowId = campaigns[0].workflowId
+      const workflowId = campaignsResult.campaigns[0].workflowId
 
       // Complete Phases 1-5
       await completePhase1And2(t, userId)
@@ -2089,11 +2089,11 @@ describe('Campaign Approval Workflow', () => {
       await waitForFlush(t)
 
       // Verify campaign status is cancelled
-      const finalCampaigns = await t.query(
+      const finalCampaignsResult = await t.query(
         api.workflows.campaign_approval.api.getCampaigns,
         {},
       )
-      expect(finalCampaigns[0].status).toBe('cancelled')
+      expect(finalCampaignsResult.campaigns[0].status).toBe('cancelled')
 
       // Verify workflow ended via rejection path
       const taskStates = await t.query(
@@ -2118,11 +2118,11 @@ describe('Campaign Approval Workflow', () => {
       })
       await waitForFlush(t)
 
-      const campaigns = await t.query(
+      const campaignsResult = await t.query(
         api.workflows.campaign_approval.api.getCampaigns,
         {},
       )
-      const workflowId = campaigns[0].workflowId
+      const workflowId = campaignsResult.campaigns[0].workflowId
 
       // Complete Phase 1, 2, and 3
       await completePhase1And2(t, userId)
@@ -2303,11 +2303,11 @@ describe('Campaign Approval Workflow', () => {
       })
       await waitForFlush(t)
 
-      const campaigns = await t.query(
+      const campaignsResult = await t.query(
         api.workflows.campaign_approval.api.getCampaigns,
         {},
       )
-      const workflowId = campaigns[0].workflowId
+      const workflowId = campaignsResult.campaigns[0].workflowId
 
       // Complete Phases 1-6
       await completePhase1And2(t, userId)
@@ -2455,11 +2455,11 @@ describe('Campaign Approval Workflow', () => {
       })
       await waitForFlush(t)
 
-      const campaigns = await t.query(
+      const campaignsResult = await t.query(
         api.workflows.campaign_approval.api.getCampaigns,
         {},
       )
-      const workflowId = campaigns[0].workflowId
+      const workflowId = campaignsResult.campaigns[0].workflowId
 
       // Complete Phases 1-6
       await completePhase1And2(t, userId)
@@ -2602,11 +2602,11 @@ describe('Campaign Approval Workflow', () => {
       })
       await waitForFlush(t)
 
-      const campaigns = await t.query(
+      const campaignsResult = await t.query(
         api.workflows.campaign_approval.api.getCampaigns,
         {},
       )
-      const workflowId = campaigns[0].workflowId
+      const workflowId = campaignsResult.campaigns[0].workflowId
 
       // Complete Phases 1-6
       await completePhase1And2(t, userId)
@@ -2846,11 +2846,11 @@ describe('Campaign Approval Workflow', () => {
       expect(taskStates.archiveMaterials).toBe('completed')
 
       // Verify campaign status is 'completed'
-      const completedCampaigns = await t.query(
+      const completedCampaignsResult = await t.query(
         api.workflows.campaign_approval.api.getCampaigns,
         {},
       )
-      expect(completedCampaigns[0].status).toBe('completed')
+      expect(completedCampaignsResult.campaigns[0].status).toBe('completed')
 
       // Verify work queue is empty (workflow complete)
       workQueue = await t.query(

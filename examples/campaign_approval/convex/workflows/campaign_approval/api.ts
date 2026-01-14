@@ -4,7 +4,7 @@ import type { Doc, Id } from '../../_generated/dataModel'
 import { campaignApprovalVersionManager } from './definition'
 import {
   getCampaignByWorkflowId,
-  listCampaigns,
+  listCampaignsWithFilters,
   listCampaignsByRequester,
   listCampaignsByOwner,
   getCampaign as getCampaignFromDb,
@@ -13,6 +13,7 @@ import {
   listKPIsByCampaignId,
   updateCampaign,
   updateCampaignCreative,
+  type CampaignStatus,
 } from './db'
 import { CampaignWorkItemHelpers } from './helpers'
 import { authComponent } from '../../auth'
@@ -72,13 +73,50 @@ export const getCampaign = query({
 })
 
 /**
- * List all campaigns
+ * List all campaigns with optional filters and pagination
+ *
+ * @param status - Filter by campaign status
+ * @param ownerId - Filter by campaign owner
+ * @param requesterId - Filter by campaign requester
+ * @param limit - Maximum number of campaigns to return (default: 50, max: 100)
+ * @param cursor - Pagination cursor from previous response
  */
 export const getCampaigns = query({
-  args: {},
-  handler: async (ctx) => {
+  args: {
+    status: v.optional(
+      v.union(
+        v.literal('draft'),
+        v.literal('intake_review'),
+        v.literal('strategy'),
+        v.literal('budget_approval'),
+        v.literal('creative_development'),
+        v.literal('technical_setup'),
+        v.literal('pre_launch'),
+        v.literal('active'),
+        v.literal('completed'),
+        v.literal('cancelled'),
+      ),
+    ),
+    ownerId: v.optional(v.id('users')),
+    requesterId: v.optional(v.id('users')),
+    limit: v.optional(v.number()),
+    cursor: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
     await assertUserHasScope(ctx, 'campaign:read')
-    return await listCampaigns(ctx.db)
+
+    // Validate and cap limit
+    const limit = Math.min(Math.max(args.limit ?? 50, 1), 100)
+
+    const result = await listCampaignsWithFilters(ctx.db, {
+      status: args.status as CampaignStatus | undefined,
+      ownerId: args.ownerId,
+      requesterId: args.requesterId,
+      limit,
+      cursor: args.cursor,
+    })
+
+    return result
   },
 })
 
@@ -114,11 +152,78 @@ export const claimCampaignWorkItem = mutation({
 })
 
 /**
+ * Workflow phase enum for filtering work queue
+ * Maps task types to their workflow phase
+ */
+const taskTypeToPhase: Record<string, string> = {
+  // Phase 1: Initiation
+  submitRequest: 'initiation',
+  intakeReview: 'initiation',
+  assignOwner: 'initiation',
+  // Phase 2: Strategy
+  conductResearch: 'strategy',
+  defineMetrics: 'strategy',
+  developStrategy: 'strategy',
+  createPlan: 'strategy',
+  // Phase 3: Budget
+  developBudget: 'budget',
+  directorApproval: 'budget',
+  executiveApproval: 'budget',
+  secureResources: 'budget',
+  // Phase 4: Creative
+  createBrief: 'creative',
+  developConcepts: 'creative',
+  internalReview: 'creative',
+  reviseAssets: 'creative',
+  legalReview: 'creative',
+  legalRevise: 'creative',
+  finalApproval: 'creative',
+  // Phase 5: Technical
+  buildInfra: 'technical',
+  configAnalytics: 'technical',
+  setupMedia: 'technical',
+  qaTest: 'technical',
+  fixIssues: 'technical',
+  // Phase 6: Launch
+  preLaunchReview: 'launch',
+  addressConcerns: 'launch',
+  launchApproval: 'launch',
+  internalComms: 'launch',
+  // Phase 7: Execution
+  launchCampaign: 'execution',
+  monitorPerformance: 'execution',
+  ongoingOptimization: 'execution',
+  // Phase 8: Closure
+  endCampaign: 'closure',
+  compileData: 'closure',
+  conductAnalysis: 'closure',
+  presentResults: 'closure',
+  archiveMaterials: 'closure',
+}
+
+/**
  * Get the campaign work queue for the authenticated user
+ *
+ * @param phase - Filter by workflow phase (initiation, strategy, budget, creative, technical, launch, execution, closure)
+ * @param campaignId - Filter by specific campaign
  */
 export const getCampaignWorkQueue = query({
-  args: {},
-  handler: async (ctx) => {
+  args: {
+    phase: v.optional(
+      v.union(
+        v.literal('initiation'),
+        v.literal('strategy'),
+        v.literal('budget'),
+        v.literal('creative'),
+        v.literal('technical'),
+        v.literal('launch'),
+        v.literal('execution'),
+        v.literal('closure'),
+      ),
+    ),
+    campaignId: v.optional(v.id('campaigns')),
+  },
+  handler: async (ctx, args) => {
     await assertUserHasScope(ctx, 'campaign:read')
     const authUser = await authComponent.getAuthUser(ctx)
 
@@ -134,7 +239,21 @@ export const getCampaignWorkQueue = query({
       'campaign_approval',
     )
 
-    const humanItems = items.filter((item) => isHumanOffer(item.metadata.offer))
+    let humanItems = items.filter((item) => isHumanOffer(item.metadata.offer))
+
+    // Apply campaignId filter
+    if (args.campaignId) {
+      humanItems = humanItems.filter(
+        (item) => item.metadata.aggregateTableId === args.campaignId,
+      )
+    }
+
+    // Apply phase filter
+    if (args.phase) {
+      humanItems = humanItems.filter(
+        (item) => taskTypeToPhase[item.metadata.payload.type] === args.phase,
+      )
+    }
 
     if (humanItems.length === 0) {
       return []
@@ -168,6 +287,7 @@ export const getCampaignWorkQueue = query({
         workItemId: metadata.workItemId,
         taskName: metadata.payload.taskName,
         taskType: metadata.payload.type,
+        phase: taskTypeToPhase[metadata.payload.type] ?? 'unknown',
         status: deriveWorkItemStatus(workItem, metadata),
         requiredScope: offer.requiredScope ?? null,
         campaign: campaign
