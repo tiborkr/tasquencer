@@ -225,6 +225,35 @@ const campaignApprovals = defineTable({
   .index('by_decision', ['decision'])
 
 /**
+ * Notification types for user notifications
+ */
+const notificationType = v.union(
+  v.literal('work_item_assigned'),
+  v.literal('work_item_completed'),
+  v.literal('campaign_status_changed'),
+  v.literal('approval_required'),
+  v.literal('approval_decision'),
+  v.literal('deadline_approaching'),
+)
+
+/**
+ * campaignNotifications - User notifications for workflow events
+ * Tracks notifications for users about campaign and work item events
+ */
+const campaignNotifications = defineTable({
+  userId: v.id('users'),
+  type: notificationType,
+  title: v.string(),
+  message: v.string(),
+  read: v.boolean(),
+  campaignId: v.optional(v.id('campaigns')),
+  workItemId: v.optional(v.id('tasquencerWorkItems')),
+  createdAt: v.number(),
+})
+  .index('by_user_id', ['userId'])
+  .index('by_user_and_read', ['userId', 'read'])
+
+/**
  * Work item payload types for all 35 workflow tasks
  */
 
@@ -540,5 +569,6 @@ export default {
   campaignStrategy,
   campaignTimeline,
   campaignApprovals,
+  campaignNotifications,
   campaignWorkItems,
 }

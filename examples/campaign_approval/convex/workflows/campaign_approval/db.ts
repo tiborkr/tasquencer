@@ -597,3 +597,88 @@ export async function getMostRecentApproval(
 
   return approvals.find(a => a.approvalType === approvalType) ?? null
 }
+
+// ============================================================================
+// Notification Functions
+// ============================================================================
+
+/**
+ * Notification type for categorizing notifications
+ */
+export type NotificationType =
+  | 'work_item_assigned'
+  | 'work_item_completed'
+  | 'campaign_status_changed'
+  | 'approval_required'
+  | 'approval_decision'
+  | 'deadline_approaching'
+
+/**
+ * Insert a new notification
+ */
+export async function insertNotification(
+  db: DatabaseWriter,
+  notification: Omit<Doc<'campaignNotifications'>, '_id' | '_creationTime'>,
+): Promise<Id<'campaignNotifications'>> {
+  return await db.insert('campaignNotifications', notification)
+}
+
+/**
+ * List notifications for a user
+ */
+export async function listNotificationsByUserId(
+  db: DatabaseReader,
+  userId: Id<'users'>,
+  options?: { unreadOnly?: boolean; limit?: number },
+): Promise<Doc<'campaignNotifications'>[]> {
+  let notifications: Doc<'campaignNotifications'>[]
+
+  if (options?.unreadOnly) {
+    notifications = await db
+      .query('campaignNotifications')
+      .withIndex('by_user_and_read', (q) =>
+        q.eq('userId', userId).eq('read', false),
+      )
+      .order('desc')
+      .collect()
+  } else {
+    notifications = await db
+      .query('campaignNotifications')
+      .withIndex('by_user_id', (q) => q.eq('userId', userId))
+      .order('desc')
+      .collect()
+  }
+
+  if (options?.limit) {
+    return notifications.slice(0, options.limit)
+  }
+
+  return notifications
+}
+
+/**
+ * Mark a notification as read
+ */
+export async function markNotificationAsRead(
+  db: DatabaseWriter,
+  notificationId: Id<'campaignNotifications'>,
+): Promise<void> {
+  await db.patch(notificationId, { read: true })
+}
+
+/**
+ * Get unread notification count for a user
+ */
+export async function getUnreadNotificationCount(
+  db: DatabaseReader,
+  userId: Id<'users'>,
+): Promise<number> {
+  const notifications = await db
+    .query('campaignNotifications')
+    .withIndex('by_user_and_read', (q) =>
+      q.eq('userId', userId).eq('read', false),
+    )
+    .collect()
+
+  return notifications.length
+}

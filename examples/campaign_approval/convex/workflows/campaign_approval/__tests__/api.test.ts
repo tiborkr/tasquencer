@@ -527,4 +527,524 @@ describe('Campaign Approval API Endpoints', () => {
       expect(api.workflows.campaign_approval.api.cancelRootWorkflow).toBeDefined()
     })
   })
+
+  // ============================================================================
+  // New API Endpoints (Priority 3)
+  // ============================================================================
+
+  describe('getCampaignTimeline', () => {
+    it('returns empty milestones array for campaign without milestones', async () => {
+      const t = setup()
+      await setupCampaignApprovalAuthorization(t)
+      const { userId } = await setupAuthenticatedCampaignUser(t)
+
+      // Create campaign
+      await t.mutation(initializeRootWorkflowMutation, {
+        payload: createTestCampaignPayload(userId),
+      })
+      await waitForFlush(t)
+
+      const campaignsResult = await t.query(api.workflows.campaign_approval.api.getCampaigns, {})
+      const campaignId = campaignsResult.campaigns[0]._id
+
+      // Get timeline
+      const timeline = await t.query(api.workflows.campaign_approval.api.getCampaignTimeline, {
+        campaignId,
+      })
+
+      expect(timeline).not.toBeNull()
+      expect(timeline.campaignId).toBe(campaignId)
+      expect(timeline.milestones).toEqual([])
+    })
+
+    it('returns milestones sorted by target date', async () => {
+      const t = setup()
+      await setupCampaignApprovalAuthorization(t)
+      const { userId } = await setupAuthenticatedCampaignUser(t)
+
+      // Create campaign with milestones directly
+      const { campaignId } = await t.run(async (ctx) => {
+        const workflowId = await ctx.db.insert('tasquencerWorkflows', {
+          name: 'campaign_approval',
+          path: ['campaign_approval'],
+          versionName: 'v1',
+          executionMode: 'normal',
+          realizedPath: ['campaign_approval'],
+          state: 'initialized',
+        })
+
+        const now = Date.now()
+        const campaignId = await ctx.db.insert('campaigns', {
+          workflowId,
+          name: 'Test Campaign',
+          objective: 'Test objective',
+          targetAudience: 'Test audience',
+          keyMessages: ['Message 1'],
+          channels: ['email'],
+          proposedStartDate: now + 7 * 24 * 60 * 60 * 1000,
+          proposedEndDate: now + 30 * 24 * 60 * 60 * 1000,
+          estimatedBudget: 10000,
+          requesterId: userId as any,
+          status: 'draft',
+          createdAt: now,
+          updatedAt: now,
+        })
+
+        // Create milestones with different target dates
+        await ctx.db.insert('campaignTimeline', {
+          campaignId,
+          milestoneName: 'Milestone 2',
+          targetDate: now + 14 * 24 * 60 * 60 * 1000, // Later date
+          status: 'pending',
+          createdAt: now,
+          updatedAt: now,
+        })
+
+        await ctx.db.insert('campaignTimeline', {
+          campaignId,
+          milestoneName: 'Milestone 1',
+          targetDate: now + 7 * 24 * 60 * 60 * 1000, // Earlier date
+          status: 'pending',
+          createdAt: now,
+          updatedAt: now,
+        })
+
+        return { campaignId }
+      })
+
+      const timeline = await t.query(api.workflows.campaign_approval.api.getCampaignTimeline, {
+        campaignId,
+      })
+
+      expect(timeline.milestones.length).toBe(2)
+      expect(timeline.milestones[0].name).toBe('Milestone 1')
+      expect(timeline.milestones[1].name).toBe('Milestone 2')
+    })
+
+    it('throws error for non-existent campaign', async () => {
+      const t = setup()
+      await setupCampaignApprovalAuthorization(t)
+      const { userId } = await setupAuthenticatedCampaignUser(t)
+
+      // Create a dummy campaign ID by inserting and deleting
+      const { deletedCampaignId } = await t.run(async (ctx) => {
+        const workflowId = await ctx.db.insert('tasquencerWorkflows', {
+          name: 'campaign_approval',
+          path: ['campaign_approval'],
+          versionName: 'v1',
+          executionMode: 'normal',
+          realizedPath: ['campaign_approval'],
+          state: 'initialized',
+        })
+
+        const now = Date.now()
+        const campaignId = await ctx.db.insert('campaigns', {
+          workflowId,
+          name: 'Temp',
+          objective: 'Temp',
+          targetAudience: 'Temp',
+          keyMessages: ['Temp'],
+          channels: ['email'],
+          proposedStartDate: now,
+          proposedEndDate: now,
+          estimatedBudget: 1000,
+          requesterId: userId as any,
+          status: 'draft',
+          createdAt: now,
+          updatedAt: now,
+        })
+
+        await ctx.db.delete(campaignId)
+        return { deletedCampaignId: campaignId }
+      })
+
+      await expect(
+        t.query(api.workflows.campaign_approval.api.getCampaignTimeline, {
+          campaignId: deletedCampaignId,
+        }),
+      ).rejects.toThrow('CAMPAIGN_NOT_FOUND')
+    })
+  })
+
+  describe('getCampaignActivity', () => {
+    it('returns empty activities array for campaign without approvals', async () => {
+      const t = setup()
+      await setupCampaignApprovalAuthorization(t)
+      const { userId } = await setupAuthenticatedCampaignUser(t)
+
+      // Create campaign
+      await t.mutation(initializeRootWorkflowMutation, {
+        payload: createTestCampaignPayload(userId),
+      })
+      await waitForFlush(t)
+
+      const campaignsResult = await t.query(api.workflows.campaign_approval.api.getCampaigns, {})
+      const campaignId = campaignsResult.campaigns[0]._id
+
+      // Get activity
+      const activity = await t.query(api.workflows.campaign_approval.api.getCampaignActivity, {
+        campaignId,
+      })
+
+      expect(activity).not.toBeNull()
+      expect(activity.campaignId).toBe(campaignId)
+      expect(activity.activities).toEqual([])
+    })
+
+    it('returns approvals for campaign', async () => {
+      const t = setup()
+      await setupCampaignApprovalAuthorization(t)
+      const { userId } = await setupAuthenticatedCampaignUser(t)
+
+      // Create campaign with approval directly
+      const { campaignId } = await t.run(async (ctx) => {
+        const workflowId = await ctx.db.insert('tasquencerWorkflows', {
+          name: 'campaign_approval',
+          path: ['campaign_approval'],
+          versionName: 'v1',
+          executionMode: 'normal',
+          realizedPath: ['campaign_approval'],
+          state: 'initialized',
+        })
+
+        const now = Date.now()
+        const campaignId = await ctx.db.insert('campaigns', {
+          workflowId,
+          name: 'Test Campaign',
+          objective: 'Test objective',
+          targetAudience: 'Test audience',
+          keyMessages: ['Message 1'],
+          channels: ['email'],
+          proposedStartDate: now + 7 * 24 * 60 * 60 * 1000,
+          proposedEndDate: now + 30 * 24 * 60 * 60 * 1000,
+          estimatedBudget: 10000,
+          requesterId: userId as any,
+          status: 'draft',
+          createdAt: now,
+          updatedAt: now,
+        })
+
+        // Create approval record
+        await ctx.db.insert('campaignApprovals', {
+          campaignId,
+          approvalType: 'intake',
+          decision: 'approved',
+          approvedBy: userId as any,
+          comments: 'Test approval',
+          createdAt: now,
+        })
+
+        return { campaignId }
+      })
+
+      const activity = await t.query(api.workflows.campaign_approval.api.getCampaignActivity, {
+        campaignId,
+      })
+
+      expect(activity.activities.length).toBe(1)
+      expect(activity.activities[0].approvalType).toBe('intake')
+      expect(activity.activities[0].decision).toBe('approved')
+      expect(activity.activities[0].comments).toBe('Test approval')
+    })
+
+    it('filters activity by approvalType', async () => {
+      const t = setup()
+      await setupCampaignApprovalAuthorization(t)
+      const { userId } = await setupAuthenticatedCampaignUser(t)
+
+      // Create campaign with multiple approvals
+      const { campaignId } = await t.run(async (ctx) => {
+        const workflowId = await ctx.db.insert('tasquencerWorkflows', {
+          name: 'campaign_approval',
+          path: ['campaign_approval'],
+          versionName: 'v1',
+          executionMode: 'normal',
+          realizedPath: ['campaign_approval'],
+          state: 'initialized',
+        })
+
+        const now = Date.now()
+        const campaignId = await ctx.db.insert('campaigns', {
+          workflowId,
+          name: 'Test Campaign',
+          objective: 'Test objective',
+          targetAudience: 'Test audience',
+          keyMessages: ['Message 1'],
+          channels: ['email'],
+          proposedStartDate: now + 7 * 24 * 60 * 60 * 1000,
+          proposedEndDate: now + 30 * 24 * 60 * 60 * 1000,
+          estimatedBudget: 10000,
+          requesterId: userId as any,
+          status: 'draft',
+          createdAt: now,
+          updatedAt: now,
+        })
+
+        // Create intake approval
+        await ctx.db.insert('campaignApprovals', {
+          campaignId,
+          approvalType: 'intake',
+          decision: 'approved',
+          approvedBy: userId as any,
+          createdAt: now,
+        })
+
+        // Create budget approval
+        await ctx.db.insert('campaignApprovals', {
+          campaignId,
+          approvalType: 'budget',
+          decision: 'approved',
+          approvedBy: userId as any,
+          createdAt: now + 1000,
+        })
+
+        return { campaignId }
+      })
+
+      // Filter by intake type
+      const intakeActivity = await t.query(api.workflows.campaign_approval.api.getCampaignActivity, {
+        campaignId,
+        approvalType: 'intake',
+      })
+
+      expect(intakeActivity.activities.length).toBe(1)
+      expect(intakeActivity.activities[0].approvalType).toBe('intake')
+
+      // Get all activities
+      const allActivity = await t.query(api.workflows.campaign_approval.api.getCampaignActivity, {
+        campaignId,
+      })
+
+      expect(allActivity.activities.length).toBe(2)
+    })
+  })
+
+  describe('releaseWorkItem', () => {
+    it('exports releaseWorkItem mutation', async () => {
+      expect(api.workflows.campaign_approval.api.releaseWorkItem).toBeDefined()
+    })
+
+    it('releases a claimed work item back to the queue', async () => {
+      const t = setup()
+      await setupCampaignApprovalAuthorization(t)
+      const { userId } = await setupAuthenticatedCampaignUser(t)
+
+      // Create campaign
+      await t.mutation(initializeRootWorkflowMutation, {
+        payload: createTestCampaignPayload(userId),
+      })
+      await waitForFlush(t)
+
+      // Get work item from queue
+      const workQueue = await t.query(api.workflows.campaign_approval.api.getCampaignWorkQueue, {})
+      expect(workQueue.length).toBe(1)
+      const workItemId = workQueue[0].workItemId
+
+      // Claim the work item
+      const claimMutation = api.workflows.campaign_approval.api.claimCampaignWorkItem as any
+      await t.mutation(claimMutation, { workItemId })
+
+      // Verify it's claimed
+      const workItemAfterClaim = await t.query(api.workflows.campaign_approval.api.getWorkItem, {
+        workItemId,
+      })
+      expect(workItemAfterClaim!.status).toBe('claimed')
+
+      // Release the work item
+      const releaseMutation = api.workflows.campaign_approval.api.releaseWorkItem as any
+      const result = await t.mutation(releaseMutation, { workItemId })
+
+      expect(result.workItemId).toBe(workItemId)
+      expect(result.status).toBe('pending')
+
+      // Verify it's pending again
+      const workItemAfterRelease = await t.query(api.workflows.campaign_approval.api.getWorkItem, {
+        workItemId,
+      })
+      expect(workItemAfterRelease!.status).toBe('pending')
+    })
+  })
+
+  describe('getCurrentUser', () => {
+    it('exports getCurrentUser query', async () => {
+      expect(api.workflows.campaign_approval.api.getCurrentUser).toBeDefined()
+    })
+
+    it('returns null for unauthenticated user', async () => {
+      const t = setup()
+
+      const user = await t.query(api.workflows.campaign_approval.api.getCurrentUser, {})
+
+      expect(user).toBeNull()
+    })
+
+    it('returns user data for authenticated user', async () => {
+      const t = setup()
+      await setupCampaignApprovalAuthorization(t)
+      const { userId } = await setupAuthenticatedCampaignUser(t)
+
+      const user = await t.query(api.workflows.campaign_approval.api.getCurrentUser, {})
+
+      expect(user).not.toBeNull()
+      expect(user!._id).toBe(userId)
+    })
+  })
+
+  describe('listUsers', () => {
+    it('exports listUsers query', async () => {
+      expect(api.workflows.campaign_approval.api.listUsers).toBeDefined()
+    })
+
+    it('returns list of users', async () => {
+      const t = setup()
+      await setupCampaignApprovalAuthorization(t)
+      await setupAuthenticatedCampaignUser(t)
+
+      const users = await t.query(api.workflows.campaign_approval.api.listUsers, {})
+
+      expect(Array.isArray(users)).toBe(true)
+      expect(users.length).toBeGreaterThan(0)
+      expect(users[0]).toHaveProperty('_id')
+    })
+  })
+
+  describe('getNotifications', () => {
+    it('exports getNotifications query', async () => {
+      expect(api.workflows.campaign_approval.api.getNotifications).toBeDefined()
+    })
+
+    it('returns empty array for user with no notifications', async () => {
+      const t = setup()
+      await setupCampaignApprovalAuthorization(t)
+      await setupAuthenticatedCampaignUser(t)
+
+      const notifications = await t.query(api.workflows.campaign_approval.api.getNotifications, {})
+
+      expect(Array.isArray(notifications)).toBe(true)
+      expect(notifications.length).toBe(0)
+    })
+
+    it('returns notifications for authenticated user', async () => {
+      const t = setup()
+      await setupCampaignApprovalAuthorization(t)
+      const { userId } = await setupAuthenticatedCampaignUser(t)
+
+      // Create notification directly
+      await t.run(async (ctx) => {
+        await ctx.db.insert('campaignNotifications', {
+          userId: userId as any,
+          type: 'work_item_assigned',
+          title: 'New Task',
+          message: 'You have been assigned a new task',
+          read: false,
+          createdAt: Date.now(),
+        })
+      })
+
+      const notifications = await t.query(api.workflows.campaign_approval.api.getNotifications, {})
+
+      expect(notifications.length).toBe(1)
+      expect(notifications[0].type).toBe('work_item_assigned')
+      expect(notifications[0].title).toBe('New Task')
+      expect(notifications[0].read).toBe(false)
+    })
+
+    it('filters to unread notifications when unreadOnly is true', async () => {
+      const t = setup()
+      await setupCampaignApprovalAuthorization(t)
+      const { userId } = await setupAuthenticatedCampaignUser(t)
+
+      // Create read and unread notifications
+      await t.run(async (ctx) => {
+        await ctx.db.insert('campaignNotifications', {
+          userId: userId as any,
+          type: 'work_item_assigned',
+          title: 'Read Notification',
+          message: 'This has been read',
+          read: true,
+          createdAt: Date.now(),
+        })
+
+        await ctx.db.insert('campaignNotifications', {
+          userId: userId as any,
+          type: 'approval_required',
+          title: 'Unread Notification',
+          message: 'This has not been read',
+          read: false,
+          createdAt: Date.now() + 1000,
+        })
+      })
+
+      const unreadOnly = await t.query(api.workflows.campaign_approval.api.getNotifications, {
+        unreadOnly: true,
+      })
+      expect(unreadOnly.length).toBe(1)
+      expect(unreadOnly[0].title).toBe('Unread Notification')
+
+      const all = await t.query(api.workflows.campaign_approval.api.getNotifications, {})
+      expect(all.length).toBe(2)
+    })
+  })
+
+  describe('markNotificationRead', () => {
+    it('exports markNotificationRead mutation', async () => {
+      expect(api.workflows.campaign_approval.api.markNotificationRead).toBeDefined()
+    })
+
+    it('marks notification as read', async () => {
+      const t = setup()
+      await setupCampaignApprovalAuthorization(t)
+      const { userId } = await setupAuthenticatedCampaignUser(t)
+
+      // Create notification
+      const { notificationId } = await t.run(async (ctx) => {
+        const notificationId = await ctx.db.insert('campaignNotifications', {
+          userId: userId as any,
+          type: 'work_item_assigned',
+          title: 'Test Notification',
+          message: 'Test message',
+          read: false,
+          createdAt: Date.now(),
+        })
+        return { notificationId }
+      })
+
+      // Mark as read
+      const markReadMutation = api.workflows.campaign_approval.api.markNotificationRead as any
+      const result = await t.mutation(markReadMutation, { notificationId })
+
+      expect(result.success).toBe(true)
+
+      // Verify it's read
+      const notification = await t.run(async (ctx) => {
+        return await ctx.db.get(notificationId)
+      })
+      expect(notification?.read).toBe(true)
+    })
+
+    it('throws error for non-existent notification', async () => {
+      const t = setup()
+      await setupCampaignApprovalAuthorization(t)
+      const { userId } = await setupAuthenticatedCampaignUser(t)
+
+      // Create and delete notification to get valid but non-existent ID
+      const { deletedId } = await t.run(async (ctx) => {
+        const notificationId = await ctx.db.insert('campaignNotifications', {
+          userId: userId as any,
+          type: 'work_item_assigned',
+          title: 'Temp',
+          message: 'Temp',
+          read: false,
+          createdAt: Date.now(),
+        })
+        await ctx.db.delete(notificationId)
+        return { deletedId: notificationId }
+      })
+
+      const markReadMutation = api.workflows.campaign_approval.api.markNotificationRead as any
+      await expect(
+        t.mutation(markReadMutation, { notificationId: deletedId }),
+      ).rejects.toThrow('NOTIFICATION_NOT_FOUND')
+    })
+  })
 })
