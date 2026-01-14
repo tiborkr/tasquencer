@@ -617,13 +617,13 @@ function TaskPageInner({
       if (config.category === 'concepts' && !formData.assets) {
         data = {
           ...data,
-          assets: creatives.map(c => ({ creativeId: c._id, storageId: c.storageId || '', notes: c.description || '' }))
+          assets: creatives.map(c => ({ creativeId: c._id, storageId: c.storageId, notes: c.description || '' }))
         }
       } else if ((config.category === 'revision' || config.category === 'legal_revision') && !formData.revisedAssets) {
         const fieldName = config.category === 'revision' ? 'revisedAssets' : 'revisedAssets'
         data = {
           ...data,
-          [fieldName]: creatives.map(c => ({ creativeId: c._id, storageId: c.storageId || '', revisionNotes: '', addressedIssue: '' }))
+          [fieldName]: creatives.map(c => ({ creativeId: c._id, storageId: c.storageId, revisionNotes: '', addressedIssue: '' }))
         }
       }
     }
