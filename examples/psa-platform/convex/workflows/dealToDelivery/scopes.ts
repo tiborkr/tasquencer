@@ -394,6 +394,20 @@ const reportsScopeModule = createScopeModule('reports')
   })
   .withNestedModule(reportsViewScopeModule)
 
+const changeOrdersScopeModule = createScopeModule('changeOrders')
+  .withScope('request', {
+    description: 'Request change orders for budget increases',
+    tags: ['changeOrders', 'request'],
+  })
+  .withScope('approve', {
+    description: 'Approve or reject change orders',
+    tags: ['changeOrders', 'approve'],
+  })
+  .withScope('view', {
+    description: 'View change orders',
+    tags: ['changeOrders', 'view'],
+  })
+
 const adminScopeModule = createScopeModule('admin')
   .withScope('users', {
     description: 'Manage users and permissions',
@@ -429,4 +443,5 @@ export const dealToDeliveryScopeModule = createScopeModule('dealToDelivery')
   .withNestedModule(invoicesScopeModule)
   .withNestedModule(paymentsScopeModule)
   .withNestedModule(reportsScopeModule)
+  .withNestedModule(changeOrdersScopeModule)
   .withNestedModule(adminScopeModule)
