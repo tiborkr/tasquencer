@@ -798,8 +798,88 @@ const workItemPayloadType = v.union(
   }),
 
   // Close Phase (2)
-  v.object({ type: v.literal('closeProject'), taskName: v.string(), projectId: v.id('projects') }),
-  v.object({ type: v.literal('conductRetro'), taskName: v.string(), projectId: v.id('projects') })
+  v.object({
+    type: v.literal('closeProject'),
+    taskName: v.string(),
+    projectId: v.id('projects'),
+    // Runtime fields
+    closeDate: v.optional(v.number()),
+    completionStatus: v.optional(v.union(
+      v.literal('completed'),
+      v.literal('cancelled'),
+      v.literal('on_hold_indefinitely')
+    )),
+    closureNotes: v.optional(v.string()),
+    closedBy: v.optional(v.id('users')),
+    closedAt: v.optional(v.number()),
+    // Closure verification
+    verification: v.optional(v.object({
+      allTasksComplete: v.boolean(),
+      allTimeApproved: v.boolean(),
+      allExpensesApproved: v.boolean(),
+      allInvoicesSent: v.boolean(),
+      allInvoicesPaid: v.boolean(),
+      warnings: v.optional(v.array(v.string())),
+    })),
+    // Project metrics snapshot
+    metrics: v.optional(v.object({
+      totalRevenue: v.number(),
+      totalCost: v.number(),
+      profit: v.number(),
+      profitMargin: v.number(),
+      budgetVariance: v.number(),
+      durationDays: v.number(),
+    })),
+  }),
+  v.object({
+    type: v.literal('conductRetro'),
+    taskName: v.string(),
+    projectId: v.id('projects'),
+    // Runtime fields
+    retroDate: v.optional(v.number()),
+    conductedBy: v.optional(v.id('users')),
+    // Retrospective data
+    successes: v.optional(v.array(v.object({
+      category: v.union(
+        v.literal('timeline'),
+        v.literal('budget'),
+        v.literal('quality'),
+        v.literal('communication'),
+        v.literal('process'),
+        v.literal('other')
+      ),
+      description: v.string(),
+      impact: v.union(v.literal('high'), v.literal('medium'), v.literal('low')),
+    }))),
+    improvements: v.optional(v.array(v.object({
+      category: v.union(
+        v.literal('timeline'),
+        v.literal('budget'),
+        v.literal('quality'),
+        v.literal('communication'),
+        v.literal('process'),
+        v.literal('other')
+      ),
+      description: v.string(),
+      impact: v.union(v.literal('high'), v.literal('medium'), v.literal('low')),
+      recommendation: v.optional(v.string()),
+    }))),
+    keyLearnings: v.optional(v.array(v.string())),
+    recommendations: v.optional(v.array(v.string())),
+    // Client satisfaction
+    clientSatisfaction: v.optional(v.object({
+      rating: v.union(v.literal(1), v.literal(2), v.literal(3), v.literal(4), v.literal(5)),
+      feedback: v.optional(v.string()),
+      wouldRecommend: v.optional(v.boolean()),
+    })),
+    // Scorecard
+    scorecard: v.optional(v.object({
+      onTime: v.boolean(),
+      onBudget: v.boolean(),
+      clientSatisfied: v.boolean(),
+      profitable: v.boolean(),
+    })),
+  })
 )
 
 /**
