@@ -19,6 +19,7 @@ import type * as workflows_dealToDelivery_authSetup from "../workflows/dealToDel
 import type * as workflows_dealToDelivery_db from "../workflows/dealToDelivery/db.js";
 import type * as workflows_dealToDelivery_definition from "../workflows/dealToDelivery/definition.js";
 import type * as workflows_dealToDelivery_helpers from "../workflows/dealToDelivery/helpers.js";
+import type * as workflows_dealToDelivery_scaffold from "../workflows/dealToDelivery/scaffold.js";
 import type * as workflows_dealToDelivery_scopes from "../workflows/dealToDelivery/scopes.js";
 import type * as workflows_dealToDelivery_workItems_authHelpers from "../workflows/dealToDelivery/workItems/authHelpers.js";
 import type * as workflows_metadata from "../workflows/metadata.js";
@@ -41,6 +42,7 @@ declare const fullApi: ApiFromModules<{
   "workflows/dealToDelivery/db": typeof workflows_dealToDelivery_db;
   "workflows/dealToDelivery/definition": typeof workflows_dealToDelivery_definition;
   "workflows/dealToDelivery/helpers": typeof workflows_dealToDelivery_helpers;
+  "workflows/dealToDelivery/scaffold": typeof workflows_dealToDelivery_scaffold;
   "workflows/dealToDelivery/scopes": typeof workflows_dealToDelivery_scopes;
   "workflows/dealToDelivery/workItems/authHelpers": typeof workflows_dealToDelivery_workItems_authHelpers;
   "workflows/metadata": typeof workflows_metadata;
