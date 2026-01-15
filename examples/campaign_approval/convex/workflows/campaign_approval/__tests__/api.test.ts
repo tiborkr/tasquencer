@@ -1260,4 +1260,378 @@ describe('Campaign Approval API Endpoints', () => {
       expect(strategy!.tactics![0].name).toBe('Email nurture')
     })
   })
+
+  // ============================================================================
+  // KPI Update Endpoints (Priority 5.3)
+  // ============================================================================
+
+  describe('updateKPI', () => {
+    it('exports updateKPI mutation', async () => {
+      expect(api.workflows.campaign_approval.api.updateKPI).toBeDefined()
+    })
+
+    it('updates a KPI actual value', async () => {
+      const t = setup()
+      await setupCampaignApprovalAuthorization(t)
+      const { userId } = await setupAuthenticatedCampaignUser(t)
+
+      // Create campaign and KPI directly
+      const { kpiId } = await t.run(async (ctx) => {
+        const workflowId = await ctx.db.insert('tasquencerWorkflows', {
+          name: 'campaign_approval',
+          path: ['campaign_approval'],
+          versionName: 'v1',
+          executionMode: 'normal',
+          realizedPath: ['campaign_approval'],
+          state: 'initialized',
+        })
+
+        const now = Date.now()
+        const campaignId = await ctx.db.insert('campaigns', {
+          workflowId,
+          name: 'Test Campaign',
+          objective: 'Test objective',
+          targetAudience: 'Test audience',
+          keyMessages: ['Message 1'],
+          channels: ['email'],
+          proposedStartDate: now + 7 * 24 * 60 * 60 * 1000,
+          proposedEndDate: now + 30 * 24 * 60 * 60 * 1000,
+          estimatedBudget: 10000,
+          requesterId: userId as any,
+          status: 'active',
+          createdAt: now,
+          updatedAt: now,
+        })
+
+        // Create KPI
+        const kpiId = await ctx.db.insert('campaignKPIs', {
+          campaignId,
+          metric: 'Click-through rate',
+          targetValue: 5,
+          unit: '%',
+          createdAt: now,
+        })
+
+        return { kpiId, campaignId }
+      })
+
+      // Update the KPI
+      const updateMutation = api.workflows.campaign_approval.api.updateKPI as any
+      const result = await t.mutation(updateMutation, {
+        kpiId,
+        actualValue: 4.2,
+      })
+
+      expect(result.success).toBe(true)
+      expect(result.kpiId).toBe(kpiId)
+      expect(result.metric).toBe('Click-through rate')
+      expect(result.targetValue).toBe(5)
+      expect(result.actualValue).toBe(4.2)
+      expect(result.unit).toBe('%')
+
+      // Verify the KPI was updated in the database
+      const updatedKpi = await t.run(async (ctx) => {
+        return await ctx.db.get(kpiId)
+      })
+
+      expect(updatedKpi?.actualValue).toBe(4.2)
+    })
+
+    it('throws error when KPI does not exist', async () => {
+      const t = setup()
+      await setupCampaignApprovalAuthorization(t)
+      const { userId } = await setupAuthenticatedCampaignUser(t)
+
+      // Create and delete KPI to get valid but non-existent ID
+      const { deletedKpiId } = await t.run(async (ctx) => {
+        const workflowId = await ctx.db.insert('tasquencerWorkflows', {
+          name: 'campaign_approval',
+          path: ['campaign_approval'],
+          versionName: 'v1',
+          executionMode: 'normal',
+          realizedPath: ['campaign_approval'],
+          state: 'initialized',
+        })
+
+        const now = Date.now()
+        const campaignId = await ctx.db.insert('campaigns', {
+          workflowId,
+          name: 'Temp',
+          objective: 'Temp',
+          targetAudience: 'Temp',
+          keyMessages: ['Temp'],
+          channels: ['email'],
+          proposedStartDate: now,
+          proposedEndDate: now,
+          estimatedBudget: 1000,
+          requesterId: userId as any,
+          status: 'draft',
+          createdAt: now,
+          updatedAt: now,
+        })
+
+        const kpiId = await ctx.db.insert('campaignKPIs', {
+          campaignId,
+          metric: 'Temp Metric',
+          targetValue: 100,
+          unit: 'units',
+          createdAt: now,
+        })
+
+        await ctx.db.delete(kpiId)
+        return { deletedKpiId: kpiId }
+      })
+
+      const updateMutation = api.workflows.campaign_approval.api.updateKPI as any
+      await expect(
+        t.mutation(updateMutation, {
+          kpiId: deletedKpiId,
+          actualValue: 50,
+        }),
+      ).rejects.toThrow('KPI_NOT_FOUND')
+    })
+  })
+
+  describe('updateKPIs', () => {
+    it('exports updateKPIs mutation', async () => {
+      expect(api.workflows.campaign_approval.api.updateKPIs).toBeDefined()
+    })
+
+    it('updates multiple KPIs in a single call', async () => {
+      const t = setup()
+      await setupCampaignApprovalAuthorization(t)
+      const { userId } = await setupAuthenticatedCampaignUser(t)
+
+      // Create campaign and multiple KPIs
+      const { kpiId1, kpiId2, kpiId3 } = await t.run(async (ctx) => {
+        const workflowId = await ctx.db.insert('tasquencerWorkflows', {
+          name: 'campaign_approval',
+          path: ['campaign_approval'],
+          versionName: 'v1',
+          executionMode: 'normal',
+          realizedPath: ['campaign_approval'],
+          state: 'initialized',
+        })
+
+        const now = Date.now()
+        const campaignId = await ctx.db.insert('campaigns', {
+          workflowId,
+          name: 'Test Campaign',
+          objective: 'Test objective',
+          targetAudience: 'Test audience',
+          keyMessages: ['Message 1'],
+          channels: ['email'],
+          proposedStartDate: now + 7 * 24 * 60 * 60 * 1000,
+          proposedEndDate: now + 30 * 24 * 60 * 60 * 1000,
+          estimatedBudget: 10000,
+          requesterId: userId as any,
+          status: 'active',
+          createdAt: now,
+          updatedAt: now,
+        })
+
+        // Create multiple KPIs
+        const kpiId1 = await ctx.db.insert('campaignKPIs', {
+          campaignId,
+          metric: 'Impressions',
+          targetValue: 100000,
+          unit: 'count',
+          createdAt: now,
+        })
+
+        const kpiId2 = await ctx.db.insert('campaignKPIs', {
+          campaignId,
+          metric: 'Clicks',
+          targetValue: 5000,
+          unit: 'count',
+          createdAt: now,
+        })
+
+        const kpiId3 = await ctx.db.insert('campaignKPIs', {
+          campaignId,
+          metric: 'Conversions',
+          targetValue: 500,
+          unit: 'count',
+          createdAt: now,
+        })
+
+        return { kpiId1, kpiId2, kpiId3 }
+      })
+
+      // Update all KPIs in a single call
+      const updateMutation = api.workflows.campaign_approval.api.updateKPIs as any
+      const result = await t.mutation(updateMutation, {
+        updates: [
+          { kpiId: kpiId1, actualValue: 95000 },
+          { kpiId: kpiId2, actualValue: 4800 },
+          { kpiId: kpiId3, actualValue: 520 },
+        ],
+      })
+
+      expect(result.success).toBe(true)
+      expect(result.updated).toHaveLength(3)
+
+      // Verify metrics match
+      const updatedMetrics = result.updated.map((u: { metric: string }) => u.metric)
+      expect(updatedMetrics).toContain('Impressions')
+      expect(updatedMetrics).toContain('Clicks')
+      expect(updatedMetrics).toContain('Conversions')
+
+      // Verify actual values in database
+      const [kpi1, kpi2, kpi3] = await t.run(async (ctx) => {
+        return Promise.all([
+          ctx.db.get(kpiId1),
+          ctx.db.get(kpiId2),
+          ctx.db.get(kpiId3),
+        ])
+      })
+
+      expect(kpi1?.actualValue).toBe(95000)
+      expect(kpi2?.actualValue).toBe(4800)
+      expect(kpi3?.actualValue).toBe(520)
+    })
+
+    it('throws error when any KPI in batch does not exist', async () => {
+      const t = setup()
+      await setupCampaignApprovalAuthorization(t)
+      const { userId } = await setupAuthenticatedCampaignUser(t)
+
+      // Create campaign with one valid KPI and one that will be deleted
+      const { validKpiId, deletedKpiId } = await t.run(async (ctx) => {
+        const workflowId = await ctx.db.insert('tasquencerWorkflows', {
+          name: 'campaign_approval',
+          path: ['campaign_approval'],
+          versionName: 'v1',
+          executionMode: 'normal',
+          realizedPath: ['campaign_approval'],
+          state: 'initialized',
+        })
+
+        const now = Date.now()
+        const campaignId = await ctx.db.insert('campaigns', {
+          workflowId,
+          name: 'Test',
+          objective: 'Test',
+          targetAudience: 'Test',
+          keyMessages: ['Test'],
+          channels: ['email'],
+          proposedStartDate: now,
+          proposedEndDate: now,
+          estimatedBudget: 1000,
+          requesterId: userId as any,
+          status: 'draft',
+          createdAt: now,
+          updatedAt: now,
+        })
+
+        const validKpiId = await ctx.db.insert('campaignKPIs', {
+          campaignId,
+          metric: 'Valid Metric',
+          targetValue: 100,
+          unit: 'units',
+          createdAt: now,
+        })
+
+        const kpiToDelete = await ctx.db.insert('campaignKPIs', {
+          campaignId,
+          metric: 'Deleted Metric',
+          targetValue: 100,
+          unit: 'units',
+          createdAt: now,
+        })
+
+        await ctx.db.delete(kpiToDelete)
+
+        return { validKpiId, deletedKpiId: kpiToDelete }
+      })
+
+      const updateMutation = api.workflows.campaign_approval.api.updateKPIs as any
+      await expect(
+        t.mutation(updateMutation, {
+          updates: [
+            { kpiId: validKpiId, actualValue: 50 },
+            { kpiId: deletedKpiId, actualValue: 60 },
+          ],
+        }),
+      ).rejects.toThrow(/KPI_NOT_FOUND/)
+    })
+  })
+
+  describe('getCampaignKPIs', () => {
+    it('exports getCampaignKPIs query', async () => {
+      expect(api.workflows.campaign_approval.api.getCampaignKPIs).toBeDefined()
+    })
+
+    it('returns KPIs with actual values when set', async () => {
+      const t = setup()
+      await setupCampaignApprovalAuthorization(t)
+      const { userId } = await setupAuthenticatedCampaignUser(t)
+
+      // Create campaign with KPIs that have actual values
+      const { campaignId } = await t.run(async (ctx) => {
+        const workflowId = await ctx.db.insert('tasquencerWorkflows', {
+          name: 'campaign_approval',
+          path: ['campaign_approval'],
+          versionName: 'v1',
+          executionMode: 'normal',
+          realizedPath: ['campaign_approval'],
+          state: 'initialized',
+        })
+
+        const now = Date.now()
+        const campaignId = await ctx.db.insert('campaigns', {
+          workflowId,
+          name: 'Test Campaign',
+          objective: 'Test objective',
+          targetAudience: 'Test audience',
+          keyMessages: ['Message 1'],
+          channels: ['email'],
+          proposedStartDate: now + 7 * 24 * 60 * 60 * 1000,
+          proposedEndDate: now + 30 * 24 * 60 * 60 * 1000,
+          estimatedBudget: 10000,
+          requesterId: userId as any,
+          status: 'active',
+          createdAt: now,
+          updatedAt: now,
+        })
+
+        // Create KPIs with and without actual values
+        await ctx.db.insert('campaignKPIs', {
+          campaignId,
+          metric: 'CTR',
+          targetValue: 5,
+          actualValue: 4.5,
+          unit: '%',
+          createdAt: now,
+        })
+
+        await ctx.db.insert('campaignKPIs', {
+          campaignId,
+          metric: 'Conversions',
+          targetValue: 1000,
+          // No actualValue - not yet measured
+          unit: 'count',
+          createdAt: now,
+        })
+
+        return { campaignId }
+      })
+
+      const kpis = await t.query(api.workflows.campaign_approval.api.getCampaignKPIs, {
+        campaignId,
+      })
+
+      expect(kpis).toHaveLength(2)
+
+      // Find the KPI with actual value
+      const ctrKpi = kpis.find((k) => k.metric === 'CTR')
+      expect(ctrKpi?.actualValue).toBe(4.5)
+      expect(ctrKpi?.targetValue).toBe(5)
+
+      // Find the KPI without actual value
+      const conversionKpi = kpis.find((k) => k.metric === 'Conversions')
+      expect(conversionKpi?.actualValue).toBeUndefined()
+      expect(conversionKpi?.targetValue).toBe(1000)
+    })
+  })
 })

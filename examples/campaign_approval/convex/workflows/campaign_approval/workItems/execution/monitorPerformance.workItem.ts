@@ -1,7 +1,11 @@
 import { Builder } from '../../../../tasquencer'
 import { z } from 'zod'
 import { authService } from '../../../../authorization'
-import { getCampaignByWorkflowId } from '../../db'
+import {
+  getCampaignByWorkflowId,
+  listKPIsByCampaignId,
+  updateCampaignKPI,
+} from '../../db'
 import { initializeCampaignWorkItemAuth } from '../authHelpers'
 import { CampaignWorkItemHelpers } from '../../helpers'
 import { authComponent } from '../../../../auth'
@@ -81,6 +85,28 @@ const monitorPerformanceActions = authService.builders.workItemActions
         parent.workflow.id,
       )
       invariant(campaign, 'CAMPAIGN_NOT_FOUND')
+
+      // Update KPIs with actual values from metrics data
+      // Match submitted metrics to existing KPIs by metric name
+      if (payload.metrics && payload.metrics.length > 0) {
+        const existingKPIs = await listKPIsByCampaignId(
+          mutationCtx.db,
+          campaign._id,
+        )
+
+        // Create a map of metric names to KPI records for efficient lookup
+        const kpiMap = new Map(existingKPIs.map((kpi) => [kpi.metric.toLowerCase(), kpi]))
+
+        // Update each matching KPI with the submitted value
+        for (const metric of payload.metrics) {
+          const kpi = kpiMap.get(metric.metric.toLowerCase())
+          if (kpi) {
+            await updateCampaignKPI(mutationCtx.db, kpi._id, {
+              actualValue: metric.value,
+            })
+          }
+        }
+      }
 
       // Update work item metadata with monitoring results
       if (metadata) {

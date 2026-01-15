@@ -13,6 +13,7 @@ import {
   listKPIsByCampaignId,
   updateCampaign,
   updateCampaignCreative,
+  updateCampaignKPI,
   listMilestonesByCampaignId,
   listApprovalsByCampaignId,
   listNotificationsByUserId,
@@ -450,6 +451,95 @@ export const getCampaignKPIs = query({
   handler: async (ctx, args) => {
     await assertUserHasScope(ctx, 'campaign:read')
     return await listKPIsByCampaignId(ctx.db, args.campaignId)
+  },
+})
+
+/**
+ * Update a KPI's actual value
+ *
+ * Allows updating the actual value of a KPI during campaign execution (Phase 7)
+ * or closure (Phase 8). This enables tracking KPI progress throughout the
+ * campaign lifecycle, not just during post-campaign analysis.
+ *
+ * @param kpiId - The ID of the KPI to update
+ * @param actualValue - The observed/measured value for this KPI
+ */
+export const updateKPI = mutation({
+  args: {
+    kpiId: v.id('campaignKPIs'),
+    actualValue: v.number(),
+  },
+  handler: async (ctx, args) => {
+    await assertUserHasScope(ctx, 'campaign:manage')
+
+    // Verify the KPI exists
+    const kpi = await ctx.db.get(args.kpiId)
+    if (!kpi) {
+      throw new Error('KPI_NOT_FOUND')
+    }
+
+    // Update the KPI with the actual value
+    await updateCampaignKPI(ctx.db, args.kpiId, {
+      actualValue: args.actualValue,
+    })
+
+    return {
+      success: true,
+      kpiId: args.kpiId,
+      metric: kpi.metric,
+      targetValue: kpi.targetValue,
+      actualValue: args.actualValue,
+      unit: kpi.unit,
+    }
+  },
+})
+
+/**
+ * Batch update multiple KPIs
+ *
+ * Allows updating multiple KPI actual values in a single mutation.
+ * Useful for the monitorPerformance task to update all KPIs at once.
+ *
+ * @param updates - Array of KPI updates containing kpiId and actualValue
+ */
+export const updateKPIs = mutation({
+  args: {
+    updates: v.array(
+      v.object({
+        kpiId: v.id('campaignKPIs'),
+        actualValue: v.number(),
+      }),
+    ),
+  },
+  handler: async (ctx, args) => {
+    await assertUserHasScope(ctx, 'campaign:manage')
+
+    const results = []
+    for (const update of args.updates) {
+      // Verify each KPI exists
+      const kpi = await ctx.db.get(update.kpiId)
+      if (!kpi) {
+        throw new Error(`KPI_NOT_FOUND: ${update.kpiId}`)
+      }
+
+      // Update the KPI
+      await updateCampaignKPI(ctx.db, update.kpiId, {
+        actualValue: update.actualValue,
+      })
+
+      results.push({
+        kpiId: update.kpiId,
+        metric: kpi.metric,
+        targetValue: kpi.targetValue,
+        actualValue: update.actualValue,
+        unit: kpi.unit,
+      })
+    }
+
+    return {
+      success: true,
+      updated: results,
+    }
   },
 })
 
