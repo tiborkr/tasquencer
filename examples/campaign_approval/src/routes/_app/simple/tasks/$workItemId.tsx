@@ -612,6 +612,21 @@ function TaskPageInner({
     enabled: !!campaignId && needsKPIs,
   })
 
+  // Fetch research and strategy data for brief form (Phase 4 pre-population from Phase 2)
+  const needsBriefData = config.category === 'brief'
+  const { data: research } = useQuery({
+    ...convexQuery(api.workflows.campaign_approval.api.getCampaignResearch, {
+      campaignId: campaignId as Id<'campaigns'>
+    }),
+    enabled: !!campaignId && needsBriefData,
+  })
+  const { data: strategy } = useQuery({
+    ...convexQuery(api.workflows.campaign_approval.api.getCampaignStrategy, {
+      campaignId: campaignId as Id<'campaigns'>
+    }),
+    enabled: !!campaignId && needsBriefData,
+  })
+
   // Pre-populate ownerId for owner_assignment category
   // Pre-populate assets for concepts/revision categories
   // Pre-populate kpiResults for analysis category
@@ -657,8 +672,60 @@ function TaskPageInner({
       }
     }
 
+    // Pre-populate brief form fields from Phase 2 research and strategy data
+    if (needsBriefData && (research || strategy)) {
+      // Pre-populate targetAudience from research.audienceAnalysis
+      if (research?.audienceAnalysis && !formData.targetAudience) {
+        data = { ...data, targetAudience: research.audienceAnalysis }
+      }
+
+      // Pre-populate toneAndStyle from strategy.creativeApproach
+      if (strategy?.creativeApproach && !formData.toneAndStyle) {
+        data = { ...data, toneAndStyle: strategy.creativeApproach }
+      }
+
+      // Pre-populate objectives from strategy.channelStrategy
+      if (strategy?.channelStrategy && !formData.objectives) {
+        data = { ...data, objectives: strategy.channelStrategy }
+      }
+
+      // Pre-populate keyMessages from strategy tactics if available
+      if (strategy?.tactics && strategy.tactics.length > 0 && !formData.keyMessages) {
+        const messages = strategy.tactics.map(t => t.description).filter(Boolean)
+        if (messages.length > 0) {
+          data = { ...data, keyMessages: messages }
+        }
+      }
+
+      // Pre-populate deliverables from strategy tactics (map channel to deliverable type)
+      if (strategy?.tactics && strategy.tactics.length > 0 && !formData.deliverables) {
+        const channelToDeliverableType: Record<string, string> = {
+          'email': 'email',
+          'social': 'social_post',
+          'social_media': 'social_post',
+          'paid_media': 'ad',
+          'paid': 'ad',
+          'display': 'ad',
+          'video': 'video',
+          'landing_page': 'landing_page',
+          'web': 'landing_page',
+        }
+        const deliverables = strategy.tactics.map(t => {
+          const channel = t.channel.toLowerCase()
+          // Find matching deliverable type or default to 'ad'
+          const type = Object.entries(channelToDeliverableType).find(([key]) =>
+            channel.includes(key)
+          )?.[1] || 'ad'
+          return { type, description: `${t.name}: ${t.description}` }
+        })
+        if (deliverables.length > 0) {
+          data = { ...data, deliverables }
+        }
+      }
+    }
+
     return data
-  }, [config.category, currentUser?.userId, formData, needsCreatives, creatives, needsKPIs, kpis])
+  }, [config.category, currentUser?.userId, formData, needsCreatives, creatives, needsKPIs, kpis, needsBriefData, research, strategy])
 
   const Icon = config.icon
 
