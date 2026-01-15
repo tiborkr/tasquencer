@@ -1098,11 +1098,11 @@ function TaskFormCard({
           )}
 
           {config.category === 'concepts' && (
-            <ConceptsForm formData={effectiveFormData} setFormData={setFormData} />
+            <ConceptsForm formData={formData} setFormData={setFormData} />
           )}
 
           {config.category === 'revision' && (
-            <RevisionForm formData={effectiveFormData} setFormData={setFormData} />
+            <RevisionForm formData={formData} setFormData={setFormData} />
           )}
 
           {config.category === 'legal_review' && (
@@ -1110,7 +1110,7 @@ function TaskFormCard({
           )}
 
           {config.category === 'legal_revision' && (
-            <LegalRevisionForm formData={effectiveFormData} setFormData={setFormData} />
+            <LegalRevisionForm formData={formData} setFormData={setFormData} />
           )}
 
           {config.category === 'end_campaign' && (
@@ -1122,7 +1122,7 @@ function TaskFormCard({
           )}
 
           {config.category === 'analysis' && (
-            <AnalysisForm formData={effectiveFormData} setFormData={setFormData} />
+            <AnalysisForm formData={formData} setFormData={setFormData} />
           )}
 
           {config.category === 'presentation' && (
