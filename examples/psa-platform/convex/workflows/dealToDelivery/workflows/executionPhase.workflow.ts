@@ -7,8 +7,8 @@ import { getChangeOrderApprovalTask } from '../workItems/getChangeOrderApproval.
 import { timeTrackingWorkflow } from './timeTracking.workflow'
 import { expenseTrackingWorkflow } from './expenseTracking.workflow'
 import { sequentialExecutionWorkflow } from './sequentialExecution.workflow'
-import { parallelExecutionWorkflow } from './parallelExecution.workflow'
-import { conditionalExecutionWorkflow } from './conditionalExecution.workflow'
+// Note: parallelExecutionWorkflow and conditionalExecutionWorkflow exist but are not used
+// They can be enabled with dynamicCompositeTask when proper version managers are set up
 const finalizeTimeTrackingTask = Builder.dummyTask()
 
 const finalizeExpenseTrackingTask = Builder.dummyTask()
@@ -22,10 +22,10 @@ export const executionPhaseWorkflow = Builder.workflow('executionPhase')
   .startCondition('start')
   .endCondition('end')
   .task('createAndAssignTasks', createAndAssignTasksTask)
-  .dynamicCompositeTask('executeProjectWork', Builder.dynamicCompositeTask([sequentialExecutionWorkflow, parallelExecutionWorkflow, conditionalExecutionWorkflow]))
-  .compositeTask('trackTime', Builder.compositeTask(timeTrackingWorkflow).withJoinType('xor').withSplitType('xor'))
+  .compositeTask('executeProjectWork', Builder.compositeTask(sequentialExecutionWorkflow))
+  .compositeTask('trackTime', Builder.compositeTask(timeTrackingWorkflow).withJoinType('xor'))
   .dummyTask('finalizeTimeTracking', finalizeTimeTrackingTask)
-  .compositeTask('trackExpenses', Builder.compositeTask(expenseTrackingWorkflow).withJoinType('xor').withSplitType('xor'))
+  .compositeTask('trackExpenses', Builder.compositeTask(expenseTrackingWorkflow).withJoinType('xor'))
   .dummyTask('finalizeExpenseTracking', finalizeExpenseTrackingTask)
   .dummyTask('reviewExecution', reviewExecutionTask)
   .task('monitorBudgetBurn', monitorBudgetBurnTask.withJoinType('xor').withSplitType('xor'))
@@ -35,24 +35,8 @@ export const executionPhaseWorkflow = Builder.workflow('executionPhase')
   .dummyTask('completeExecution', completeExecutionTask)
   .connectCondition('start', (to) => to.task('createAndAssignTasks'))
   .connectTask('createAndAssignTasks', (to) => to.task('executeProjectWork').task('trackTime').task('trackExpenses'))
-  .connectTask('trackTime', (to) =>
-    to
-      .task('trackTime')
-      .task('finalizeTimeTracking')
-      .route(async ({ route }) => {
-      const routes = [route.toTask('trackTime'), route.toTask('finalizeTimeTracking')]
-      return routes[Math.floor(Math.random() * routes.length)]!
-    })
-  )
-  .connectTask('trackExpenses', (to) =>
-    to
-      .task('trackExpenses')
-      .task('finalizeExpenseTracking')
-      .route(async ({ route }) => {
-      const routes = [route.toTask('trackExpenses'), route.toTask('finalizeExpenseTracking')]
-      return routes[Math.floor(Math.random() * routes.length)]!
-    })
-  )
+  .connectTask('trackTime', (to) => to.task('finalizeTimeTracking'))
+  .connectTask('trackExpenses', (to) => to.task('finalizeExpenseTracking'))
   .connectTask('executeProjectWork', (to) => to.task('reviewExecution'))
   .connectTask('finalizeTimeTracking', (to) => to.task('reviewExecution'))
   .connectTask('finalizeExpenseTracking', (to) => to.task('reviewExecution'))

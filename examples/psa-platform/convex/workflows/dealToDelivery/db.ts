@@ -1165,7 +1165,7 @@ export async function calculateProjectBudgetBurn(
   for (const entry of timeEntries) {
     if (entry.status === 'Approved' || entry.status === 'Locked') {
       const user = await getUser(db, entry.userId)
-      if (user) {
+      if (user && user.costRate !== undefined) {
         timeCost += entry.hours * user.costRate
       }
     }

@@ -40,14 +40,14 @@ export async function initializeDealToDeliveryWorkItemAuth(
 }
 
 /**
- * Creates a system work item that auto-completes without human intervention.
+ * Creates an agent work item that auto-completes without human intervention.
  * Used for routing decisions, automated checks, and system tasks.
  *
  * @param mutationCtx - The mutation context with database access
  * @param workItemId - The Tasquencer work item ID to associate metadata with
- * @param config - Configuration for the system work item metadata
+ * @param config - Configuration for the agent work item metadata
  */
-export async function initializeSystemWorkItemAuth(
+export async function initializeAgentWorkItemAuth(
   mutationCtx: MutationCtx,
   workItemId: Id<'tasquencerWorkItems'>,
   config: {
@@ -61,7 +61,7 @@ export async function initializeSystemWorkItemAuth(
     workItemId,
     workflowName: 'dealToDelivery',
     offer: {
-      type: 'system' as const,
+      type: 'agent' as const,
     },
     aggregateTableId: config.dealId,
     payload: config.payload,

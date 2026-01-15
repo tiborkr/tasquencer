@@ -4,9 +4,8 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { setup, setupAuthenticatedUser, type TestContext } from './helpers.test'
+import { setup, type TestContext } from './helpers.test'
 import * as db from '../workflows/dealToDelivery/db'
-import type { Id, Doc } from '../_generated/dataModel'
 
 describe('PSA Platform Database Operations', () => {
   let t: TestContext
@@ -780,8 +779,8 @@ describe('PSA Platform Database Operations', () => {
       expect(result.totalCost).toBe(70000)
       // Budget: $10,000 (1,000,000 cents)
       expect(result.budgetAmount).toBe(1000000)
-      // Burn rate: 7%
-      expect(result.burnRate).toBe(7)
+      // Burn rate: 7% (use toBeCloseTo for floating point)
+      expect(result.burnRate).toBeCloseTo(7, 10)
       // Remaining: $9,300 (930,000 cents)
       expect(result.remaining).toBe(930000)
     })

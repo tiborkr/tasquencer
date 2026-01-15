@@ -17,16 +17,18 @@ const organizations = defineTable({
 })
 
 const users = defineTable({
-  organizationId: v.id('organizations'),
-  email: v.string(),
-  name: v.string(),
-  role: v.string(), // References permission set
-  costRate: v.number(), // Internal hourly cost rate in cents
-  billRate: v.number(), // Default external billing rate in cents
-  skills: v.array(v.string()), // Array of skill tags
-  department: v.string(),
-  location: v.string(),
-  isActive: v.boolean(),
+  // Required for auth - set after organization is created
+  organizationId: v.optional(v.id('organizations')),
+  email: v.optional(v.string()),
+  // Profile fields - optional until user completes profile
+  name: v.optional(v.string()),
+  role: v.optional(v.string()), // References permission set
+  costRate: v.optional(v.number()), // Internal hourly cost rate in cents
+  billRate: v.optional(v.number()), // Default external billing rate in cents
+  skills: v.optional(v.array(v.string())), // Array of skill tags
+  department: v.optional(v.string()),
+  location: v.optional(v.string()),
+  isActive: v.optional(v.boolean()),
 })
   .index('by_organization', ['organizationId'])
   .index('by_email', ['organizationId', 'email'])
