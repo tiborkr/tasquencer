@@ -728,6 +728,22 @@ export async function listTimeEntriesByUserAndDate(
     .collect()
 }
 
+/**
+ * List time entries for a user within a date range (inclusive)
+ * Uses in-memory filtering since there's no compound range index
+ */
+export async function listTimeEntriesByUserAndDateRange(
+  db: DatabaseReader,
+  userId: Id<'users'>,
+  startDate: number,
+  endDate: number,
+): Promise<Doc<'timeEntries'>[]> {
+  const allEntries = await listTimeEntriesByUser(db, userId)
+  return allEntries.filter(
+    (entry) => entry.date >= startDate && entry.date <= endDate
+  )
+}
+
 export async function listTimeEntriesByStatus(
   db: DatabaseReader,
   organizationId: Id<'organizations'>,

@@ -548,16 +548,92 @@ const workItemPayloadType = v.union(
   v.object({ type: v.literal('submitExpense'), taskName: v.string(), expenseId: v.id('expenses') }),
 
   // Timesheet Approval (4)
-  v.object({ type: v.literal('reviewTimesheet'), taskName: v.string(), userId: v.id('users'), weekStartDate: v.number() }),
-  v.object({ type: v.literal('approveTimesheet'), taskName: v.string(), userId: v.id('users'), weekStartDate: v.number() }),
-  v.object({ type: v.literal('rejectTimesheet'), taskName: v.string(), userId: v.id('users'), weekStartDate: v.number() }),
-  v.object({ type: v.literal('reviseTimesheet'), taskName: v.string(), userId: v.id('users'), weekStartDate: v.number() }),
+  v.object({
+    type: v.literal('reviewTimesheet'),
+    taskName: v.string(),
+    userId: v.id('users'),
+    weekStartDate: v.number(),
+    // Runtime fields set during workflow execution
+    decision: v.optional(v.union(v.literal('approve'), v.literal('reject'))),
+    reviewComments: v.optional(v.string()),
+    reviewedBy: v.optional(v.id('users')),
+    reviewedAt: v.optional(v.number()),
+  }),
+  v.object({
+    type: v.literal('approveTimesheet'),
+    taskName: v.string(),
+    userId: v.id('users'),
+    weekStartDate: v.number(),
+    // Runtime fields
+    approvedBy: v.optional(v.id('users')),
+    approvedAt: v.optional(v.number()),
+    approvalNotes: v.optional(v.string()),
+    approvedCount: v.optional(v.number()),
+  }),
+  v.object({
+    type: v.literal('rejectTimesheet'),
+    taskName: v.string(),
+    userId: v.id('users'),
+    weekStartDate: v.number(),
+    // Runtime fields
+    rejectedBy: v.optional(v.id('users')),
+    rejectedAt: v.optional(v.number()),
+    rejectionComments: v.optional(v.string()),
+    rejectedCount: v.optional(v.number()),
+  }),
+  v.object({
+    type: v.literal('reviseTimesheet'),
+    taskName: v.string(),
+    userId: v.id('users'),
+    weekStartDate: v.number(),
+    // Runtime fields
+    revisedAt: v.optional(v.number()),
+    resubmitted: v.optional(v.boolean()),
+    revisionCount: v.optional(v.number()),
+  }),
 
   // Expense Approval (4)
-  v.object({ type: v.literal('reviewExpense'), taskName: v.string(), expenseId: v.id('expenses') }),
-  v.object({ type: v.literal('approveExpense'), taskName: v.string(), expenseId: v.id('expenses') }),
-  v.object({ type: v.literal('rejectExpense'), taskName: v.string(), expenseId: v.id('expenses') }),
-  v.object({ type: v.literal('reviseExpense'), taskName: v.string(), expenseId: v.id('expenses') }),
+  v.object({
+    type: v.literal('reviewExpense'),
+    taskName: v.string(),
+    expenseId: v.id('expenses'),
+    // Runtime fields set during workflow execution
+    decision: v.optional(v.union(v.literal('approve'), v.literal('reject'))),
+    reviewComments: v.optional(v.string()),
+    reviewedBy: v.optional(v.id('users')),
+    reviewedAt: v.optional(v.number()),
+  }),
+  v.object({
+    type: v.literal('approveExpense'),
+    taskName: v.string(),
+    expenseId: v.id('expenses'),
+    // Runtime fields
+    approvedBy: v.optional(v.id('users')),
+    approvedAt: v.optional(v.number()),
+    approvalNotes: v.optional(v.string()),
+    finalAmount: v.optional(v.number()),
+  }),
+  v.object({
+    type: v.literal('rejectExpense'),
+    taskName: v.string(),
+    expenseId: v.id('expenses'),
+    // Runtime fields
+    rejectedBy: v.optional(v.id('users')),
+    rejectedAt: v.optional(v.number()),
+    rejectionReason: v.optional(v.string()),
+    issues: v.optional(v.array(v.object({
+      type: v.string(),
+      details: v.string(),
+    }))),
+  }),
+  v.object({
+    type: v.literal('reviseExpense'),
+    taskName: v.string(),
+    expenseId: v.id('expenses'),
+    // Runtime fields
+    revisedAt: v.optional(v.number()),
+    resubmitted: v.optional(v.boolean()),
+  }),
 
   // Invoice Generation (8)
   v.object({ type: v.literal('selectInvoicingMethod'), taskName: v.string(), projectId: v.id('projects') }),
