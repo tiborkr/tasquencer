@@ -7,6 +7,7 @@ import { invoiceRecurringTask } from '../workItems/invoiceRecurring.workItem'
 import { reviewDraftTask } from '../workItems/reviewDraft.workItem'
 import { editDraftTask } from '../workItems/editDraft.workItem'
 import { finalizeInvoiceTask } from '../workItems/finalizeInvoice.workItem'
+
 export const invoiceGenerationWorkflow = Builder.workflow('invoiceGeneration')
   .startCondition('start')
   .endCondition('end')
@@ -25,10 +26,41 @@ export const invoiceGenerationWorkflow = Builder.workflow('invoiceGeneration')
       .task('invoiceFixedFee')
       .task('invoiceMilestone')
       .task('invoiceRecurring')
-      .route(async ({ route }) => {
-      const routes = [route.toTask('invoiceTimeAndMaterials'), route.toTask('invoiceFixedFee'), route.toTask('invoiceMilestone'), route.toTask('invoiceRecurring')]
-      return routes[Math.floor(Math.random() * routes.length)]!
-    })
+      .route(async ({ route, mutationCtx }) => {
+        // Query the most recent selectInvoicingMethod work item metadata
+        // Use descending sort to get the most recent item (loop-safe pattern)
+        const workItems = await mutationCtx.db
+          .query('dealToDeliveryWorkItems')
+          .filter((q) => q.eq(q.field('payload.type'), 'selectInvoicingMethod'))
+          .collect()
+
+        // Sort by creation time descending to get the most recent
+        const sortedWorkItems = workItems.sort(
+          (a, b) => b._creationTime - a._creationTime
+        )
+        const mostRecentMetadata = sortedWorkItems[0]
+
+        // Get the selected method from the payload
+        const payload = mostRecentMetadata?.payload as {
+          type: 'selectInvoicingMethod'
+          selectedMethod?: 'TimeAndMaterials' | 'FixedFee' | 'Milestone' | 'Recurring'
+        } | undefined
+
+        const method = payload?.selectedMethod || 'TimeAndMaterials'
+
+        // Route based on the selected method
+        switch (method) {
+          case 'FixedFee':
+            return route.toTask('invoiceFixedFee')
+          case 'Milestone':
+            return route.toTask('invoiceMilestone')
+          case 'Recurring':
+            return route.toTask('invoiceRecurring')
+          case 'TimeAndMaterials':
+          default:
+            return route.toTask('invoiceTimeAndMaterials')
+        }
+      })
   )
   .connectTask('invoiceTimeAndMaterials', (to) => to.task('reviewDraft'))
   .connectTask('invoiceFixedFee', (to) => to.task('reviewDraft'))
@@ -38,10 +70,35 @@ export const invoiceGenerationWorkflow = Builder.workflow('invoiceGeneration')
     to
       .task('editDraft')
       .task('finalizeInvoice')
-      .route(async ({ route }) => {
-      const routes = [route.toTask('editDraft'), route.toTask('finalizeInvoice')]
-      return routes[Math.floor(Math.random() * routes.length)]!
-    })
+      .route(async ({ route, mutationCtx }) => {
+        // Query the most recent reviewDraft work item metadata
+        // Use descending sort to get the most recent item (loop-safe pattern)
+        const workItems = await mutationCtx.db
+          .query('dealToDeliveryWorkItems')
+          .filter((q) => q.eq(q.field('payload.type'), 'reviewDraft'))
+          .collect()
+
+        // Sort by creation time descending to get the most recent
+        const sortedWorkItems = workItems.sort(
+          (a, b) => b._creationTime - a._creationTime
+        )
+        const mostRecentMetadata = sortedWorkItems[0]
+
+        // Get the approval decision from the payload
+        const payload = mostRecentMetadata?.payload as {
+          type: 'reviewDraft'
+          approved?: boolean
+        } | undefined
+
+        const approved = payload?.approved ?? false
+
+        // Route based on the decision
+        if (approved) {
+          return route.toTask('finalizeInvoice')
+        } else {
+          return route.toTask('editDraft')
+        }
+      })
   )
   .connectTask('editDraft', (to) => to.task('reviewDraft'))
   .connectTask('finalizeInvoice', (to) => to.condition('end'))

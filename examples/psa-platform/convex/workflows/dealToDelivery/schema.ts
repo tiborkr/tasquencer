@@ -636,14 +636,85 @@ const workItemPayloadType = v.union(
   }),
 
   // Invoice Generation (8)
-  v.object({ type: v.literal('selectInvoicingMethod'), taskName: v.string(), projectId: v.id('projects') }),
-  v.object({ type: v.literal('invoiceTimeAndMaterials'), taskName: v.string(), projectId: v.id('projects') }),
-  v.object({ type: v.literal('invoiceFixedFee'), taskName: v.string(), projectId: v.id('projects') }),
-  v.object({ type: v.literal('invoiceMilestone'), taskName: v.string(), projectId: v.id('projects'), milestoneId: v.optional(v.id('milestones')) }),
-  v.object({ type: v.literal('invoiceRecurring'), taskName: v.string(), projectId: v.id('projects') }),
-  v.object({ type: v.literal('reviewDraft'), taskName: v.string(), invoiceId: v.id('invoices') }),
-  v.object({ type: v.literal('editDraft'), taskName: v.string(), invoiceId: v.id('invoices') }),
-  v.object({ type: v.literal('finalizeInvoice'), taskName: v.string(), invoiceId: v.id('invoices') }),
+  v.object({
+    type: v.literal('selectInvoicingMethod'),
+    taskName: v.string(),
+    projectId: v.id('projects'),
+    // Runtime fields
+    selectedMethod: v.optional(v.union(
+      v.literal('TimeAndMaterials'),
+      v.literal('FixedFee'),
+      v.literal('Milestone'),
+      v.literal('Recurring')
+    )),
+  }),
+  v.object({
+    type: v.literal('invoiceTimeAndMaterials'),
+    taskName: v.string(),
+    projectId: v.id('projects'),
+    // Runtime fields
+    invoiceId: v.optional(v.id('invoices')),
+    lineItemCount: v.optional(v.number()),
+    total: v.optional(v.number()),
+  }),
+  v.object({
+    type: v.literal('invoiceFixedFee'),
+    taskName: v.string(),
+    projectId: v.id('projects'),
+    // Runtime fields
+    invoiceId: v.optional(v.id('invoices')),
+    total: v.optional(v.number()),
+  }),
+  v.object({
+    type: v.literal('invoiceMilestone'),
+    taskName: v.string(),
+    projectId: v.id('projects'),
+    milestoneId: v.optional(v.id('milestones')),
+    // Runtime fields
+    invoiceId: v.optional(v.id('invoices')),
+    milestoneName: v.optional(v.string()),
+    total: v.optional(v.number()),
+  }),
+  v.object({
+    type: v.literal('invoiceRecurring'),
+    taskName: v.string(),
+    projectId: v.id('projects'),
+    // Runtime fields
+    invoiceId: v.optional(v.id('invoices')),
+    total: v.optional(v.number()),
+    hoursUsed: v.optional(v.number()),
+  }),
+  v.object({
+    type: v.literal('reviewDraft'),
+    taskName: v.string(),
+    invoiceId: v.id('invoices'),
+    // Runtime fields
+    approved: v.optional(v.boolean()),
+    reviewComments: v.optional(v.string()),
+    reviewedBy: v.optional(v.id('users')),
+    reviewedAt: v.optional(v.number()),
+    lineItemCount: v.optional(v.number()),
+  }),
+  v.object({
+    type: v.literal('editDraft'),
+    taskName: v.string(),
+    invoiceId: v.id('invoices'),
+    // Runtime fields
+    edited: v.optional(v.boolean()),
+    newTotal: v.optional(v.number()),
+    editedBy: v.optional(v.id('users')),
+    editedAt: v.optional(v.number()),
+  }),
+  v.object({
+    type: v.literal('finalizeInvoice'),
+    taskName: v.string(),
+    invoiceId: v.id('invoices'),
+    // Runtime fields
+    finalized: v.optional(v.boolean()),
+    invoiceNumber: v.optional(v.string()),
+    finalizedBy: v.optional(v.id('users')),
+    finalizedAt: v.optional(v.number()),
+  }),
 
   // Billing Phase (6)
   v.object({ type: v.literal('sendInvoice'), taskName: v.string(), invoiceId: v.id('invoices') }),
