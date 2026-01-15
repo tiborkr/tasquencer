@@ -40,6 +40,13 @@ import {
   ChevronDown,
   ChevronUp,
   AlertCircle,
+  PieChart,
+  TrendingUp,
+  FileImage,
+  Video,
+  Mail,
+  Globe,
+  MessageCircle,
 } from 'lucide-react'
 import { Route as ParentRoute } from './$campaignId'
 
@@ -99,6 +106,8 @@ function CampaignDetailIndex() {
   const [showStrategy, setShowStrategy] = useState(false)
   const [showTimeline, setShowTimeline] = useState(false)
   const [showActivity, setShowActivity] = useState(false)
+  const [showBudgetBreakdown, setShowBudgetBreakdown] = useState(false)
+  const [showCreatives, setShowCreatives] = useState(false)
 
   // Fetch active work items for this campaign
   const { data: activeWorkItems } = useSuspenseQuery(
@@ -137,6 +146,22 @@ function CampaignDetailIndex() {
       campaignId: campaignId as Id<'campaigns'>,
     }),
     enabled: showActivity,
+  })
+
+  // Fetch budget breakdown (lazy - only when expanded)
+  const { data: budgetData, isLoading: loadingBudget } = useQuery({
+    ...convexQuery(api.workflows.campaign_approval.api.getCampaignBudget, {
+      campaignId: campaignId as Id<'campaigns'>,
+    }),
+    enabled: showBudgetBreakdown,
+  })
+
+  // Fetch creatives gallery (lazy - only when expanded)
+  const { data: creatives, isLoading: loadingCreatives } = useQuery({
+    ...convexQuery(api.workflows.campaign_approval.api.getCampaignCreatives, {
+      campaignId: campaignId as Id<'campaigns'>,
+    }),
+    enabled: showCreatives,
   })
 
   const cancelMutation = useMutation({
@@ -680,6 +705,265 @@ function CampaignDetailIndex() {
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <AlertCircle className="h-4 w-4" />
                   No approval decisions recorded yet.
+                </div>
+              )}
+            </CardContent>
+          )}
+        </Card>
+
+        {/* Budget Breakdown Section (Phase 3) */}
+        <Card>
+          <button
+            type="button"
+            className="w-full"
+            onClick={() => setShowBudgetBreakdown(!showBudgetBreakdown)}
+          >
+            <CardHeader className="pb-3 cursor-pointer hover:bg-muted/50 transition-colors">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <PieChart className="h-4 w-4 text-green-500" />
+                  <CardTitle className="text-base">Budget Breakdown</CardTitle>
+                </div>
+                {showBudgetBreakdown ? (
+                  <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                )}
+              </div>
+              <CardDescription className="text-left">
+                Budget allocation and approval status
+              </CardDescription>
+            </CardHeader>
+          </button>
+          {showBudgetBreakdown && (
+            <CardContent className="pt-0">
+              {loadingBudget ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading budget data...
+                </div>
+              ) : budgetData ? (
+                <div className="space-y-4">
+                  {/* Budget Summary */}
+                  <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Total Budget</p>
+                      <p className="text-2xl font-bold">${budgetData.totalAmount.toLocaleString()}</p>
+                    </div>
+                    <Badge
+                      variant="outline"
+                      className={
+                        budgetData.status === 'approved'
+                          ? 'border-green-500/30 text-green-600 bg-green-500/5'
+                          : budgetData.status === 'rejected'
+                          ? 'border-red-500/30 text-red-600 bg-red-500/5'
+                          : 'border-amber-500/30 text-amber-600 bg-amber-500/5'
+                      }
+                    >
+                      {budgetData.status.replace(/_/g, ' ')}
+                    </Badge>
+                  </div>
+
+                  {/* Category Breakdown */}
+                  <div className="space-y-3">
+                    {[
+                      { key: 'mediaSpend', label: 'Media Spend', color: 'bg-blue-500', icon: TrendingUp },
+                      { key: 'creativeProduction', label: 'Creative Production', color: 'bg-purple-500', icon: PieChart },
+                      { key: 'technologyTools', label: 'Technology & Tools', color: 'bg-indigo-500', icon: Wallet },
+                      { key: 'agencyFees', label: 'Agency Fees', color: 'bg-amber-500', icon: FileText },
+                      { key: 'eventCosts', label: 'Event Costs', color: 'bg-green-500', icon: DollarSign },
+                      { key: 'contingency', label: 'Contingency', color: 'bg-gray-500', icon: AlertCircle },
+                    ].map((category) => {
+                      const amount = budgetData[category.key as keyof typeof budgetData] as number
+                      const percentage = budgetData.totalAmount > 0
+                        ? (amount / budgetData.totalAmount) * 100
+                        : 0
+                      const Icon = category.icon
+
+                      return (
+                        <div key={category.key} className="space-y-1">
+                          <div className="flex items-center justify-between text-sm">
+                            <div className="flex items-center gap-2">
+                              <div className={`h-2.5 w-2.5 rounded-full ${category.color}`} />
+                              <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+                              <span>{category.label}</span>
+                            </div>
+                            <div className="text-right">
+                              <span className="font-medium">${amount.toLocaleString()}</span>
+                              <span className="text-xs text-muted-foreground ml-1">({percentage.toFixed(0)}%)</span>
+                            </div>
+                          </div>
+                          <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                            <div
+                              className={`h-full ${category.color} transition-all`}
+                              style={{ width: `${percentage}%` }}
+                            />
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {/* ROI & Justification */}
+                  {budgetData.roiProjection && (
+                    <>
+                      <Separator />
+                      <div>
+                        <h4 className="text-sm font-medium mb-1">ROI Projection</h4>
+                        <p className="text-sm text-muted-foreground">{budgetData.roiProjection}</p>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Link to full page */}
+                  <div className="pt-2">
+                    <Button asChild variant="outline" size="sm" className="w-full">
+                      <Link
+                        to="/campaigns/$campaignId/budget"
+                        params={{ campaignId }}
+                      >
+                        View Full Budget Details
+                        <ChevronRight className="ml-1 h-3 w-3" />
+                      </Link>
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <AlertCircle className="h-4 w-4" />
+                  No budget data available yet. Budget will be developed during the Budget phase.
+                </div>
+              )}
+            </CardContent>
+          )}
+        </Card>
+
+        {/* Creative Assets Gallery Section (Phase 4) */}
+        <Card>
+          <button
+            type="button"
+            className="w-full"
+            onClick={() => setShowCreatives(!showCreatives)}
+          >
+            <CardHeader className="pb-3 cursor-pointer hover:bg-muted/50 transition-colors">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Image className="h-4 w-4 text-pink-500" />
+                  <CardTitle className="text-base">Creative Assets</CardTitle>
+                </div>
+                {showCreatives ? (
+                  <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                )}
+              </div>
+              <CardDescription className="text-left">
+                Campaign creative assets and deliverables
+              </CardDescription>
+            </CardHeader>
+          </button>
+          {showCreatives && (
+            <CardContent className="pt-0">
+              {loadingCreatives ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading creative assets...
+                </div>
+              ) : creatives && creatives.length > 0 ? (
+                <div className="space-y-4">
+                  {/* Asset Type Summary */}
+                  <div className="flex flex-wrap gap-2">
+                    {(() => {
+                      const typeCounts = creatives.reduce((acc, creative) => {
+                        acc[creative.assetType] = (acc[creative.assetType] || 0) + 1
+                        return acc
+                      }, {} as Record<string, number>)
+
+                      const typeConfig: Record<string, { label: string; icon: typeof FileImage; color: string }> = {
+                        ad: { label: 'Ads', icon: FileImage, color: 'bg-blue-500/10 text-blue-600 border-blue-500/20' },
+                        email: { label: 'Emails', icon: Mail, color: 'bg-purple-500/10 text-purple-600 border-purple-500/20' },
+                        landing_page: { label: 'Landing Pages', icon: Globe, color: 'bg-green-500/10 text-green-600 border-green-500/20' },
+                        social_post: { label: 'Social Posts', icon: MessageCircle, color: 'bg-amber-500/10 text-amber-600 border-amber-500/20' },
+                        video: { label: 'Videos', icon: Video, color: 'bg-red-500/10 text-red-600 border-red-500/20' },
+                      }
+
+                      return Object.entries(typeCounts).map(([type, count]) => {
+                        const config = typeConfig[type] || typeConfig.ad
+                        const Icon = config.icon
+                        return (
+                          <Badge key={type} variant="outline" className={config.color}>
+                            <Icon className="h-3 w-3 mr-1" />
+                            {count} {config.label}
+                          </Badge>
+                        )
+                      })
+                    })()}
+                  </div>
+
+                  {/* Asset Grid Preview */}
+                  <div className="grid gap-3 grid-cols-2 md:grid-cols-3">
+                    {creatives.slice(0, 6).map((creative) => {
+                      const typeConfig: Record<string, { icon: typeof FileImage; color: string }> = {
+                        ad: { icon: FileImage, color: 'text-blue-600' },
+                        email: { icon: Mail, color: 'text-purple-600' },
+                        landing_page: { icon: Globe, color: 'text-green-600' },
+                        social_post: { icon: MessageCircle, color: 'text-amber-600' },
+                        video: { icon: Video, color: 'text-red-600' },
+                      }
+                      const config = typeConfig[creative.assetType] || typeConfig.ad
+                      const Icon = config.icon
+
+                      return (
+                        <div
+                          key={creative._id}
+                          className="rounded-lg border bg-muted/30 overflow-hidden"
+                        >
+                          <div className="aspect-video bg-muted flex items-center justify-center">
+                            <Icon className={`h-6 w-6 ${config.color}`} />
+                          </div>
+                          <div className="p-2">
+                            <p className="text-xs font-medium truncate">{creative.name}</p>
+                            <div className="flex items-center justify-between mt-1">
+                              <span className="text-[10px] text-muted-foreground">v{creative.version}</span>
+                              {creative.storageId ? (
+                                <Badge variant="outline" className="text-[10px] text-green-600 px-1 py-0">
+                                  Uploaded
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-[10px] text-amber-600 px-1 py-0">
+                                  Pending
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {creatives.length > 6 && (
+                    <p className="text-xs text-center text-muted-foreground">
+                      +{creatives.length - 6} more assets
+                    </p>
+                  )}
+
+                  {/* Link to full page */}
+                  <div className="pt-2">
+                    <Button asChild variant="outline" size="sm" className="w-full">
+                      <Link
+                        to="/campaigns/$campaignId/creatives"
+                        params={{ campaignId }}
+                      >
+                        View All Creative Assets
+                        <ChevronRight className="ml-1 h-3 w-3" />
+                      </Link>
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <AlertCircle className="h-4 w-4" />
+                  No creative assets yet. Assets will be created during the Creative Development phase.
                 </div>
               )}
             </CardContent>
