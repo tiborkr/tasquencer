@@ -43,7 +43,7 @@ const createProposalActions = authService.builders.workItemActions
   .complete(
     createProposalPayloadSchema,
     createProposalPolicy,
-    async ({ mutationCtx, workItem }, payload) => {
+    async ({ mutationCtx, workItem }, _payload) => {
       const authUser = await authComponent.getAuthUser(mutationCtx)
       const userId = authUser.userId
       invariant(userId, 'USER_DOES_NOT_EXIST')
@@ -78,7 +78,7 @@ const createProposalActions = authService.builders.workItemActions
       const documentUrl = `https://docs.example.com/proposals/${dealId}/v1`
 
       // Create the proposal with Draft status
-      const proposalId = await insertProposal(mutationCtx.db, {
+      await insertProposal(mutationCtx.db, {
         organizationId: deal.organizationId,
         dealId: dealId,
         version: 1,

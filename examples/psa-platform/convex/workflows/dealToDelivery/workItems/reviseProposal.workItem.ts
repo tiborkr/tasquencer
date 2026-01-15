@@ -73,9 +73,8 @@ const reviseProposalActions = authService.builders.workItemActions
         throw new Error('WORK_ITEM_NOT_CLAIMED_BY_USER')
       }
 
-      // Get proposalId from payload
+      // Verify work item type for type safety
       invariant(metadata.payload.type === 'reviseProposal', 'INVALID_WORK_ITEM_TYPE')
-      const originalProposalId = metadata.payload.proposalId
 
       // Get the deal from metadata
       const dealId = metadata.aggregateTableId
@@ -127,7 +126,7 @@ const reviseProposalActions = authService.builders.workItemActions
       const documentUrl = `https://docs.example.com/proposals/${dealId}/v${newVersion}`
 
       // Create new proposal version
-      const proposalId = await insertProposal(mutationCtx.db, {
+      await insertProposal(mutationCtx.db, {
         organizationId: deal.organizationId,
         dealId: dealId,
         version: newVersion,

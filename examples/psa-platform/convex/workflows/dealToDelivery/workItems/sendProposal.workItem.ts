@@ -41,7 +41,7 @@ const sendProposalActions = authService.builders.workItemActions
   .complete(
     sendProposalPayloadSchema,
     sendProposalPolicy,
-    async ({ mutationCtx, workItem }, payload) => {
+    async ({ mutationCtx, workItem }, _payload) => {
       const authUser = await authComponent.getAuthUser(mutationCtx)
       const userId = authUser.userId
       invariant(userId, 'USER_DOES_NOT_EXIST')

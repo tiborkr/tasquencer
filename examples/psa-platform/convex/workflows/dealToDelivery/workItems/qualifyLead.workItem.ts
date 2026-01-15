@@ -7,7 +7,6 @@ import invariant from 'tiny-invariant'
 import { getDeal, getDealByWorkflowId, updateDeal } from '../db'
 import { initializeDealToDeliveryWorkItemAuth } from './authHelpers'
 import { DealToDeliveryWorkItemHelpers } from '../helpers'
-import type { Id } from '../../../_generated/dataModel'
 
 // Policy: requires deals:qualify scope
 const qualifyLeadPolicy = authService.policies.requireScope('dealToDelivery:deals:qualify')

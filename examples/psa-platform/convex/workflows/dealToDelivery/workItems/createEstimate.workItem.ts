@@ -10,11 +10,9 @@ import {
   updateDeal,
   insertEstimate,
   insertEstimateService,
-  getUser,
 } from '../db'
 import { initializeDealToDeliveryWorkItemAuth } from './authHelpers'
 import { DealToDeliveryWorkItemHelpers } from '../helpers'
-import type { Id } from '../../../_generated/dataModel'
 
 // Policy: requires estimates:create scope
 const createEstimatePolicy = authService.policies.requireScope('dealToDelivery:estimates:create')
