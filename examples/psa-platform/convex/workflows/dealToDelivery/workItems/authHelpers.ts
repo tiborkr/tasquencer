@@ -83,8 +83,8 @@ export async function initializeAgentWorkItemAuth(
   mutationCtx: MutationCtx,
   workItemId: Id<'tasquencerWorkItems'>,
   config: {
-    /** ID of the aggregate root (deals table) this work item relates to */
-    dealId: Id<'deals'>
+    /** ID of the aggregate root (deals table) this work item relates to (optional for project-based work items) */
+    dealId?: Id<'deals'>
     /** Typed payload specific to the work item type */
     payload: Doc<'dealToDeliveryWorkItems'>['payload']
   },

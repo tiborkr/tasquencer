@@ -13,6 +13,11 @@
     "dagre": "^0.8.5",
     "date-fns": "^4.1.0"
   },
+  "peerDependencies": {
+    "lucide-react": ">=0.400.0",
+    "react": ">=18.0.0",
+    "react-dom": ">=18.0.0"
+  },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",
     "@repo/tasquencer": "workspace:*",
@@ -24,6 +29,7 @@
     "@types/react": "^19.1.9",
     "@types/react-dom": "^19.1.7",
     "eslint": "^9.32.0",
+    "lucide-react": "^0.542.0",
     "tailwindcss": "^4.1.11",
     "typescript": "^5.9.2"
   },
