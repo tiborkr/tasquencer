@@ -717,12 +717,85 @@ const workItemPayloadType = v.union(
   }),
 
   // Billing Phase (6)
-  v.object({ type: v.literal('sendInvoice'), taskName: v.string(), invoiceId: v.id('invoices') }),
-  v.object({ type: v.literal('sendViaEmail'), taskName: v.string(), invoiceId: v.id('invoices') }),
-  v.object({ type: v.literal('sendViaPdf'), taskName: v.string(), invoiceId: v.id('invoices') }),
-  v.object({ type: v.literal('sendViaPortal'), taskName: v.string(), invoiceId: v.id('invoices') }),
-  v.object({ type: v.literal('recordPayment'), taskName: v.string(), invoiceId: v.id('invoices') }),
-  v.object({ type: v.literal('checkMoreBilling'), taskName: v.string(), projectId: v.id('projects') }),
+  v.object({
+    type: v.literal('sendInvoice'),
+    taskName: v.string(),
+    invoiceId: v.id('invoices'),
+    // Runtime fields
+    selectedMethod: v.optional(v.union(
+      v.literal('email'),
+      v.literal('pdf'),
+      v.literal('portal')
+    )),
+    selectedBy: v.optional(v.id('users')),
+    selectedAt: v.optional(v.number()),
+  }),
+  v.object({
+    type: v.literal('sendViaEmail'),
+    taskName: v.string(),
+    invoiceId: v.id('invoices'),
+    // Runtime fields
+    recipientEmail: v.optional(v.string()),
+    recipientName: v.optional(v.string()),
+    ccEmails: v.optional(v.array(v.string())),
+    personalMessage: v.optional(v.string()),
+    attachPdf: v.optional(v.boolean()),
+    includePaymentLink: v.optional(v.boolean()),
+    sentAt: v.optional(v.number()),
+    sentBy: v.optional(v.id('users')),
+    trackingId: v.optional(v.string()),
+  }),
+  v.object({
+    type: v.literal('sendViaPdf'),
+    taskName: v.string(),
+    invoiceId: v.id('invoices'),
+    // Runtime fields
+    pdfUrl: v.optional(v.string()),
+    markAsSent: v.optional(v.boolean()),
+    generatedAt: v.optional(v.number()),
+    generatedBy: v.optional(v.id('users')),
+  }),
+  v.object({
+    type: v.literal('sendViaPortal'),
+    taskName: v.string(),
+    invoiceId: v.id('invoices'),
+    // Runtime fields
+    clientUserId: v.optional(v.id('users')),
+    notifyAllContacts: v.optional(v.boolean()),
+    portalMessage: v.optional(v.string()),
+    portalUrl: v.optional(v.string()),
+    publishedAt: v.optional(v.number()),
+    publishedBy: v.optional(v.id('users')),
+  }),
+  v.object({
+    type: v.literal('recordPayment'),
+    taskName: v.string(),
+    invoiceId: v.id('invoices'),
+    // Runtime fields
+    paymentId: v.optional(v.id('payments')),
+    amount: v.optional(v.number()),
+    paymentDate: v.optional(v.number()),
+    paymentMethod: v.optional(v.string()),
+    reference: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    fullyPaid: v.optional(v.boolean()),
+    totalPaid: v.optional(v.number()),
+    remaining: v.optional(v.number()),
+    recordedBy: v.optional(v.id('users')),
+    recordedAt: v.optional(v.number()),
+  }),
+  v.object({
+    type: v.literal('checkMoreBilling'),
+    taskName: v.string(),
+    projectId: v.id('projects'),
+    // Runtime fields
+    moreBillingCycles: v.optional(v.boolean()),
+    uninvoicedTimeCount: v.optional(v.number()),
+    uninvoicedExpenseCount: v.optional(v.number()),
+    unpaidMilestoneCount: v.optional(v.number()),
+    isRecurringDue: v.optional(v.boolean()),
+    checkedAt: v.optional(v.number()),
+  }),
 
   // Close Phase (2)
   v.object({ type: v.literal('closeProject'), taskName: v.string(), projectId: v.id('projects') }),

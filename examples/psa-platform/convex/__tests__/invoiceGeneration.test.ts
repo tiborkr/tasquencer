@@ -438,7 +438,7 @@ describe('PSA Platform Invoice Generation', () => {
         const now = Date.now()
 
         // Create budget for project
-        const budgetId = await db.insertBudget(ctx.db, {
+        await db.insertBudget(ctx.db, {
           organizationId: orgId,
           projectId,
           type: 'FixedFee',
