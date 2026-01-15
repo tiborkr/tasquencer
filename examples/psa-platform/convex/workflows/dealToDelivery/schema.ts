@@ -4,7 +4,8 @@
 
 import { defineTable } from 'convex/server'
 import { v } from 'convex/values'
-import { defineWorkItemMetadataTable } from '@repo/tasquencer'
+// Note: Using custom table definition instead of defineWorkItemMetadataTable
+// to allow optional aggregateTableId for tasks that create the aggregate
 
 // ============================================================================
 // ORGANIZATION & USERS
@@ -585,10 +586,46 @@ const workItemPayloadType = v.union(
  * Work item metadata table for dealToDelivery workflow
  * Uses auth scope-based authorization
  * Links to deals table as the primary aggregate root
+ *
+ * Note: aggregateTableId is optional because the first task (createDeal)
+ * doesn't have a deal yet - it creates it.
  */
-const dealToDeliveryWorkItems = defineWorkItemMetadataTable('deals').withPayload(
-  workItemPayloadType
-)
+const dealToDeliveryWorkItems = defineTable({
+  workItemId: v.id('tasquencerWorkItems'),
+  workflowName: v.string(),
+  offer: v.union(
+    v.object({
+      type: v.literal('human'),
+      requiredScope: v.optional(v.string()),
+      requiredGroupId: v.optional(v.string()),
+    }),
+    v.object({
+      type: v.literal('agent'),
+    }),
+  ),
+  claim: v.optional(
+    v.union(
+      v.object({
+        type: v.literal('human'),
+        userId: v.optional(v.string()),
+        at: v.number(),
+      }),
+      v.object({
+        type: v.literal('agent'),
+        at: v.number(),
+      }),
+    ),
+  ),
+  // Made optional for tasks that create the aggregate (like createDeal)
+  aggregateTableId: v.optional(v.id('deals')),
+  payload: workItemPayloadType,
+})
+  .index('by_workItemId', ['workItemId'])
+  .index('by_offer_type_claim', ['offer.type', 'claim'])
+  .index('by_claim_userId', ['claim.userId'])
+  .index('by_aggregateTableId', ['aggregateTableId'])
+  .index('by_workflowName_workItemId', ['workflowName', 'workItemId'])
+  .index('by_workflowName_offer_type_claim', ['workflowName', 'offer.type', 'claim'])
 
 // Export all tables for schema spread
 export default {
