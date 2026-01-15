@@ -8,7 +8,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setup, type TestContext } from './helpers.test'
 import * as db from '../workflows/dealToDelivery/db'
-import type { Id } from '../_generated/dataModel'
 
 describe('PSA Platform Execution Phase', () => {
   let t: TestContext
