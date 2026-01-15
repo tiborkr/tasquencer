@@ -71,7 +71,25 @@ const proposalsScopeModule = createScopeModule('proposals')
     description: 'Send proposals to clients',
     tags: ['proposals', 'send'],
   })
+  .withScope('sign', {
+    description: 'Record proposal signatures',
+    tags: ['proposals', 'sign'],
+  })
   .withNestedModule(proposalsViewScopeModule)
+
+const estimatesScopeModule = createScopeModule('estimates')
+  .withScope('create', {
+    description: 'Create estimates for deals',
+    tags: ['estimates', 'create'],
+  })
+  .withScope('edit', {
+    description: 'Edit estimates',
+    tags: ['estimates', 'edit'],
+  })
+  .withScope('view', {
+    description: 'View estimates',
+    tags: ['estimates', 'view'],
+  })
 
 const projectsViewScopeModule = createScopeModule('view')
   .withScope('own', {
@@ -400,6 +418,7 @@ export const dealToDeliveryScopeModule = createScopeModule('dealToDelivery')
     tags: ['dealToDelivery', 'staff'],
   })
   .withNestedModule(dealsScopeModule)
+  .withNestedModule(estimatesScopeModule)
   .withNestedModule(proposalsScopeModule)
   .withNestedModule(projectsScopeModule)
   .withNestedModule(tasksScopeModule)

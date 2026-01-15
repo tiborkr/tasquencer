@@ -4,7 +4,7 @@ import { authService } from '../../../authorization'
 import { authComponent } from '../../../auth'
 import { isHumanClaim } from '@repo/tasquencer'
 import invariant from 'tiny-invariant'
-import { getDeal, insertDeal, getUser } from '../db'
+import { getDeal, insertDeal, getUser, updateDeal } from '../db'
 import { initializeHumanWorkItemAuth } from './authHelpers'
 import { DealToDeliveryWorkItemHelpers } from '../helpers'
 import type { Id } from '../../../_generated/dataModel'
@@ -40,7 +40,7 @@ const createDealActions = authService.builders.workItemActions
   .complete(
     createDealPayloadSchema,
     createDealPolicy,
-    async ({ mutationCtx, workItem }, payload) => {
+    async ({ mutationCtx, workItem, parent }, payload) => {
       const authUser = await authComponent.getAuthUser(mutationCtx)
       const userId = authUser.userId
       invariant(userId, 'USER_DOES_NOT_EXIST')
@@ -62,6 +62,9 @@ const createDealActions = authService.builders.workItemActions
       invariant(user, 'USER_NOT_FOUND')
       invariant(user.organizationId, 'USER_NOT_IN_ORGANIZATION')
 
+      // Get the workflow ID to link the deal to the workflow
+      const workflowId = parent.workflow.id
+
       // Create the deal with initial stage and probability
       const dealId = await insertDeal(mutationCtx.db, {
         organizationId: user.organizationId,
@@ -73,14 +76,22 @@ const createDealActions = authService.builders.workItemActions
         stage: 'Lead',
         ownerId: payload.ownerId as Id<'users'>,
         createdAt: Date.now(),
+        workflowId, // Link deal to workflow for downstream tasks
       })
 
       // Get the created deal to verify success
       const deal = await getDeal(mutationCtx.db, dealId)
       invariant(deal, 'DEAL_CREATION_FAILED')
 
-      // Note: The dealId is now created and stored in the deals table
-      // Downstream tasks can access it via the workflow context
+      // Update work item metadata with the dealId now that it exists
+      await mutationCtx.db.patch(metadata!._id, {
+        aggregateTableId: dealId,
+        payload: {
+          type: 'createDeal' as const,
+          taskName: 'Create Deal',
+          dealId,
+        },
+      })
     },
   )
 
