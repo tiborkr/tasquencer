@@ -1047,4 +1047,217 @@ describe('Campaign Approval API Endpoints', () => {
       ).rejects.toThrow('NOTIFICATION_NOT_FOUND')
     })
   })
+
+  describe('getCampaignResearch', () => {
+    it('exports getCampaignResearch query', async () => {
+      expect(api.workflows.campaign_approval.api.getCampaignResearch).toBeDefined()
+    })
+
+    it('returns null when no research exists', async () => {
+      const t = setup()
+      await setupCampaignApprovalAuthorization(t)
+      const { userId } = await setupAuthenticatedCampaignUser(t)
+
+      // Create a campaign first
+      const { campaignId } = await t.run(async (ctx) => {
+        const now = Date.now()
+        // Create workflow
+        const workflowId = await ctx.db.insert('tasquencerWorkflows', {
+          name: 'campaign_approval',
+          path: ['campaign_approval'],
+          versionName: 'v1',
+          executionMode: 'normal',
+          realizedPath: ['campaign_approval'],
+          state: 'initialized',
+        })
+        const campaignId = await ctx.db.insert('campaigns', {
+          workflowId,
+          name: 'Test Campaign',
+          objective: 'Test objective',
+          targetAudience: 'Test audience',
+          keyMessages: ['Message 1'],
+          channels: ['email'],
+          proposedStartDate: now + 7 * 24 * 60 * 60 * 1000,
+          proposedEndDate: now + 30 * 24 * 60 * 60 * 1000,
+          estimatedBudget: 50000,
+          requesterId: userId as any,
+          status: 'strategy',
+          createdAt: now,
+          updatedAt: now,
+        })
+        return { campaignId }
+      })
+
+      const research = await t.query(api.workflows.campaign_approval.api.getCampaignResearch, {
+        campaignId,
+      })
+
+      expect(research).toBeNull()
+    })
+
+    it('returns research data when it exists', async () => {
+      const t = setup()
+      await setupCampaignApprovalAuthorization(t)
+      const { userId } = await setupAuthenticatedCampaignUser(t)
+
+      // Create a campaign and research
+      const { campaignId } = await t.run(async (ctx) => {
+        const now = Date.now()
+        // Create workflow
+        const workflowId = await ctx.db.insert('tasquencerWorkflows', {
+          name: 'campaign_approval',
+          path: ['campaign_approval'],
+          versionName: 'v1',
+          executionMode: 'normal',
+          realizedPath: ['campaign_approval'],
+          state: 'initialized',
+        })
+        const campaignId = await ctx.db.insert('campaigns', {
+          workflowId,
+          name: 'Test Campaign',
+          objective: 'Test objective',
+          targetAudience: 'Test audience',
+          keyMessages: ['Message 1'],
+          channels: ['email'],
+          proposedStartDate: now + 7 * 24 * 60 * 60 * 1000,
+          proposedEndDate: now + 30 * 24 * 60 * 60 * 1000,
+          estimatedBudget: 50000,
+          requesterId: userId as any,
+          status: 'strategy',
+          createdAt: now,
+          updatedAt: now,
+        })
+        await ctx.db.insert('campaignResearch', {
+          campaignId,
+          audienceAnalysis: 'Target demographic: 25-45 professionals',
+          competitiveLandscape: 'Main competitors: A, B, C',
+          historicalInsights: 'Previous campaigns showed 20% conversion',
+          recommendations: 'Focus on digital channels',
+          createdBy: userId as any,
+          createdAt: now,
+          updatedAt: now,
+        })
+        return { campaignId }
+      })
+
+      const research = await t.query(api.workflows.campaign_approval.api.getCampaignResearch, {
+        campaignId,
+      })
+
+      expect(research).not.toBeNull()
+      expect(research!.audienceAnalysis).toBe('Target demographic: 25-45 professionals')
+      expect(research!.competitiveLandscape).toBe('Main competitors: A, B, C')
+      expect(research!.historicalInsights).toBe('Previous campaigns showed 20% conversion')
+      expect(research!.recommendations).toBe('Focus on digital channels')
+    })
+  })
+
+  describe('getCampaignStrategy', () => {
+    it('exports getCampaignStrategy query', async () => {
+      expect(api.workflows.campaign_approval.api.getCampaignStrategy).toBeDefined()
+    })
+
+    it('returns null when no strategy exists', async () => {
+      const t = setup()
+      await setupCampaignApprovalAuthorization(t)
+      const { userId } = await setupAuthenticatedCampaignUser(t)
+
+      // Create a campaign first
+      const { campaignId } = await t.run(async (ctx) => {
+        const now = Date.now()
+        // Create workflow
+        const workflowId = await ctx.db.insert('tasquencerWorkflows', {
+          name: 'campaign_approval',
+          path: ['campaign_approval'],
+          versionName: 'v1',
+          executionMode: 'normal',
+          realizedPath: ['campaign_approval'],
+          state: 'initialized',
+        })
+        const campaignId = await ctx.db.insert('campaigns', {
+          workflowId,
+          name: 'Test Campaign',
+          objective: 'Test objective',
+          targetAudience: 'Test audience',
+          keyMessages: ['Message 1'],
+          channels: ['email'],
+          proposedStartDate: now + 7 * 24 * 60 * 60 * 1000,
+          proposedEndDate: now + 30 * 24 * 60 * 60 * 1000,
+          estimatedBudget: 50000,
+          requesterId: userId as any,
+          status: 'strategy',
+          createdAt: now,
+          updatedAt: now,
+        })
+        return { campaignId }
+      })
+
+      const strategy = await t.query(api.workflows.campaign_approval.api.getCampaignStrategy, {
+        campaignId,
+      })
+
+      expect(strategy).toBeNull()
+    })
+
+    it('returns strategy data when it exists', async () => {
+      const t = setup()
+      await setupCampaignApprovalAuthorization(t)
+      const { userId } = await setupAuthenticatedCampaignUser(t)
+
+      // Create a campaign and strategy
+      const { campaignId } = await t.run(async (ctx) => {
+        const now = Date.now()
+        // Create workflow
+        const workflowId = await ctx.db.insert('tasquencerWorkflows', {
+          name: 'campaign_approval',
+          path: ['campaign_approval'],
+          versionName: 'v1',
+          executionMode: 'normal',
+          realizedPath: ['campaign_approval'],
+          state: 'initialized',
+        })
+        const campaignId = await ctx.db.insert('campaigns', {
+          workflowId,
+          name: 'Test Campaign',
+          objective: 'Test objective',
+          targetAudience: 'Test audience',
+          keyMessages: ['Message 1'],
+          channels: ['email'],
+          proposedStartDate: now + 7 * 24 * 60 * 60 * 1000,
+          proposedEndDate: now + 30 * 24 * 60 * 60 * 1000,
+          estimatedBudget: 50000,
+          requesterId: userId as any,
+          status: 'strategy',
+          createdAt: now,
+          updatedAt: now,
+        })
+        await ctx.db.insert('campaignStrategy', {
+          campaignId,
+          channelStrategy: 'Multi-channel approach with email as primary',
+          creativeApproach: 'Modern, minimalist design with bold typography',
+          customerJourney: 'Awareness -> Consideration -> Conversion -> Retention',
+          segmentation: 'Segment by industry and company size',
+          tactics: [
+            { name: 'Email nurture', description: 'Weekly newsletter', channel: 'email' },
+            { name: 'Social ads', description: 'Targeted LinkedIn ads', channel: 'paid_ads' },
+          ],
+          createdBy: userId as any,
+          createdAt: now,
+          updatedAt: now,
+        })
+        return { campaignId }
+      })
+
+      const strategy = await t.query(api.workflows.campaign_approval.api.getCampaignStrategy, {
+        campaignId,
+      })
+
+      expect(strategy).not.toBeNull()
+      expect(strategy!.channelStrategy).toBe('Multi-channel approach with email as primary')
+      expect(strategy!.creativeApproach).toBe('Modern, minimalist design with bold typography')
+      expect(strategy!.customerJourney).toBe('Awareness -> Consideration -> Conversion -> Retention')
+      expect(strategy!.tactics).toHaveLength(2)
+      expect(strategy!.tactics![0].name).toBe('Email nurture')
+    })
+  })
 })

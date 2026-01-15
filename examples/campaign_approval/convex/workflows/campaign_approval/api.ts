@@ -17,6 +17,8 @@ import {
   listApprovalsByCampaignId,
   listNotificationsByUserId,
   markNotificationAsRead,
+  getCampaignResearchByCampaignId,
+  getCampaignStrategyByCampaignId,
   type CampaignStatus,
 } from './db'
 import { CampaignWorkItemHelpers } from './helpers'
@@ -448,6 +450,42 @@ export const getCampaignKPIs = query({
   handler: async (ctx, args) => {
     await assertUserHasScope(ctx, 'campaign:read')
     return await listKPIsByCampaignId(ctx.db, args.campaignId)
+  },
+})
+
+// ============================================================================
+// Research & Strategy Query Endpoints
+// ============================================================================
+
+/**
+ * Get research findings for a campaign
+ *
+ * Returns the market research data including audience analysis,
+ * competitive landscape, historical insights, and recommendations.
+ */
+export const getCampaignResearch = query({
+  args: {
+    campaignId: v.id('campaigns'),
+  },
+  handler: async (ctx, args) => {
+    await assertUserHasScope(ctx, 'campaign:read')
+    return await getCampaignResearchByCampaignId(ctx.db, args.campaignId)
+  },
+})
+
+/**
+ * Get strategy document for a campaign
+ *
+ * Returns the campaign strategy including channel strategy,
+ * creative approach, customer journey, and tactics.
+ */
+export const getCampaignStrategy = query({
+  args: {
+    campaignId: v.id('campaigns'),
+  },
+  handler: async (ctx, args) => {
+    await assertUserHasScope(ctx, 'campaign:read')
+    return await getCampaignStrategyByCampaignId(ctx.db, args.campaignId)
   },
 })
 

@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useMemo, useState } from 'react'
-import { useMutation, useSuspenseQuery } from '@tanstack/react-query'
+import { useMutation, useSuspenseQuery, useQuery } from '@tanstack/react-query'
 import { useConvexMutation, convexQuery } from '@convex-dev/react-query'
 import { api } from '@/convex/_generated/api'
 import type { Doc, Id } from '@/convex/_generated/dataModel'
@@ -33,6 +33,13 @@ import {
   Clock,
   Play,
   History,
+  Search,
+  Compass,
+  FileText,
+  Milestone,
+  ChevronDown,
+  ChevronUp,
+  AlertCircle,
 } from 'lucide-react'
 import { Route as ParentRoute } from './$campaignId'
 
@@ -88,6 +95,10 @@ function CampaignDetailIndex() {
   const { campaignId } = Route.useParams()
   const { campaignData } = ParentRoute.useLoaderData()
   const [cancelError, setCancelError] = useState<string | null>(null)
+  const [showResearch, setShowResearch] = useState(false)
+  const [showStrategy, setShowStrategy] = useState(false)
+  const [showTimeline, setShowTimeline] = useState(false)
+  const [showActivity, setShowActivity] = useState(false)
 
   // Fetch active work items for this campaign
   const { data: activeWorkItems } = useSuspenseQuery(
@@ -95,6 +106,38 @@ function CampaignDetailIndex() {
       campaignId: campaignId as Id<'campaigns'>,
     }),
   )
+
+  // Fetch research data (lazy - only when expanded)
+  const { data: research, isLoading: loadingResearch } = useQuery({
+    ...convexQuery(api.workflows.campaign_approval.api.getCampaignResearch, {
+      campaignId: campaignId as Id<'campaigns'>,
+    }),
+    enabled: showResearch,
+  })
+
+  // Fetch strategy data (lazy - only when expanded)
+  const { data: strategy, isLoading: loadingStrategy } = useQuery({
+    ...convexQuery(api.workflows.campaign_approval.api.getCampaignStrategy, {
+      campaignId: campaignId as Id<'campaigns'>,
+    }),
+    enabled: showStrategy,
+  })
+
+  // Fetch timeline milestones (lazy - only when expanded)
+  const { data: timeline, isLoading: loadingTimeline } = useQuery({
+    ...convexQuery(api.workflows.campaign_approval.api.getCampaignTimeline, {
+      campaignId: campaignId as Id<'campaigns'>,
+    }),
+    enabled: showTimeline,
+  })
+
+  // Fetch activity/approvals (lazy - only when expanded)
+  const { data: activity, isLoading: loadingActivity } = useQuery({
+    ...convexQuery(api.workflows.campaign_approval.api.getCampaignActivity, {
+      campaignId: campaignId as Id<'campaigns'>,
+    }),
+    enabled: showActivity,
+  })
 
   const cancelMutation = useMutation({
     mutationFn: useConvexMutation(
@@ -341,6 +384,308 @@ function CampaignDetailIndex() {
           </CardContent>
         </Card>
       )}
+
+      {/* Expandable Phase Data Sections */}
+      <div className="space-y-3">
+        {/* Research Section (Phase 2) */}
+        <Card>
+          <button
+            type="button"
+            className="w-full"
+            onClick={() => setShowResearch(!showResearch)}
+          >
+            <CardHeader className="pb-3 cursor-pointer hover:bg-muted/50 transition-colors">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Search className="h-4 w-4 text-blue-500" />
+                  <CardTitle className="text-base">Research Findings</CardTitle>
+                </div>
+                {showResearch ? (
+                  <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                )}
+              </div>
+              <CardDescription className="text-left">
+                Market research, audience analysis, and competitive insights
+              </CardDescription>
+            </CardHeader>
+          </button>
+          {showResearch && (
+            <CardContent className="pt-0">
+              {loadingResearch ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading research data...
+                </div>
+              ) : research ? (
+                <div className="space-y-4">
+                  <div>
+                    <h4 className="text-sm font-medium mb-1">Audience Analysis</h4>
+                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                      {research.audienceAnalysis || 'Not yet completed'}
+                    </p>
+                  </div>
+                  <Separator />
+                  <div>
+                    <h4 className="text-sm font-medium mb-1">Competitive Landscape</h4>
+                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                      {research.competitiveLandscape || 'Not yet completed'}
+                    </p>
+                  </div>
+                  <Separator />
+                  <div>
+                    <h4 className="text-sm font-medium mb-1">Historical Insights</h4>
+                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                      {research.historicalInsights || 'Not yet completed'}
+                    </p>
+                  </div>
+                  {research.recommendations && (
+                    <>
+                      <Separator />
+                      <div>
+                        <h4 className="text-sm font-medium mb-1">Recommendations</h4>
+                        <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                          {research.recommendations}
+                        </p>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <AlertCircle className="h-4 w-4" />
+                  No research data available yet. Research will be added during the Strategy phase.
+                </div>
+              )}
+            </CardContent>
+          )}
+        </Card>
+
+        {/* Strategy Section (Phase 2) */}
+        <Card>
+          <button
+            type="button"
+            className="w-full"
+            onClick={() => setShowStrategy(!showStrategy)}
+          >
+            <CardHeader className="pb-3 cursor-pointer hover:bg-muted/50 transition-colors">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Compass className="h-4 w-4 text-purple-500" />
+                  <CardTitle className="text-base">Campaign Strategy</CardTitle>
+                </div>
+                {showStrategy ? (
+                  <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                )}
+              </div>
+              <CardDescription className="text-left">
+                Channel strategy, creative approach, and customer journey
+              </CardDescription>
+            </CardHeader>
+          </button>
+          {showStrategy && (
+            <CardContent className="pt-0">
+              {loadingStrategy ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading strategy data...
+                </div>
+              ) : strategy ? (
+                <div className="space-y-4">
+                  <div>
+                    <h4 className="text-sm font-medium mb-1">Channel Strategy</h4>
+                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                      {strategy.channelStrategy || 'Not yet defined'}
+                    </p>
+                  </div>
+                  <Separator />
+                  <div>
+                    <h4 className="text-sm font-medium mb-1">Creative Approach</h4>
+                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                      {strategy.creativeApproach || 'Not yet defined'}
+                    </p>
+                  </div>
+                  <Separator />
+                  <div>
+                    <h4 className="text-sm font-medium mb-1">Customer Journey</h4>
+                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                      {strategy.customerJourney || 'Not yet defined'}
+                    </p>
+                  </div>
+                  {strategy.tactics && strategy.tactics.length > 0 && (
+                    <>
+                      <Separator />
+                      <div>
+                        <h4 className="text-sm font-medium mb-2">Key Tactics</h4>
+                        <div className="space-y-2">
+                          {strategy.tactics.map((tactic: { name: string; description?: string; channel?: string }, i: number) => (
+                            <div key={i} className="rounded-lg border p-2 bg-muted/30">
+                              <p className="text-sm font-medium">{tactic.name}</p>
+                              {tactic.description && (
+                                <p className="text-xs text-muted-foreground">{tactic.description}</p>
+                              )}
+                              {tactic.channel && (
+                                <Badge variant="outline" className="mt-1 text-[10px]">
+                                  {tactic.channel}
+                                </Badge>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <AlertCircle className="h-4 w-4" />
+                  No strategy data available yet. Strategy will be developed during the Strategy phase.
+                </div>
+              )}
+            </CardContent>
+          )}
+        </Card>
+
+        {/* Timeline/Milestones Section */}
+        <Card>
+          <button
+            type="button"
+            className="w-full"
+            onClick={() => setShowTimeline(!showTimeline)}
+          >
+            <CardHeader className="pb-3 cursor-pointer hover:bg-muted/50 transition-colors">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Milestone className="h-4 w-4 text-emerald-500" />
+                  <CardTitle className="text-base">Milestones</CardTitle>
+                </div>
+                {showTimeline ? (
+                  <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                )}
+              </div>
+              <CardDescription className="text-left">
+                Campaign milestones and target dates
+              </CardDescription>
+            </CardHeader>
+          </button>
+          {showTimeline && (
+            <CardContent className="pt-0">
+              {loadingTimeline ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading timeline data...
+                </div>
+              ) : timeline && timeline.milestones && timeline.milestones.length > 0 ? (
+                <div className="space-y-2">
+                  {timeline.milestones.map((milestone: { _id: string; name: string; targetDate: number; actualDate?: number | null; status: string; notes?: string | null }) => (
+                    <div
+                      key={milestone._id}
+                      className="flex items-start justify-between rounded-lg border p-3"
+                    >
+                      <div className="flex items-start gap-3">
+                        <MilestoneStatusIcon status={milestone.status} />
+                        <div>
+                          <p className="text-sm font-medium">{milestone.name}</p>
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <span>Target: {new Date(milestone.targetDate).toLocaleDateString()}</span>
+                            {milestone.actualDate && (
+                              <span className="text-emerald-600">
+                                • Completed: {new Date(milestone.actualDate).toLocaleDateString()}
+                              </span>
+                            )}
+                          </div>
+                          {milestone.notes && (
+                            <p className="text-xs text-muted-foreground mt-1">{milestone.notes}</p>
+                          )}
+                        </div>
+                      </div>
+                      <MilestoneStatusBadge status={milestone.status} />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <AlertCircle className="h-4 w-4" />
+                  No milestones defined yet. Milestones will be created during the Planning phase.
+                </div>
+              )}
+            </CardContent>
+          )}
+        </Card>
+
+        {/* Activity/Approvals Section */}
+        <Card>
+          <button
+            type="button"
+            className="w-full"
+            onClick={() => setShowActivity(!showActivity)}
+          >
+            <CardHeader className="pb-3 cursor-pointer hover:bg-muted/50 transition-colors">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-amber-500" />
+                  <CardTitle className="text-base">Approval History</CardTitle>
+                </div>
+                {showActivity ? (
+                  <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                )}
+              </div>
+              <CardDescription className="text-left">
+                Audit trail of approval decisions
+              </CardDescription>
+            </CardHeader>
+          </button>
+          {showActivity && (
+            <CardContent className="pt-0">
+              {loadingActivity ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading activity data...
+                </div>
+              ) : activity && activity.activities && activity.activities.length > 0 ? (
+                <div className="space-y-2">
+                  {activity.activities.map((item: { _id: string; approvalType: string; decision: string; timestamp: number; comments?: string | null }) => (
+                    <div
+                      key={item._id}
+                      className="flex items-start justify-between rounded-lg border p-3"
+                    >
+                      <div className="flex items-start gap-3">
+                        <ApprovalDecisionIcon decision={item.decision} />
+                        <div>
+                          <p className="text-sm font-medium capitalize">
+                            {item.approvalType.replace(/_/g, ' ')} Review
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {new Date(item.timestamp).toLocaleString()}
+                          </p>
+                          {item.comments && (
+                            <p className="text-xs text-muted-foreground mt-1 italic">
+                              "{item.comments}"
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <ApprovalDecisionBadge decision={item.decision} />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <AlertCircle className="h-4 w-4" />
+                  No approval decisions recorded yet.
+                </div>
+              )}
+            </CardContent>
+          )}
+        </Card>
+      </div>
 
       {/* Active Tasks Section */}
       <Card>
@@ -591,5 +936,62 @@ function PhaseIcon({ status }: { status: string }) {
     <div className="flex h-6 w-6 items-center justify-center rounded-full bg-muted text-muted-foreground">
       <Circle className="h-4 w-4" />
     </div>
+  )
+}
+
+// Milestone status helper components
+function MilestoneStatusIcon({ status }: { status: string }) {
+  if (status === 'completed') {
+    return <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
+  }
+  if (status === 'in_progress') {
+    return <CircleDot className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
+  }
+  if (status === 'delayed') {
+    return <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+  }
+  return <Circle className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+}
+
+function MilestoneStatusBadge({ status }: { status: string }) {
+  const variants: Record<string, string> = {
+    pending: 'border-gray-500/30 text-gray-600 dark:text-gray-400 bg-gray-500/5',
+    in_progress: 'border-blue-500/30 text-blue-600 dark:text-blue-400 bg-blue-500/5',
+    completed: 'border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-500/5',
+    delayed: 'border-amber-500/30 text-amber-600 dark:text-amber-400 bg-amber-500/5',
+  }
+
+  return (
+    <Badge variant="outline" className={`text-[10px] ${variants[status] || variants.pending}`}>
+      {status.replace(/_/g, ' ')}
+    </Badge>
+  )
+}
+
+// Approval decision helper components
+function ApprovalDecisionIcon({ decision }: { decision: string }) {
+  if (decision === 'approved') {
+    return <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
+  }
+  if (decision === 'rejected') {
+    return <Ban className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
+  }
+  if (decision === 'changes_requested') {
+    return <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+  }
+  return <Circle className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+}
+
+function ApprovalDecisionBadge({ decision }: { decision: string }) {
+  const variants: Record<string, string> = {
+    approved: 'border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-500/5',
+    rejected: 'border-red-500/30 text-red-600 dark:text-red-400 bg-red-500/5',
+    changes_requested: 'border-amber-500/30 text-amber-600 dark:text-amber-400 bg-amber-500/5',
+  }
+
+  return (
+    <Badge variant="outline" className={`text-[10px] ${variants[decision] || ''}`}>
+      {decision.replace(/_/g, ' ')}
+    </Badge>
   )
 }
