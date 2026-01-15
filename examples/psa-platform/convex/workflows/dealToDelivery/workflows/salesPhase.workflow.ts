@@ -9,6 +9,7 @@ import { negotiateTermsTask } from '../workItems/negotiateTerms.workItem'
 import { reviseProposalTask } from '../workItems/reviseProposal.workItem'
 import { getProposalSignedTask } from '../workItems/getProposalSigned.workItem'
 import { archiveDealTask } from '../workItems/archiveDeal.workItem'
+import { getDealByWorkflowId } from '../db'
 const completeSalesTask = Builder.dummyTask()
 export const salesPhaseWorkflow = Builder.workflow('salesPhase')
   .startCondition('start')
@@ -30,10 +31,19 @@ export const salesPhaseWorkflow = Builder.workflow('salesPhase')
     to
       .task('createEstimate')
       .task('disqualifyLead')
-      .route(async ({ route }) => {
-      const routes = [route.toTask('createEstimate'), route.toTask('disqualifyLead')]
-      return routes[Math.floor(Math.random() * routes.length)]!
-    })
+      .route(async ({ mutationCtx, parent, route }) => {
+        // Get deal state to determine routing based on qualification outcome
+        const deal = await getDealByWorkflowId(mutationCtx.db, parent.workflow.id)
+        if (!deal) {
+          throw new Error('Deal not found for workflow')
+        }
+
+        // Route based on deal stage set by qualifyLead completion
+        // Qualified → createEstimate, Disqualified → disqualifyLead
+        return deal.stage === 'Qualified'
+          ? route.toTask('createEstimate')
+          : route.toTask('disqualifyLead')
+      })
   )
   .connectTask('disqualifyLead', (to) => to.task('archiveDeal'))
   .connectTask('createEstimate', (to) => to.task('createProposal'))
@@ -44,20 +54,44 @@ export const salesPhaseWorkflow = Builder.workflow('salesPhase')
       .task('getProposalSigned')
       .task('reviseProposal')
       .task('archiveDeal')
-      .route(async ({ route }) => {
-      const routes = [route.toTask('getProposalSigned'), route.toTask('reviseProposal'), route.toTask('archiveDeal')]
-      return routes[Math.floor(Math.random() * routes.length)]!
-    })
+      .route(async ({ mutationCtx, parent, route }) => {
+        // Get deal state to determine routing based on negotiation outcome
+        const deal = await getDealByWorkflowId(mutationCtx.db, parent.workflow.id)
+        if (!deal) {
+          throw new Error('Deal not found for workflow')
+        }
+
+        // Route based on negotiation outcome stored in deal state:
+        // - Lost: probability = 0 AND lostReason set → archiveDeal
+        // - Accepted: probability = 75 → getProposalSigned
+        // - Revision: probability unchanged (typically 50) → reviseProposal
+        if (deal.probability === 0 && deal.lostReason) {
+          return route.toTask('archiveDeal')
+        } else if (deal.probability >= 75) {
+          return route.toTask('getProposalSigned')
+        } else {
+          return route.toTask('reviseProposal')
+        }
+      })
   )
   .connectTask('reviseProposal', (to) => to.task('sendProposal'))
   .connectTask('getProposalSigned', (to) =>
     to
       .task('completeSales')
       .task('archiveDeal')
-      .route(async ({ route }) => {
-      const routes = [route.toTask('completeSales'), route.toTask('archiveDeal')]
-      return routes[Math.floor(Math.random() * routes.length)]!
-    })
+      .route(async ({ mutationCtx, parent, route }) => {
+        // Get deal state to determine routing based on signature outcome
+        const deal = await getDealByWorkflowId(mutationCtx.db, parent.workflow.id)
+        if (!deal) {
+          throw new Error('Deal not found for workflow')
+        }
+
+        // Route based on deal stage set by getProposalSigned completion
+        // Won → completeSales, Lost → archiveDeal
+        return deal.stage === 'Won'
+          ? route.toTask('completeSales')
+          : route.toTask('archiveDeal')
+      })
   )
   .connectTask('archiveDeal', (to) => to.condition('end'))
   .connectTask('completeSales', (to) => to.condition('end'))

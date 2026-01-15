@@ -8,6 +8,7 @@ import {
   getProjectByWorkflowId,
   getTask,
   updateTask,
+  listTasksByProject,
 } from '../db'
 import { initializeHumanWorkItemAuth } from './authHelpers'
 import { DealToDeliveryWorkItemHelpers } from '../helpers'
@@ -79,6 +80,24 @@ const completeTaskActions = authService.builders.workItemActions
       const newStatus = payload.moveToReview ? 'Review' : 'Done'
       await updateTask(mutationCtx.db, taskId, {
         status: newStatus,
+      })
+
+      // Check if there are more tasks to execute
+      const allTasks = await listTasksByProject(mutationCtx.db, task.projectId)
+      const pendingTasks = allTasks.filter(
+        (t) => t.status === 'Todo' || t.status === 'InProgress'
+      )
+      const hasMoreTasks = pendingTasks.length > 0
+
+      // Store the routing decision in metadata
+      // Note: must use explicit object to satisfy discriminated union type
+      await mutationCtx.db.patch(metadata._id, {
+        payload: {
+          type: 'completeTask' as const,
+          taskName: metadata.payload.taskName,
+          taskId: taskId,
+          hasMoreTasks,
+        },
       })
     },
   )

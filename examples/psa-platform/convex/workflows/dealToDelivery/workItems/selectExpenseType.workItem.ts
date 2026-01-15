@@ -61,11 +61,9 @@ const selectExpenseTypeActions = authService.builders.workItemActions
           taskName: 'Select Expense Type',
           userId: userId as Id<'users'>,
           projectId: payload.projectId as Id<'projects'>,
+          expenseType: payload.expenseType, // Store the selected type for routing
         },
       })
-
-      // Store selected expense type for workflow routing decision
-      // This will be read by the route function in the workflow
     },
   )
 

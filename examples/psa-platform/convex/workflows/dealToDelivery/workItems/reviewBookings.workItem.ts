@@ -95,9 +95,20 @@ const reviewBookingsActions = authService.builders.workItemActions
         console.warn('Booking conflicts detected:', conflicts)
       }
 
-      // The routing decision will be based on payload.approved
+      // Store the routing decision in the work item metadata
       // If not approved, workflow routes back to filterBySkillsRole
       // If approved, workflow proceeds to checkConfirmationNeeded
+      // Note: must use explicit object to satisfy discriminated union type
+      await mutationCtx.db.patch(metadata._id, {
+        payload: {
+          type: 'reviewBookings' as const,
+          taskName: metadata.payload.taskName,
+          projectId: project._id,
+          approved: _payload.approved,
+          hasConflicts: conflicts.length > 0,
+          reviewedAt: Date.now(),
+        },
+      })
     },
   )
 

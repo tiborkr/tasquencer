@@ -505,7 +505,15 @@ const workItemPayloadType = v.union(
   v.object({ type: v.literal('filterBySkillsRole'), taskName: v.string(), projectId: v.id('projects') }),
   v.object({ type: v.literal('recordPlannedTimeOff'), taskName: v.string(), userId: v.id('users') }),
   v.object({ type: v.literal('createBookings'), taskName: v.string(), projectId: v.id('projects') }),
-  v.object({ type: v.literal('reviewBookings'), taskName: v.string(), projectId: v.id('projects') }),
+  v.object({
+    type: v.literal('reviewBookings'),
+    taskName: v.string(),
+    projectId: v.id('projects'),
+    // Runtime fields set during workflow execution
+    approved: v.optional(v.boolean()), // true = proceed, false = revise
+    hasConflicts: v.optional(v.boolean()),
+    reviewedAt: v.optional(v.number()),
+  }),
   v.object({ type: v.literal('checkConfirmationNeeded'), taskName: v.string(), projectId: v.id('projects') }),
   v.object({ type: v.literal('confirmBookings'), taskName: v.string(), projectId: v.id('projects') }),
 
@@ -519,16 +527,40 @@ const workItemPayloadType = v.union(
   // Sequential/Parallel/Conditional Execution (9)
   v.object({ type: v.literal('getNextTask'), taskName: v.string(), projectId: v.id('projects') }),
   v.object({ type: v.literal('executeTask'), taskName: v.string(), taskId: v.id('tasks') }),
-  v.object({ type: v.literal('completeTask'), taskName: v.string(), taskId: v.id('tasks') }),
+  v.object({
+    type: v.literal('completeTask'),
+    taskName: v.string(),
+    taskId: v.id('tasks'),
+    // Runtime field - whether there are more tasks to execute
+    hasMoreTasks: v.optional(v.boolean()),
+  }),
   v.object({ type: v.literal('initParallelTasks'), taskName: v.string(), projectId: v.id('projects') }),
   v.object({ type: v.literal('executeParallelTask'), taskName: v.string(), taskId: v.id('tasks') }),
   v.object({ type: v.literal('syncParallelTasks'), taskName: v.string(), projectId: v.id('projects') }),
-  v.object({ type: v.literal('evaluateCondition'), taskName: v.string(), projectId: v.id('projects') }),
+  v.object({
+    type: v.literal('evaluateCondition'),
+    taskName: v.string(),
+    projectId: v.id('projects'),
+    // Runtime field - condition evaluation result (true = primary branch, false = alternate)
+    conditionMet: v.optional(v.boolean()),
+  }),
   v.object({ type: v.literal('executePrimaryBranch'), taskName: v.string(), projectId: v.id('projects') }),
   v.object({ type: v.literal('executeAlternateBranch'), taskName: v.string(), projectId: v.id('projects') }),
 
   // Time Tracking (6)
-  v.object({ type: v.literal('selectEntryMethod'), taskName: v.string(), userId: v.id('users'), projectId: v.id('projects') }),
+  v.object({
+    type: v.literal('selectEntryMethod'),
+    taskName: v.string(),
+    userId: v.id('users'),
+    projectId: v.id('projects'),
+    // Runtime field - selected entry method
+    method: v.optional(v.union(
+      v.literal('timer'),
+      v.literal('manual'),
+      v.literal('calendar'),
+      v.literal('autoBooking')
+    )),
+  }),
   v.object({ type: v.literal('useTimer'), taskName: v.string(), userId: v.id('users'), projectId: v.id('projects') }),
   v.object({ type: v.literal('manualEntry'), taskName: v.string(), userId: v.id('users'), projectId: v.id('projects') }),
   v.object({ type: v.literal('importFromCalendar'), taskName: v.string(), userId: v.id('users'), projectId: v.id('projects') }),
@@ -536,14 +568,33 @@ const workItemPayloadType = v.union(
   v.object({ type: v.literal('submitTimeEntry'), taskName: v.string(), timeEntryId: v.id('timeEntries') }),
 
   // Expense Tracking (10)
-  v.object({ type: v.literal('selectExpenseType'), taskName: v.string(), userId: v.id('users'), projectId: v.id('projects') }),
+  v.object({
+    type: v.literal('selectExpenseType'),
+    taskName: v.string(),
+    userId: v.id('users'),
+    projectId: v.id('projects'),
+    // Runtime field - selected expense type
+    expenseType: v.optional(v.union(
+      v.literal('Software'),
+      v.literal('Travel'),
+      v.literal('Materials'),
+      v.literal('Subcontractor'),
+      v.literal('Other')
+    )),
+  }),
   v.object({ type: v.literal('logSoftwareExpense'), taskName: v.string(), userId: v.id('users'), projectId: v.id('projects') }),
   v.object({ type: v.literal('logTravelExpense'), taskName: v.string(), userId: v.id('users'), projectId: v.id('projects') }),
   v.object({ type: v.literal('logMaterialsExpense'), taskName: v.string(), userId: v.id('users'), projectId: v.id('projects') }),
   v.object({ type: v.literal('logSubcontractorExpense'), taskName: v.string(), userId: v.id('users'), projectId: v.id('projects') }),
   v.object({ type: v.literal('logOtherExpense'), taskName: v.string(), userId: v.id('users'), projectId: v.id('projects') }),
   v.object({ type: v.literal('attachReceipt'), taskName: v.string(), expenseId: v.id('expenses') }),
-  v.object({ type: v.literal('markBillable'), taskName: v.string(), expenseId: v.id('expenses') }),
+  v.object({
+    type: v.literal('markBillable'),
+    taskName: v.string(),
+    expenseId: v.id('expenses'),
+    // Runtime field - whether the expense was marked as billable
+    billable: v.optional(v.boolean()),
+  }),
   v.object({ type: v.literal('setBillableRate'), taskName: v.string(), expenseId: v.id('expenses') }),
   v.object({ type: v.literal('submitExpense'), taskName: v.string(), expenseId: v.id('expenses') }),
 

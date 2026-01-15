@@ -6,6 +6,8 @@ import { createBookingsTask } from '../workItems/createBookings.workItem'
 import { reviewBookingsTask } from '../workItems/reviewBookings.workItem'
 import { checkConfirmationNeededTask } from '../workItems/checkConfirmationNeeded.workItem'
 import { confirmBookingsTask } from '../workItems/confirmBookings.workItem'
+import { getProjectByWorkflowId, listBookingsByProject } from '../db'
+import { getLatestWorkItemByTypeAndProject } from '../helpers'
 const completeAllocationTask = Builder.dummyTask()
   .withJoinType('xor')
 export const resourcePlanningWorkflow = Builder.workflow('resourcePlanning')
@@ -28,19 +30,49 @@ export const resourcePlanningWorkflow = Builder.workflow('resourcePlanning')
     to
       .task('filterBySkillsRole')
       .task('checkConfirmationNeeded')
-      .route(async ({ route }) => {
-      const routes = [route.toTask('filterBySkillsRole'), route.toTask('checkConfirmationNeeded')]
-      return routes[Math.floor(Math.random() * routes.length)]!
-    })
+      .route(async ({ mutationCtx, parent, route }) => {
+        // Get project to find the work item decision
+        const project = await getProjectByWorkflowId(mutationCtx.db, parent.workflow.id)
+        if (!project) {
+          throw new Error('Project not found for workflow')
+        }
+
+        // Get the latest reviewBookings work item for this project
+        const reviewWorkItem = await getLatestWorkItemByTypeAndProject(
+          mutationCtx.db,
+          'reviewBookings',
+          project._id
+        )
+
+        // Route based on the review decision stored in the work item metadata
+        // approved = true → proceed to checkConfirmationNeeded
+        // approved = false → go back to filterBySkillsRole (revise)
+        if (reviewWorkItem?.payload.type === 'reviewBookings' && reviewWorkItem.payload.approved === false) {
+          return route.toTask('filterBySkillsRole')
+        }
+        return route.toTask('checkConfirmationNeeded')
+      })
   )
   .connectTask('checkConfirmationNeeded', (to) =>
     to
       .task('confirmBookings')
       .task('completeAllocation')
-      .route(async ({ route }) => {
-      const routes = [route.toTask('confirmBookings'), route.toTask('completeAllocation')]
-      return routes[Math.floor(Math.random() * routes.length)]!
-    })
+      .route(async ({ mutationCtx, parent, route }) => {
+        // Get project and its bookings
+        const project = await getProjectByWorkflowId(mutationCtx.db, parent.workflow.id)
+        if (!project) {
+          throw new Error('Project not found for workflow')
+        }
+
+        const bookings = await listBookingsByProject(mutationCtx.db, project._id)
+
+        // Route based on whether any Tentative bookings need confirmation
+        const hasTentativeBookings = bookings.some((b) => b.type === 'Tentative')
+
+        return hasTentativeBookings
+          ? route.toTask('confirmBookings')
+          : route.toTask('completeAllocation')
+      })
   )
   .connectTask('confirmBookings', (to) => to.task('completeAllocation'))
   .connectTask('completeAllocation', (to) => to.condition('end'))

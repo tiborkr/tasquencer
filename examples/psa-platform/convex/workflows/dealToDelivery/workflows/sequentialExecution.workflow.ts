@@ -2,7 +2,10 @@ import { Builder } from '../../../tasquencer'
 import { getNextTaskTask } from '../workItems/getNextTask.workItem'
 import { executeTaskTask } from '../workItems/executeTask.workItem'
 import { completeTaskTask } from '../workItems/completeTask.workItem'
+import { DealToDeliveryWorkItemHelpers } from '../helpers'
+
 const finishSequenceTask = Builder.dummyTask()
+
 export const sequentialExecutionWorkflow = Builder.workflow('sequentialExecution')
   .startCondition('start')
   .endCondition('end')
@@ -17,9 +20,24 @@ export const sequentialExecutionWorkflow = Builder.workflow('sequentialExecution
     to
       .task('getNextTask')
       .task('finishSequence')
-      .route(async ({ route }) => {
-      const routes = [route.toTask('getNextTask'), route.toTask('finishSequence')]
-      return routes[Math.floor(Math.random() * routes.length)]!
-    })
+      .route(async ({ mutationCtx, workItem, route }) => {
+        // Get the hasMoreTasks flag from the work item metadata
+        const workItemIds = await workItem.getAllWorkItemIds()
+        const workItemId = workItemIds[workItemIds.length - 1]
+        if (!workItemId) {
+          return route.toTask('finishSequence')
+        }
+        const metadata = await DealToDeliveryWorkItemHelpers.getWorkItemMetadata(
+          mutationCtx.db,
+          workItemId
+        )
+
+        // Route based on whether there are more tasks to execute
+        if (metadata?.payload.type === 'completeTask' && metadata.payload.hasMoreTasks === true) {
+          return route.toTask('getNextTask')
+        }
+
+        return route.toTask('finishSequence')
+      })
   )
   .connectTask('finishSequence', (to) => to.condition('end'))

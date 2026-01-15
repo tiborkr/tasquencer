@@ -7,6 +7,11 @@ import { getChangeOrderApprovalTask } from '../workItems/getChangeOrderApproval.
 import { timeTrackingWorkflow } from './timeTracking.workflow'
 import { expenseTrackingWorkflow } from './expenseTracking.workflow'
 import { sequentialExecutionWorkflow } from './sequentialExecution.workflow'
+import {
+  getProjectByWorkflowId,
+  calculateProjectBudgetBurn,
+  listChangeOrdersByProject,
+} from '../db'
 // Note: parallelExecutionWorkflow and conditionalExecutionWorkflow exist but are not used
 // They can be enabled with dynamicCompositeTask when proper version managers are set up
 const finalizeTimeTrackingTask = Builder.dummyTask()
@@ -45,10 +50,23 @@ export const executionPhaseWorkflow = Builder.workflow('executionPhase')
     to
       .task('completeExecution')
       .task('pauseWork')
-      .route(async ({ route }) => {
-      const routes = [route.toTask('completeExecution'), route.toTask('pauseWork')]
-      return routes[Math.floor(Math.random() * routes.length)]!
-    })
+      .route(async ({ mutationCtx, parent, route }) => {
+        // Get project and calculate budget burn
+        const project = await getProjectByWorkflowId(mutationCtx.db, parent.workflow.id)
+        if (!project) {
+          throw new Error('Project not found for workflow')
+        }
+
+        const burnMetrics = await calculateProjectBudgetBurn(mutationCtx.db, project._id)
+
+        // Route based on budget burn rate (90% threshold)
+        // budgetOk (< 90%) → completeExecution
+        // budgetOverrun (>= 90%) → pauseWork
+        const budgetOk = burnMetrics.burnRate < 90
+        return budgetOk
+          ? route.toTask('completeExecution')
+          : route.toTask('pauseWork')
+      })
   )
   .connectTask('pauseWork', (to) => to.task('requestChangeOrder'))
   .connectTask('requestChangeOrder', (to) => to.task('getChangeOrderApproval'))
@@ -56,9 +74,26 @@ export const executionPhaseWorkflow = Builder.workflow('executionPhase')
     to
       .task('monitorBudgetBurn')
       .task('completeExecution')
-      .route(async ({ route }) => {
-      const routes = [route.toTask('monitorBudgetBurn'), route.toTask('completeExecution')]
-      return routes[Math.floor(Math.random() * routes.length)]!
-    })
+      .route(async ({ mutationCtx, parent, route }) => {
+        // Get project and find the most recent change order
+        const project = await getProjectByWorkflowId(mutationCtx.db, parent.workflow.id)
+        if (!project) {
+          throw new Error('Project not found for workflow')
+        }
+
+        const changeOrders = await listChangeOrdersByProject(mutationCtx.db, project._id)
+        // Get the most recently processed change order
+        const latestChangeOrder = changeOrders
+          .filter((co) => co.status !== 'Pending') // Exclude still-pending ones
+          .sort((a, b) => (b.approvedAt ?? 0) - (a.approvedAt ?? 0))[0]
+
+        // Route based on change order approval status
+        // Approved → resume work, go back to monitorBudgetBurn
+        // Rejected → end workflow, go to completeExecution
+        if (latestChangeOrder?.status === 'Approved') {
+          return route.toTask('monitorBudgetBurn')
+        }
+        return route.toTask('completeExecution')
+      })
   )
   .connectTask('completeExecution', (to) => to.condition('end'))

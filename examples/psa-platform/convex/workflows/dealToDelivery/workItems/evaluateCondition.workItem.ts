@@ -76,13 +76,13 @@ const evaluateConditionActions = authService.builders.workItemActions
       invariant(project, 'PROJECT_NOT_FOUND_FOR_WORKFLOW')
 
       // conditionMet determines routing: true = primary branch, false = alternate branch
-      let _conditionMet = false
+      let conditionMet = false
 
       switch (payload.conditionType) {
         case 'budgetThreshold': {
           const threshold = payload.budgetThreshold ?? 90
           const burn = await calculateProjectBudgetBurn(mutationCtx.db, project._id)
-          _conditionMet = burn.burnRate >= threshold
+          conditionMet = burn.burnRate >= threshold
           break
         }
 
@@ -93,29 +93,35 @@ const evaluateConditionActions = authService.builders.workItemActions
           const completionRate = tasks.length > 0
             ? (completedTasks / tasks.length) * 100
             : 0
-          _conditionMet = completionRate >= threshold
+          conditionMet = completionRate >= threshold
           break
         }
 
         case 'milestoneReached': {
           // Placeholder for milestone evaluation
           // Would check if specific milestones are complete
-          _conditionMet = true
+          conditionMet = true
           break
         }
 
         case 'custom': {
           // Custom conditions would be evaluated based on the string
           // This is a placeholder for extensibility
-          _conditionMet = payload.customCondition === 'true'
+          conditionMet = payload.customCondition === 'true'
           break
         }
       }
 
-      // The condition result determines routing in the XOR split
-      // Primary branch is taken if condition is met
-      // Alternate branch is taken if condition is not met
-      void _conditionMet // Used for routing decisions
+      // Store the routing decision in metadata
+      // Note: must use explicit object to satisfy discriminated union type
+      await mutationCtx.db.patch(metadata._id, {
+        payload: {
+          type: 'evaluateCondition' as const,
+          taskName: metadata.payload.taskName,
+          projectId: project._id,
+          conditionMet,
+        },
+      })
     },
   )
 

@@ -68,17 +68,15 @@ const markBillableActions = authService.builders.workItemActions
         billable: payload.billable,
       })
 
-      // Update metadata
+      // Update metadata with the billable decision for routing
       await mutationCtx.db.patch(metadata!._id, {
         payload: {
           type: 'markBillable' as const,
           taskName: 'Mark Billable',
           expenseId: payload.expenseId as Id<'expenses'>,
+          billable: payload.billable, // Store the billable flag for routing
         },
       })
-
-      // The workflow routing will determine whether to go to setBillableRate or submitExpense
-      // based on the billable flag
     },
   )
 

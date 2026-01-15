@@ -62,11 +62,9 @@ const selectEntryMethodActions = authService.builders.workItemActions
           taskName: 'Select Time Entry Method',
           userId: userId as Id<'users'>,
           projectId: payload.projectId as Id<'projects'>,
+          method: payload.method, // Store the selected method for routing
         },
       })
-
-      // Store the method selection in the work item result for workflow routing
-      // The workflow will read this to determine which path to take
     },
   )
 

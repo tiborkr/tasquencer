@@ -8,6 +8,7 @@ import { checkMoreBillingTask } from '../workItems/checkMoreBilling.workItem'
 import { timesheetApprovalWorkflow } from './timesheetApproval.workflow'
 import { expenseApprovalWorkflow } from './expenseApproval.workflow'
 import { invoiceGenerationWorkflow } from './invoiceGeneration.workflow'
+import { DealToDeliveryWorkItemHelpers } from '../helpers'
 const startApprovalsTask = Builder.dummyTask()
 
 const confirmDeliveryTask = Builder.dummyTask()
@@ -39,9 +40,33 @@ export const billingPhaseWorkflow = Builder.workflow('billingPhase')
       .task('sendViaEmail')
       .task('sendViaPdf')
       .task('sendViaPortal')
-      .route(async ({ route }) => {
-      return [route.toTask('sendViaEmail'), route.toTask('sendViaPdf'), route.toTask('sendViaPortal')]
-    })
+      .route(async ({ mutationCtx, workItem, route }) => {
+        // Get the selected delivery method from the work item metadata
+        const workItemIds = await workItem.getAllWorkItemIds()
+        const workItemId = workItemIds[workItemIds.length - 1]
+        if (!workItemId) {
+          return [route.toTask('sendViaEmail')]
+        }
+        const metadata = await DealToDeliveryWorkItemHelpers.getWorkItemMetadata(
+          mutationCtx.db,
+          workItemId
+        )
+
+        // Route based on the selected delivery method
+        if (metadata?.payload.type === 'sendInvoice' && metadata.payload.selectedMethod) {
+          switch (metadata.payload.selectedMethod) {
+            case 'email':
+              return [route.toTask('sendViaEmail')]
+            case 'pdf':
+              return [route.toTask('sendViaPdf')]
+            case 'portal':
+              return [route.toTask('sendViaPortal')]
+          }
+        }
+
+        // Default to email delivery if no method selected
+        return [route.toTask('sendViaEmail')]
+      })
   )
   .connectTask('sendViaEmail', (to) => to.task('confirmDelivery'))
   .connectTask('sendViaPdf', (to) => to.task('confirmDelivery'))
@@ -52,9 +77,24 @@ export const billingPhaseWorkflow = Builder.workflow('billingPhase')
     to
       .task('generateInvoice')
       .task('completeBilling')
-      .route(async ({ route }) => {
-      const routes = [route.toTask('generateInvoice'), route.toTask('completeBilling')]
-      return routes[Math.floor(Math.random() * routes.length)]!
-    })
+      .route(async ({ mutationCtx, workItem, route }) => {
+        // Get the billing check result from the work item metadata
+        const workItemIds = await workItem.getAllWorkItemIds()
+        const workItemId = workItemIds[workItemIds.length - 1]
+        if (!workItemId) {
+          return route.toTask('completeBilling')
+        }
+        const metadata = await DealToDeliveryWorkItemHelpers.getWorkItemMetadata(
+          mutationCtx.db,
+          workItemId
+        )
+
+        // Route based on whether more billing cycles are needed
+        if (metadata?.payload.type === 'checkMoreBilling' && metadata.payload.moreBillingCycles === true) {
+          return route.toTask('generateInvoice')
+        }
+
+        return route.toTask('completeBilling')
+      })
   )
   .connectTask('completeBilling', (to) => to.condition('end'))
