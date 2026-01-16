@@ -13,8 +13,10 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppHomepageRouteImport } from './routes/_app/homepage'
+import { Route as AppDealsRouteImport } from './routes/_app/deals'
 import { Route as AppAuditRouteImport } from './routes/_app/audit'
 import { Route as AppAdminRouteImport } from './routes/_app/admin'
+import { Route as AppDealsIndexRouteImport } from './routes/_app/deals/index'
 import { Route as AppAuditIndexRouteImport } from './routes/_app/audit/index'
 import { Route as AppAdminIndexRouteImport } from './routes/_app/admin/index'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
@@ -50,6 +52,11 @@ const AppHomepageRoute = AppHomepageRouteImport.update({
   path: '/homepage',
   getParentRoute: () => AppRoute,
 } as any)
+const AppDealsRoute = AppDealsRouteImport.update({
+  id: '/deals',
+  path: '/deals',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppAuditRoute = AppAuditRouteImport.update({
   id: '/audit',
   path: '/audit',
@@ -59,6 +66,11 @@ const AppAdminRoute = AppAdminRouteImport.update({
   id: '/admin',
   path: '/admin',
   getParentRoute: () => AppRoute,
+} as any)
+const AppDealsIndexRoute = AppDealsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppDealsRoute,
 } as any)
 const AppAuditIndexRoute = AppAuditIndexRouteImport.update({
   id: '/',
@@ -143,6 +155,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/admin': typeof AppAdminRouteWithChildren
   '/audit': typeof AppAuditRouteWithChildren
+  '/deals': typeof AppDealsRouteWithChildren
   '/homepage': typeof AppHomepageRoute
   '/admin/groups': typeof AppAdminGroupsRouteWithChildren
   '/admin/roles': typeof AppAdminRolesRouteWithChildren
@@ -151,6 +164,7 @@ export interface FileRoutesByFullPath {
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/admin/': typeof AppAdminIndexRoute
   '/audit/': typeof AppAuditIndexRoute
+  '/deals/': typeof AppDealsIndexRoute
   '/admin/groups/$groupId': typeof AppAdminGroupsGroupIdRoute
   '/admin/roles/$roleId': typeof AppAdminRolesRoleIdRoute
   '/audit/$traceId/visualizer': typeof AppAuditTraceIdVisualizerRoute
@@ -167,6 +181,7 @@ export interface FileRoutesByTo {
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/admin': typeof AppAdminIndexRoute
   '/audit': typeof AppAuditIndexRoute
+  '/deals': typeof AppDealsIndexRoute
   '/admin/groups/$groupId': typeof AppAdminGroupsGroupIdRoute
   '/admin/roles/$roleId': typeof AppAdminRolesRoleIdRoute
   '/audit/$traceId/visualizer': typeof AppAuditTraceIdVisualizerRoute
@@ -183,6 +198,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/_app/admin': typeof AppAdminRouteWithChildren
   '/_app/audit': typeof AppAuditRouteWithChildren
+  '/_app/deals': typeof AppDealsRouteWithChildren
   '/_app/homepage': typeof AppHomepageRoute
   '/_app/admin/groups': typeof AppAdminGroupsRouteWithChildren
   '/_app/admin/roles': typeof AppAdminRolesRouteWithChildren
@@ -191,6 +207,7 @@ export interface FileRoutesById {
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/_app/admin/': typeof AppAdminIndexRoute
   '/_app/audit/': typeof AppAuditIndexRoute
+  '/_app/deals/': typeof AppDealsIndexRoute
   '/_app/admin/groups/$groupId': typeof AppAdminGroupsGroupIdRoute
   '/_app/admin/roles/$roleId': typeof AppAdminRolesRoleIdRoute
   '/_app/audit/$traceId/visualizer': typeof AppAuditTraceIdVisualizerRoute
@@ -207,6 +224,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/admin'
     | '/audit'
+    | '/deals'
     | '/homepage'
     | '/admin/groups'
     | '/admin/roles'
@@ -215,6 +233,7 @@ export interface FileRouteTypes {
     | '/api/auth/$'
     | '/admin/'
     | '/audit/'
+    | '/deals/'
     | '/admin/groups/$groupId'
     | '/admin/roles/$roleId'
     | '/audit/$traceId/visualizer'
@@ -231,6 +250,7 @@ export interface FileRouteTypes {
     | '/api/auth/$'
     | '/admin'
     | '/audit'
+    | '/deals'
     | '/admin/groups/$groupId'
     | '/admin/roles/$roleId'
     | '/audit/$traceId/visualizer'
@@ -246,6 +266,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/_app/admin'
     | '/_app/audit'
+    | '/_app/deals'
     | '/_app/homepage'
     | '/_app/admin/groups'
     | '/_app/admin/roles'
@@ -254,6 +275,7 @@ export interface FileRouteTypes {
     | '/api/auth/$'
     | '/_app/admin/'
     | '/_app/audit/'
+    | '/_app/deals/'
     | '/_app/admin/groups/$groupId'
     | '/_app/admin/roles/$roleId'
     | '/_app/audit/$traceId/visualizer'
@@ -301,6 +323,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppHomepageRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/deals': {
+      id: '/_app/deals'
+      path: '/deals'
+      fullPath: '/deals'
+      preLoaderRoute: typeof AppDealsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/audit': {
       id: '/_app/audit'
       path: '/audit'
@@ -314,6 +343,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin'
       preLoaderRoute: typeof AppAdminRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/_app/deals/': {
+      id: '/_app/deals/'
+      path: '/'
+      fullPath: '/deals/'
+      preLoaderRoute: typeof AppDealsIndexRouteImport
+      parentRoute: typeof AppDealsRoute
     }
     '/_app/audit/': {
       id: '/_app/audit/'
@@ -511,15 +547,29 @@ const AppAuditRouteWithChildren = AppAuditRoute._addFileChildren(
   AppAuditRouteChildren,
 )
 
+interface AppDealsRouteChildren {
+  AppDealsIndexRoute: typeof AppDealsIndexRoute
+}
+
+const AppDealsRouteChildren: AppDealsRouteChildren = {
+  AppDealsIndexRoute: AppDealsIndexRoute,
+}
+
+const AppDealsRouteWithChildren = AppDealsRoute._addFileChildren(
+  AppDealsRouteChildren,
+)
+
 interface AppRouteChildren {
   AppAdminRoute: typeof AppAdminRouteWithChildren
   AppAuditRoute: typeof AppAuditRouteWithChildren
+  AppDealsRoute: typeof AppDealsRouteWithChildren
   AppHomepageRoute: typeof AppHomepageRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppAdminRoute: AppAdminRouteWithChildren,
   AppAuditRoute: AppAuditRouteWithChildren,
+  AppDealsRoute: AppDealsRouteWithChildren,
   AppHomepageRoute: AppHomepageRoute,
 }
 
