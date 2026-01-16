@@ -8,6 +8,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setup, type TestContext } from './helpers.test'
 import * as db from '../workflows/dealToDelivery/db'
+import { extractWorkflowStructure } from '@repo/tasquencer'
+import { executionPhaseWorkflow } from '../workflows/dealToDelivery/workflows/executionPhase.workflow'
 
 describe('PSA Platform Execution Phase', () => {
   let t: TestContext
@@ -20,6 +22,17 @@ describe('PSA Platform Execution Phase', () => {
   // ============================================================================
   // TASK MANAGEMENT TESTS
   // ============================================================================
+
+  it('uses a dynamic composite task for executeProjectWork', () => {
+    const structure = extractWorkflowStructure(executionPhaseWorkflow)
+    const executeProjectWork = structure.tasks.find((task) => task.name === 'executeProjectWork')
+    expect(executeProjectWork).toBeDefined()
+    expect(executeProjectWork?.type).toBe('dynamicCompositeTask')
+    if (executeProjectWork?.type !== 'dynamicCompositeTask') return
+    expect(executeProjectWork.childWorkflows.map((w) => w.name).sort()).toEqual(
+      ['conditionalExecution', 'parallelExecution', 'sequentialExecution'].sort(),
+    )
+  })
 
   describe('Task Management', () => {
     it('creates tasks for a project', async () => {

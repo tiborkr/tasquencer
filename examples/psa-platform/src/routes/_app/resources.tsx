@@ -70,11 +70,12 @@ function RouteComponent() {
 
   // Get current user
   const currentUser = useQuery(api.workflows.dealToDelivery.api.getCurrentUser)
+  const organizationId = currentUser?.organizationId
 
   // Get organization users (team members)
   const users = useQuery(
     api.workflows.dealToDelivery.api.getUsers,
-    currentUser?.organizationId ? { organizationId: currentUser.organizationId } : 'skip'
+    organizationId ? { organizationId } : 'skip'
   )
 
   // Get user's projects for booking form
@@ -178,7 +179,42 @@ function RouteComponent() {
     }
   }
 
-  if (currentUser === undefined || users === undefined) {
+  if (currentUser === undefined || (organizationId && users === undefined)) {
+    return (
+      <div className="p-6 lg:p-8">
+        <div className="animate-pulse space-y-6">
+          <div className="h-8 w-48 bg-muted rounded" />
+          <div className="h-64 bg-muted rounded" />
+        </div>
+      </div>
+    )
+  }
+
+  if (!currentUser) {
+    return (
+      <div className="p-6 lg:p-8">
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>Unable to load current user.</AlertDescription>
+        </Alert>
+      </div>
+    )
+  }
+
+  if (!organizationId) {
+    return (
+      <div className="p-6 lg:p-8 space-y-4">
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            Your user record is missing an <code>organizationId</code>, so team members cannot be loaded.
+          </AlertDescription>
+        </Alert>
+      </div>
+    )
+  }
+
+  if (users === undefined) {
     return (
       <div className="p-6 lg:p-8">
         <div className="animate-pulse space-y-6">

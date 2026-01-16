@@ -7,13 +7,14 @@ import { getChangeOrderApprovalTask } from '../workItems/getChangeOrderApproval.
 import { timeTrackingWorkflow } from './timeTracking.workflow'
 import { expenseTrackingWorkflow } from './expenseTracking.workflow'
 import { sequentialExecutionWorkflow } from './sequentialExecution.workflow'
+import { parallelExecutionWorkflow } from './parallelExecution.workflow'
+import { conditionalExecutionWorkflow } from './conditionalExecution.workflow'
 import {
   getProjectByWorkflowId,
   calculateProjectBudgetBurn,
   listChangeOrdersByProject,
 } from '../db'
-// Note: parallelExecutionWorkflow and conditionalExecutionWorkflow exist but are not used
-// They can be enabled with dynamicCompositeTask when proper version managers are set up
+
 const finalizeTimeTrackingTask = Builder.dummyTask()
 
 const finalizeExpenseTrackingTask = Builder.dummyTask()
@@ -27,7 +28,20 @@ export const executionPhaseWorkflow = Builder.workflow('executionPhase')
   .startCondition('start')
   .endCondition('end')
   .task('createAndAssignTasks', createAndAssignTasksTask)
-  .compositeTask('executeProjectWork', Builder.compositeTask(sequentialExecutionWorkflow))
+  .dynamicCompositeTask(
+    'executeProjectWork',
+    Builder.dynamicCompositeTask([
+      sequentialExecutionWorkflow,
+      parallelExecutionWorkflow,
+      conditionalExecutionWorkflow,
+    ]).withActivities({
+      onEnabled: async ({ workflow }) => {
+        const existing = await workflow.getAllWorkflowIds()
+        if (existing.length > 0) return
+        await workflow.initialize.sequentialExecution()
+      },
+    })
+  )
   .compositeTask('trackTime', Builder.compositeTask(timeTrackingWorkflow).withJoinType('xor'))
   .dummyTask('finalizeTimeTracking', finalizeTimeTrackingTask)
   .compositeTask('trackExpenses', Builder.compositeTask(expenseTrackingWorkflow).withJoinType('xor'))
