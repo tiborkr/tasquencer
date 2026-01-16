@@ -33,6 +33,7 @@ import {
   User,
   Loader2,
   ClipboardCheck,
+  FileText,
 } from 'lucide-react'
 
 export const Route = createFileRoute('/_app/deals/')({
@@ -121,6 +122,14 @@ function DealCard({ deal, companies, users }: DealCardProps) {
             <Button size="sm" className="w-full mt-2">
               <ClipboardCheck className="h-4 w-4 mr-2" />
               Qualify Lead
+            </Button>
+          </Link>
+        )}
+        {deal.stage === 'Qualified' && (
+          <Link to="/deals/$dealId/estimate" params={{ dealId: deal._id }}>
+            <Button size="sm" className="w-full mt-2" variant="outline">
+              <FileText className="h-4 w-4 mr-2" />
+              Create Estimate
             </Button>
           </Link>
         )}

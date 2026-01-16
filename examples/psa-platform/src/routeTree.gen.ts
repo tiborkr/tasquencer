@@ -29,6 +29,7 @@ import { Route as AppAdminUsersIndexRouteImport } from './routes/_app/admin/user
 import { Route as AppAdminRolesIndexRouteImport } from './routes/_app/admin/roles.index'
 import { Route as AppAdminGroupsIndexRouteImport } from './routes/_app/admin/groups.index'
 import { Route as AppDealsDealIdQualifyRouteImport } from './routes/_app/deals/$dealId.qualify'
+import { Route as AppDealsDealIdEstimateRouteImport } from './routes/_app/deals/$dealId.estimate'
 import { Route as AppAuditTraceIdVisualizerRouteImport } from './routes/_app/audit/$traceId.visualizer'
 import { Route as AppAdminRolesRoleIdRouteImport } from './routes/_app/admin/roles.$roleId'
 import { Route as AppAdminGroupsGroupIdRouteImport } from './routes/_app/admin/groups.$groupId'
@@ -133,6 +134,11 @@ const AppDealsDealIdQualifyRoute = AppDealsDealIdQualifyRouteImport.update({
   path: '/$dealId/qualify',
   getParentRoute: () => AppDealsRoute,
 } as any)
+const AppDealsDealIdEstimateRoute = AppDealsDealIdEstimateRouteImport.update({
+  id: '/$dealId/estimate',
+  path: '/$dealId/estimate',
+  getParentRoute: () => AppDealsRoute,
+} as any)
 const AppAuditTraceIdVisualizerRoute =
   AppAuditTraceIdVisualizerRouteImport.update({
     id: '/visualizer',
@@ -174,6 +180,7 @@ export interface FileRoutesByFullPath {
   '/admin/groups/$groupId': typeof AppAdminGroupsGroupIdRoute
   '/admin/roles/$roleId': typeof AppAdminRolesRoleIdRoute
   '/audit/$traceId/visualizer': typeof AppAuditTraceIdVisualizerRoute
+  '/deals/$dealId/estimate': typeof AppDealsDealIdEstimateRoute
   '/deals/$dealId/qualify': typeof AppDealsDealIdQualifyRoute
   '/admin/groups/': typeof AppAdminGroupsIndexRoute
   '/admin/roles/': typeof AppAdminRolesIndexRoute
@@ -192,6 +199,7 @@ export interface FileRoutesByTo {
   '/admin/groups/$groupId': typeof AppAdminGroupsGroupIdRoute
   '/admin/roles/$roleId': typeof AppAdminRolesRoleIdRoute
   '/audit/$traceId/visualizer': typeof AppAuditTraceIdVisualizerRoute
+  '/deals/$dealId/estimate': typeof AppDealsDealIdEstimateRoute
   '/deals/$dealId/qualify': typeof AppDealsDealIdQualifyRoute
   '/admin/groups': typeof AppAdminGroupsIndexRoute
   '/admin/roles': typeof AppAdminRolesIndexRoute
@@ -219,6 +227,7 @@ export interface FileRoutesById {
   '/_app/admin/groups/$groupId': typeof AppAdminGroupsGroupIdRoute
   '/_app/admin/roles/$roleId': typeof AppAdminRolesRoleIdRoute
   '/_app/audit/$traceId/visualizer': typeof AppAuditTraceIdVisualizerRoute
+  '/_app/deals/$dealId/estimate': typeof AppDealsDealIdEstimateRoute
   '/_app/deals/$dealId/qualify': typeof AppDealsDealIdQualifyRoute
   '/_app/admin/groups/': typeof AppAdminGroupsIndexRoute
   '/_app/admin/roles/': typeof AppAdminRolesIndexRoute
@@ -246,6 +255,7 @@ export interface FileRouteTypes {
     | '/admin/groups/$groupId'
     | '/admin/roles/$roleId'
     | '/audit/$traceId/visualizer'
+    | '/deals/$dealId/estimate'
     | '/deals/$dealId/qualify'
     | '/admin/groups/'
     | '/admin/roles/'
@@ -264,6 +274,7 @@ export interface FileRouteTypes {
     | '/admin/groups/$groupId'
     | '/admin/roles/$roleId'
     | '/audit/$traceId/visualizer'
+    | '/deals/$dealId/estimate'
     | '/deals/$dealId/qualify'
     | '/admin/groups'
     | '/admin/roles'
@@ -290,6 +301,7 @@ export interface FileRouteTypes {
     | '/_app/admin/groups/$groupId'
     | '/_app/admin/roles/$roleId'
     | '/_app/audit/$traceId/visualizer'
+    | '/_app/deals/$dealId/estimate'
     | '/_app/deals/$dealId/qualify'
     | '/_app/admin/groups/'
     | '/_app/admin/roles/'
@@ -447,6 +459,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppDealsDealIdQualifyRouteImport
       parentRoute: typeof AppDealsRoute
     }
+    '/_app/deals/$dealId/estimate': {
+      id: '/_app/deals/$dealId/estimate'
+      path: '/$dealId/estimate'
+      fullPath: '/deals/$dealId/estimate'
+      preLoaderRoute: typeof AppDealsDealIdEstimateRouteImport
+      parentRoute: typeof AppDealsRoute
+    }
     '/_app/audit/$traceId/visualizer': {
       id: '/_app/audit/$traceId/visualizer'
       path: '/visualizer'
@@ -568,11 +587,13 @@ const AppAuditRouteWithChildren = AppAuditRoute._addFileChildren(
 
 interface AppDealsRouteChildren {
   AppDealsIndexRoute: typeof AppDealsIndexRoute
+  AppDealsDealIdEstimateRoute: typeof AppDealsDealIdEstimateRoute
   AppDealsDealIdQualifyRoute: typeof AppDealsDealIdQualifyRoute
 }
 
 const AppDealsRouteChildren: AppDealsRouteChildren = {
   AppDealsIndexRoute: AppDealsIndexRoute,
+  AppDealsDealIdEstimateRoute: AppDealsDealIdEstimateRoute,
   AppDealsDealIdQualifyRoute: AppDealsDealIdQualifyRoute,
 }
 
