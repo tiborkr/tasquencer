@@ -133,7 +133,7 @@ function RouteComponent() {
                 <CheckCircle className="h-16 w-16 text-green-500 mx-auto" />
                 <h2 className="text-2xl font-bold">Deal Won!</h2>
                 <p className="text-muted-foreground">
-                  Congratulations! The deal has been marked as won. You can now create a project.
+                  Congratulations! The deal has been marked as won and a project has been automatically created.
                 </p>
               </>
             )}
@@ -155,9 +155,16 @@ function RouteComponent() {
                 </p>
               </>
             )}
-            <div className="pt-4">
+            <div className="pt-4 flex gap-2 justify-center">
+              {outcome === 'won' && (
+                <Link to="/projects">
+                  <Button>View Projects</Button>
+                </Link>
+              )}
               <Link to="/deals">
-                <Button>Back to Pipeline</Button>
+                <Button variant={outcome === 'won' ? 'outline' : 'default'}>
+                  Back to Pipeline
+                </Button>
               </Link>
             </div>
           </CardContent>

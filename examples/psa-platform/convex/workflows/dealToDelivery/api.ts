@@ -494,6 +494,7 @@ export const updateDealDetails = mutation({
 
 /**
  * Update deal stage with automatic probability adjustment
+ * When marking a deal as Won, automatically creates a project
  */
 export const updateDealStage = mutation({
   args: {
@@ -511,6 +512,11 @@ export const updateDealStage = mutation({
   },
   handler: async (ctx, args) => {
     await assertUserHasScope(ctx, 'dealToDelivery:deals:edit:own')
+
+    const deal = await db.getDeal(ctx.db, args.dealId)
+    if (!deal) {
+      throw new Error('DEAL_NOT_FOUND')
+    }
 
     // Determine probability based on stage
     const stageProbabilities: Record<string, number> = {
@@ -540,7 +546,61 @@ export const updateDealStage = mutation({
 
     await db.updateDeal(ctx.db, args.dealId, updates)
 
-    return { success: true, newProbability }
+    // Automatically create project when deal is won
+    let projectId: Id<'projects'> | undefined
+    let budgetId: Id<'budgets'> | undefined
+
+    if (args.stage === 'Won') {
+      const authUser = await authComponent.getAuthUser(ctx)
+      if (authUser.userId) {
+        // Create project
+        projectId = await db.insertProject(ctx.db, {
+          organizationId: deal.organizationId,
+          companyId: deal.companyId,
+          dealId: args.dealId,
+          name: deal.name,
+          status: 'Planning',
+          startDate: Date.now(),
+          managerId: authUser.userId as Id<'users'>,
+          createdAt: Date.now(),
+        })
+
+        // Get estimate for budget creation
+        const estimate = await db.getEstimateByDeal(ctx.db, args.dealId)
+
+        // Create budget
+        budgetId = await db.insertBudget(ctx.db, {
+          organizationId: deal.organizationId,
+          projectId,
+          type: 'TimeAndMaterials',
+          totalAmount: estimate?.total ?? deal.value,
+          createdAt: Date.now(),
+        })
+
+        // Link budget to project
+        await db.updateProject(ctx.db, projectId, { budgetId })
+
+        // Create services from estimate if available
+        if (estimate) {
+          const estimateServices = await db.listEstimateServicesByEstimate(
+            ctx.db,
+            estimate._id
+          )
+          for (const estService of estimateServices) {
+            await db.insertService(ctx.db, {
+              organizationId: deal.organizationId,
+              budgetId,
+              name: estService.name,
+              rate: estService.rate,
+              estimatedHours: estService.hours,
+              totalAmount: estService.total,
+            })
+          }
+        }
+      }
+    }
+
+    return { success: true, newProbability, projectId, budgetId }
   },
 })
 
