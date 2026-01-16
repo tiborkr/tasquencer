@@ -1,19 +1,23 @@
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, useNavigate, useSearch } from '@tanstack/react-router'
 import { useQuery, useMutation } from 'convex/react'
 import { api } from '@/convex/_generated/api'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { Id } from '@/convex/_generated/dataModel'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@repo/ui/components/card'
 import { Button } from '@repo/ui/components/button'
 import { Input } from '@repo/ui/components/input'
 import { Label } from '@repo/ui/components/label'
 import { Alert, AlertDescription } from '@repo/ui/components/alert'
-import { Loader2, AlertTriangle, ArrowLeft, Plus, Trash2, DollarSign, Clock } from 'lucide-react'
+import { Loader2, AlertTriangle, ArrowLeft, Plus, Trash2, DollarSign, Clock, RefreshCw } from 'lucide-react'
 
 export const Route = createFileRoute('/_app/deals/$dealId/estimate')({
   component: RouteComponent,
-  loader: () => ({
-    crumb: 'Create Estimate',
+  validateSearch: (search: Record<string, unknown>) => ({
+    mode: (search.mode as 'create' | 'edit') ?? 'create',
+  }),
+  loaderDeps: ({ search }) => ({ mode: search.mode }),
+  loader: ({ deps }) => ({
+    crumb: deps.mode === 'edit' ? 'Revise Estimate' : 'Create Estimate',
   }),
 })
 
@@ -31,11 +35,19 @@ function generateId(): string {
 function RouteComponent() {
   const navigate = useNavigate()
   const { dealId } = Route.useParams()
+  const { mode } = useSearch({ from: '/_app/deals/$dealId/estimate' })
+  const isEditMode = mode === 'edit'
 
   // Query deal details
   const deal = useQuery(api.workflows.dealToDelivery.api.getDealById, {
     dealId: dealId as Id<'deals'>
   })
+
+  // Query existing estimate when in edit mode
+  const existingEstimate = useQuery(
+    api.workflows.dealToDelivery.api.getEstimateByDealId,
+    isEditMode ? { dealId: dealId as Id<'deals'> } : 'skip'
+  )
 
   // Service lines state
   const [serviceLines, setServiceLines] = useState<ServiceLine[]>([
@@ -43,9 +55,28 @@ function RouteComponent() {
   ])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [dataLoaded, setDataLoaded] = useState(!isEditMode) // Track if edit data was loaded
 
-  // Mutation
+  // Mutations
   const createEstimateMutation = useMutation(api.workflows.dealToDelivery.api.createEstimate)
+  const updateEstimateMutation = useMutation(api.workflows.dealToDelivery.api.updateEstimate)
+
+  // Load existing estimate data when in edit mode
+  useEffect(() => {
+    if (isEditMode && existingEstimate && existingEstimate.services && !dataLoaded) {
+      const loadedLines = existingEstimate.services.map(service => ({
+        id: generateId(),
+        name: service.name,
+        // Convert cents back to dollars for display
+        rate: (service.rate / 100).toString(),
+        hours: service.hours.toString(),
+      }))
+      if (loadedLines.length > 0) {
+        setServiceLines(loadedLines)
+        setDataLoaded(true)
+      }
+    }
+  }, [isEditMode, existingEstimate, dataLoaded])
 
   // Add new service line
   const addServiceLine = () => {
@@ -101,22 +132,30 @@ function RouteComponent() {
         hours: parseFloat(line.hours),
       }))
 
-      await createEstimateMutation({
-        dealId: dealId as Id<'deals'>,
-        services,
-      })
+      if (isEditMode) {
+        await updateEstimateMutation({
+          dealId: dealId as Id<'deals'>,
+          services,
+        })
+      } else {
+        await createEstimateMutation({
+          dealId: dealId as Id<'deals'>,
+          services,
+        })
+      }
 
       // Navigate back to deals pipeline on success
       navigate({ to: '/deals' })
     } catch (err) {
-      console.error('Failed to create estimate:', err)
-      setError(err instanceof Error ? err.message : 'Failed to create estimate')
+      console.error(`Failed to ${isEditMode ? 'update' : 'create'} estimate:`, err)
+      setError(err instanceof Error ? err.message : `Failed to ${isEditMode ? 'update' : 'create'} estimate`)
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  if (deal === undefined) {
+  // Show loading state while data is being fetched
+  if (deal === undefined || (isEditMode && existingEstimate === undefined)) {
     return (
       <div className="p-6 lg:p-8">
         <div className="max-w-3xl mx-auto animate-pulse space-y-6">
@@ -182,9 +221,17 @@ function RouteComponent() {
         {/* Header */}
         <Card>
           <CardHeader>
-            <CardTitle>Create Estimate: {deal.name}</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              {isEditMode && <RefreshCw className="h-5 w-5 text-yellow-500" />}
+              {isEditMode ? 'Revise Estimate' : 'Create Estimate'}: {deal.name}
+            </CardTitle>
             <CardDescription>
               Company: {deal.companyName} • Stage: {deal.stage}
+              {isEditMode && (
+                <span className="ml-2 text-yellow-600 font-medium">
+                  (Editing existing estimate)
+                </span>
+              )}
             </CardDescription>
           </CardHeader>
         </Card>
@@ -343,10 +390,10 @@ function RouteComponent() {
           </Button>
           <Button
             onClick={handleSubmit}
-            disabled={!isValid || isSubmitting}
+            disabled={!isValid || isSubmitting || (isEditMode && !dataLoaded)}
           >
             {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            Create Estimate
+            {isEditMode ? 'Save Revised Estimate' : 'Create Estimate'}
           </Button>
         </div>
       </div>

@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useQuery, useMutation } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import type { Id } from '@/convex/_generated/dataModel'
@@ -7,7 +7,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@repo
 import { Button } from '@repo/ui/components/button'
 import { Input } from '@repo/ui/components/input'
 import { Label } from '@repo/ui/components/label'
-import { Textarea } from '@repo/ui/components/textarea'
 import { Badge } from '@repo/ui/components/badge'
 import {
   ArrowLeft,
@@ -19,6 +18,7 @@ import {
   XCircle,
   Loader2,
   RefreshCw,
+  Edit,
 } from 'lucide-react'
 
 export const Route = createFileRoute('/_app/deals/$dealId/negotiate')({
@@ -39,9 +39,9 @@ function formatCurrency(cents: number): string {
 
 function RouteComponent() {
   const { dealId } = Route.useParams()
+  const navigate = useNavigate()
   const [outcome, setOutcome] = useState<'won' | 'lost' | 'revise' | null>(null)
   const [lostReason, setLostReason] = useState('')
-  const [revisionNotes, setRevisionNotes] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [completed, setCompleted] = useState(false)
 
@@ -88,21 +88,13 @@ function RouteComponent() {
     }
   }
 
-  const handleRevise = async () => {
-    setIsSubmitting(true)
-    try {
-      // Move back to Proposal stage for revision
-      await updateDealStage({
-        dealId: dealId as Id<'deals'>,
-        stage: 'Proposal',
-      })
-      setOutcome('revise')
-      setCompleted(true)
-    } catch (error) {
-      console.error('Failed to request revision:', error)
-    } finally {
-      setIsSubmitting(false)
-    }
+  const handleRevise = () => {
+    // Navigate to estimate form in edit mode to allow editing pricing/services
+    navigate({
+      to: '/deals/$dealId/estimate',
+      params: { dealId },
+      search: { mode: 'edit' },
+    })
   }
 
   if (deal === undefined) {
@@ -296,33 +288,23 @@ function RouteComponent() {
 
           {/* Revision Option */}
           <div className="border rounded-lg p-4 space-y-4">
-            <div>
-              <h3 className="font-semibold text-yellow-600 flex items-center gap-2">
-                <RefreshCw className="h-5 w-5" />
-                Request Revision
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                The client has requested changes to the proposal
-              </p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="revisionNotes">Revision notes (optional)</Label>
-              <Textarea
-                id="revisionNotes"
-                value={revisionNotes}
-                onChange={(e) => setRevisionNotes(e.target.value)}
-                placeholder="What changes did the client request?"
-                rows={2}
-              />
-            </div>
-            <div className="flex justify-end">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="font-semibold text-yellow-600 flex items-center gap-2">
+                  <Edit className="h-5 w-5" />
+                  Revise Proposal
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  Edit the estimate pricing to revise the proposal
+                </p>
+              </div>
               <Button
                 onClick={handleRevise}
-                disabled={isSubmitting}
                 variant="outline"
+                className="border-yellow-300 hover:bg-yellow-50"
               >
-                {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                Request Revision
+                <Edit className="h-4 w-4 mr-2" />
+                Edit Pricing
               </Button>
             </div>
           </div>

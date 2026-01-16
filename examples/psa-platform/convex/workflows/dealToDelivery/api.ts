@@ -690,6 +690,93 @@ export const getEstimateWithServices = query({
   },
 })
 
+/**
+ * Get estimate by deal ID with services
+ * Used for loading existing estimate data when editing/revising
+ */
+export const getEstimateByDealId = query({
+  args: {
+    dealId: v.id('deals'),
+  },
+  handler: async (ctx, args) => {
+    await assertUserHasScope(ctx, 'dealToDelivery:estimates:view')
+
+    const estimate = await db.getEstimateByDeal(ctx.db, args.dealId)
+    if (!estimate) {
+      return null
+    }
+
+    const services = await db.listEstimateServicesByEstimate(ctx.db, estimate._id)
+
+    return { ...estimate, services }
+  },
+})
+
+/**
+ * Update/revise an estimate with new services
+ * Used when revising a proposal during negotiation
+ */
+export const updateEstimate = mutation({
+  args: {
+    dealId: v.id('deals'),
+    services: v.array(
+      v.object({
+        name: v.string(),
+        rate: v.number(),
+        hours: v.number(),
+      })
+    ),
+  },
+  handler: async (ctx, args) => {
+    await assertUserHasScope(ctx, 'dealToDelivery:estimates:edit')
+
+    const deal = await db.getDeal(ctx.db, args.dealId)
+    if (!deal) {
+      throw new Error('DEAL_NOT_FOUND')
+    }
+
+    const existingEstimate = await db.getEstimateByDeal(ctx.db, args.dealId)
+    if (!existingEstimate) {
+      throw new Error('ESTIMATE_NOT_FOUND')
+    }
+
+    // Calculate new total
+    const total = args.services.reduce(
+      (sum, s) => sum + s.rate * s.hours,
+      0
+    )
+
+    // Update estimate total
+    await db.updateEstimate(ctx.db, existingEstimate._id, {
+      total,
+    })
+
+    // Delete existing services
+    const existingServices = await db.listEstimateServicesByEstimate(ctx.db, existingEstimate._id)
+    for (const service of existingServices) {
+      await db.deleteEstimateService(ctx.db, service._id)
+    }
+
+    // Create new services
+    for (const service of args.services) {
+      await db.insertEstimateService(ctx.db, {
+        estimateId: existingEstimate._id,
+        name: service.name,
+        rate: service.rate,
+        hours: service.hours,
+        total: service.rate * service.hours,
+      })
+    }
+
+    // Update deal value (keep the current stage - don't auto-advance)
+    await db.updateDeal(ctx.db, args.dealId, {
+      value: total,
+    })
+
+    return { estimateId: existingEstimate._id, total }
+  },
+})
+
 // ============================================================================
 // PROPOSAL ENDPOINTS
 // ============================================================================

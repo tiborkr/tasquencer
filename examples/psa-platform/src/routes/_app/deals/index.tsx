@@ -129,7 +129,7 @@ function DealCard({ deal, companies, users }: DealCardProps) {
           </Link>
         )}
         {deal.stage === 'Qualified' && (
-          <Link to="/deals/$dealId/estimate" params={{ dealId: deal._id }}>
+          <Link to="/deals/$dealId/estimate" params={{ dealId: deal._id }} search={{ mode: 'create' }}>
             <Button size="sm" className="w-full mt-2" variant="outline">
               <FileText className="h-4 w-4 mr-2" />
               Create Estimate
