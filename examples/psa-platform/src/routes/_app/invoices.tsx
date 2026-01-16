@@ -42,6 +42,9 @@ import {
   Send,
   DollarSign,
   Check,
+  RefreshCw,
+  Target,
+  CalendarRange,
 } from 'lucide-react'
 
 export const Route = createFileRoute('/_app/invoices')({
@@ -109,6 +112,12 @@ function RouteComponent() {
   const [formInvoiceAmount, setFormInvoiceAmount] = useState('')
   const [formDescription, setFormDescription] = useState('')
   const [formNotes, setFormNotes] = useState('')
+  // Milestone form state
+  const [formMilestoneId, setFormMilestoneId] = useState<Id<'milestones'> | ''>('')
+  // Recurring form state - billing period dates
+  const [formBillingPeriodStart, setFormBillingPeriodStart] = useState('')
+  const [formBillingPeriodEnd, setFormBillingPeriodEnd] = useState('')
+  const [formIncludeOverage, setFormIncludeOverage] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
 
@@ -129,6 +138,24 @@ function RouteComponent() {
         }
       : 'skip'
   )
+
+  // Get project budget for milestones
+  const projectBudget = useQuery(
+    api.workflows.dealToDelivery.api.getProjectBudget,
+    formProjectId ? { projectId: formProjectId } : 'skip'
+  )
+
+  // Get uninvoiced milestones
+  const uninvoicedMilestones = useMemo(() => {
+    if (!projectBudget?.milestones) return []
+    return projectBudget.milestones.filter((m) => !m.invoiceId)
+  }, [projectBudget?.milestones])
+
+  // Get selected milestone details
+  const selectedMilestone = useMemo(() => {
+    if (!formMilestoneId || !uninvoicedMilestones.length) return null
+    return uninvoicedMilestones.find((m) => m._id === formMilestoneId) ?? null
+  }, [formMilestoneId, uninvoicedMilestones])
 
   // Invoice type from query
   type Invoice = NonNullable<typeof invoices>[number]
@@ -167,6 +194,10 @@ function RouteComponent() {
     setFormInvoiceAmount('')
     setFormDescription('')
     setFormNotes('')
+    setFormMilestoneId('')
+    setFormBillingPeriodStart('')
+    setFormBillingPeriodEnd('')
+    setFormIncludeOverage(false)
     setFormError(null)
   }
 
@@ -194,9 +225,25 @@ function RouteComponent() {
       return
     }
 
-    if ((formMethod === 'FixedFee' || formMethod === 'Recurring') && !formInvoiceAmount) {
+    if (formMethod === 'FixedFee' && !formInvoiceAmount) {
       setFormError('Please enter an invoice amount')
       return
+    }
+
+    if (formMethod === 'Milestone' && !formMilestoneId) {
+      setFormError('Please select a milestone')
+      return
+    }
+
+    if (formMethod === 'Recurring') {
+      if (!formBillingPeriodStart || !formBillingPeriodEnd) {
+        setFormError('Please select the billing period')
+        return
+      }
+      if (!formInvoiceAmount) {
+        setFormError('Please enter the retainer amount')
+        return
+      }
     }
 
     const amount = parseFloat(formInvoiceAmount)
@@ -221,9 +268,22 @@ function RouteComponent() {
           groupBy: formGroupBy,
           detailLevel: formDetailLevel,
         }),
-        ...((formMethod === 'FixedFee' || formMethod === 'Recurring') && {
+        ...(formMethod === 'FixedFee' && {
           invoiceAmount: Math.round(amount * 100),
           description: formDescription || 'Invoice',
+        }),
+        ...(formMethod === 'Milestone' && {
+          milestoneId: formMilestoneId as Id<'milestones'>,
+          includeExpenses: formIncludeExpenses,
+        }),
+        ...(formMethod === 'Recurring' && {
+          invoiceAmount: Math.round(amount * 100),
+          description: formDescription || 'Monthly Retainer',
+          billingPeriod: {
+            start: new Date(formBillingPeriodStart).getTime(),
+            end: new Date(formBillingPeriodEnd).getTime(),
+          },
+          includeOverage: formIncludeOverage,
         }),
       })
 
@@ -531,10 +591,141 @@ function RouteComponent() {
                     </div>
                   </div>
 
+                  {/* Line Items Preview */}
+                  {uninvoicedItems && (formIncludeTime || formIncludeExpenses) && (
+                    <div className="mt-4">
+                      <div className="flex justify-between items-center mb-2">
+                        <Label>Preview Line Items</Label>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-xs"
+                          type="button"
+                        >
+                          <RefreshCw className="h-3 w-3 mr-1" />
+                          Refresh
+                        </Button>
+                      </div>
+                      <div className="border rounded-md max-h-[200px] overflow-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Description</TableHead>
+                              <TableHead className="text-right">Qty</TableHead>
+                              <TableHead className="text-right">Rate</TableHead>
+                              <TableHead className="text-right">Amount</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {formIncludeTime && uninvoicedItems.timeEntries.length > 0 && (
+                              <>
+                                {formDetailLevel === 'summary' ? (
+                                  // Grouped summary - simplified by billable status
+                                  (() => {
+                                    const totalHours = uninvoicedItems.timeEntries.reduce((sum, e) => sum + e.hours, 0)
+                                    const totalAmount = uninvoicedItems.timeEntries.reduce((sum, e) => sum + e.hours * 10000, 0) // $100/hr placeholder
+                                    return (
+                                      <TableRow>
+                                        <TableCell>Time Services</TableCell>
+                                        <TableCell className="text-right">
+                                          {totalHours.toFixed(1)} hrs
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                          {formatCurrency(10000)}
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                          {formatCurrency(totalAmount)}
+                                        </TableCell>
+                                      </TableRow>
+                                    )
+                                  })()
+                                ) : (
+                                  // Detailed - individual entries
+                                  uninvoicedItems.timeEntries.slice(0, 10).map((entry) => (
+                                    <TableRow key={entry._id}>
+                                      <TableCell className="text-sm">
+                                        {entry.notes || 'Time Entry'}
+                                      </TableCell>
+                                      <TableCell className="text-right">
+                                        {entry.hours.toFixed(1)} hrs
+                                      </TableCell>
+                                      <TableCell className="text-right">
+                                        {formatCurrency(10000)}
+                                      </TableCell>
+                                      <TableCell className="text-right">
+                                        {formatCurrency(entry.hours * 10000)}
+                                      </TableCell>
+                                    </TableRow>
+                                  ))
+                                )}
+                                {formDetailLevel === 'detailed' && uninvoicedItems.timeEntries.length > 10 && (
+                                  <TableRow>
+                                    <TableCell colSpan={4} className="text-center text-muted-foreground text-sm">
+                                      ... and {uninvoicedItems.timeEntries.length - 10} more time entries
+                                    </TableCell>
+                                  </TableRow>
+                                )}
+                              </>
+                            )}
+                            {formIncludeExpenses && uninvoicedItems.expenses.length > 0 && (
+                              <>
+                                <TableRow className="bg-muted/30">
+                                  <TableCell colSpan={4} className="font-medium text-sm py-1">
+                                    Expenses
+                                  </TableCell>
+                                </TableRow>
+                                {uninvoicedItems.expenses.slice(0, 5).map((expense) => {
+                                  const markup = expense.markupRate ? expense.amount * (expense.markupRate / 100) : 0
+                                  const billedAmount = expense.amount + markup
+                                  return (
+                                    <TableRow key={expense._id}>
+                                      <TableCell className="text-sm">
+                                        {expense.description}
+                                      </TableCell>
+                                      <TableCell className="text-right">1</TableCell>
+                                      <TableCell className="text-right">
+                                        {formatCurrency(billedAmount)}
+                                      </TableCell>
+                                      <TableCell className="text-right">
+                                        {formatCurrency(billedAmount)}
+                                      </TableCell>
+                                    </TableRow>
+                                  )
+                                })}
+                                {uninvoicedItems.expenses.length > 5 && (
+                                  <TableRow>
+                                    <TableCell colSpan={4} className="text-center text-muted-foreground text-sm">
+                                      ... and {uninvoicedItems.expenses.length - 5} more expenses
+                                    </TableCell>
+                                  </TableRow>
+                                )}
+                              </>
+                            )}
+                            {!formIncludeTime && !formIncludeExpenses && (
+                              <TableRow>
+                                <TableCell colSpan={4} className="text-center text-muted-foreground py-4">
+                                  Select time entries or expenses to include
+                                </TableCell>
+                              </TableRow>
+                            )}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Preview Total */}
                   <div className="border-t mt-4 pt-4">
-                    <div className="flex justify-between items-center text-lg font-semibold">
-                      <span>Preview Total:</span>
+                    <div className="flex justify-between text-sm text-muted-foreground">
+                      <span>Subtotal:</span>
+                      <span>{formatCurrency(previewTotals.total)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm text-muted-foreground">
+                      <span>Tax (0%):</span>
+                      <span>{formatCurrency(0)}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-lg font-semibold mt-2 pt-2 border-t">
+                      <span>Total:</span>
                       <span>{formatCurrency(previewTotals.total)}</span>
                     </div>
                   </div>
@@ -542,12 +733,10 @@ function RouteComponent() {
               </>
             )}
 
-            {/* Fixed Fee / Recurring Options */}
-            {(formMethod === 'FixedFee' || formMethod === 'Recurring') && (
+            {/* Fixed Fee Options */}
+            {formMethod === 'FixedFee' && (
               <div className="border-t pt-4 space-y-4">
-                <h4 className="font-medium">
-                  {formMethod === 'FixedFee' ? 'Fixed Fee' : 'Recurring'} Options
-                </h4>
+                <h4 className="font-medium">Fixed Fee Options</h4>
 
                 <div className="space-y-2">
                   <Label htmlFor="amount">Invoice Amount ($) *</Label>
@@ -572,8 +761,163 @@ function RouteComponent() {
                     id="description"
                     value={formDescription}
                     onChange={(e) => setFormDescription(e.target.value)}
-                    placeholder="e.g., Project milestone payment"
+                    placeholder="e.g., Project phase 1 payment"
                   />
+                </div>
+
+                {/* Budget context */}
+                {projectBudget && (
+                  <div className="bg-muted/50 rounded-md p-3 text-sm space-y-1">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Total Budget:</span>
+                      <span className="font-medium">{formatCurrency(projectBudget.totalAmount)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Already Invoiced:</span>
+                      <span>{formatCurrency(projectBudget.totalAmount - projectBudget.remaining)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Remaining:</span>
+                      <span className="text-green-600 font-medium">{formatCurrency(projectBudget.remaining)}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Milestone Options */}
+            {formMethod === 'Milestone' && (
+              <div className="border-t pt-4 space-y-4">
+                <h4 className="font-medium flex items-center gap-2">
+                  <Target className="h-4 w-4" />
+                  Milestone Options
+                </h4>
+
+                <div className="space-y-2">
+                  <Label>Select Milestone *</Label>
+                  {uninvoicedMilestones.length === 0 ? (
+                    <Alert>
+                      <AlertTriangle className="h-4 w-4" />
+                      <AlertDescription>
+                        No uninvoiced milestones found for this project.
+                      </AlertDescription>
+                    </Alert>
+                  ) : (
+                    <Select
+                      value={formMilestoneId}
+                      onValueChange={(value) => setFormMilestoneId(value as Id<'milestones'>)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select milestone..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {uninvoicedMilestones.map((milestone) => (
+                          <SelectItem key={milestone._id} value={milestone._id}>
+                            {milestone.name} ({milestone.percentage}% - {formatCurrency(milestone.amount)})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+
+                {/* Selected milestone preview */}
+                {selectedMilestone && (
+                  <div className="bg-muted/50 rounded-md p-3 space-y-2">
+                    <div className="font-medium">{selectedMilestone.name}</div>
+                    <div className="text-sm text-muted-foreground">
+                      {selectedMilestone.percentage}% of budget
+                    </div>
+                    <div className="flex justify-between items-center border-t pt-2 mt-2">
+                      <span className="font-medium">Amount:</span>
+                      <span className="text-lg font-bold">{formatCurrency(selectedMilestone.amount)}</span>
+                    </div>
+                    {selectedMilestone.dueDate && (
+                      <div className="text-sm text-muted-foreground">
+                        Due: {formatDate(selectedMilestone.dueDate)}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="milestoneIncludeExpenses"
+                    checked={formIncludeExpenses}
+                    onCheckedChange={(checked) => setFormIncludeExpenses(!!checked)}
+                  />
+                  <Label htmlFor="milestoneIncludeExpenses" className="font-normal cursor-pointer">
+                    Include approved expenses
+                  </Label>
+                </div>
+              </div>
+            )}
+
+            {/* Recurring Options */}
+            {formMethod === 'Recurring' && (
+              <div className="border-t pt-4 space-y-4">
+                <h4 className="font-medium flex items-center gap-2">
+                  <CalendarRange className="h-4 w-4" />
+                  Recurring Retainer Options
+                </h4>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="billingPeriodStart">Period Start *</Label>
+                    <Input
+                      id="billingPeriodStart"
+                      type="date"
+                      value={formBillingPeriodStart}
+                      onChange={(e) => setFormBillingPeriodStart(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="billingPeriodEnd">Period End *</Label>
+                    <Input
+                      id="billingPeriodEnd"
+                      type="date"
+                      value={formBillingPeriodEnd}
+                      onChange={(e) => setFormBillingPeriodEnd(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="retainerAmount">Retainer Amount ($) *</Label>
+                  <div className="relative">
+                    <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="retainerAmount"
+                      type="number"
+                      placeholder="0.00"
+                      className="pl-9"
+                      value={formInvoiceAmount}
+                      onChange={(e) => setFormInvoiceAmount(e.target.value)}
+                      min="0.01"
+                      step="0.01"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="recurringDescription">Description</Label>
+                  <Input
+                    id="recurringDescription"
+                    value={formDescription}
+                    onChange={(e) => setFormDescription(e.target.value)}
+                    placeholder="e.g., Monthly retainer - January 2025"
+                  />
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="includeOverage"
+                    checked={formIncludeOverage}
+                    onCheckedChange={(checked) => setFormIncludeOverage(!!checked)}
+                  />
+                  <Label htmlFor="includeOverage" className="font-normal cursor-pointer">
+                    Include overage (hours exceeding retainer)
+                  </Label>
                 </div>
               </div>
             )}
