@@ -210,3 +210,91 @@ export const scaffoldSuperadmin = internalMutation({
     }
   },
 })
+
+/**
+ * Scaffold organization only.
+ * Creates organization and links to first user without touching roles.
+ * Use when scaffoldSuperadmin was already run.
+ */
+export const scaffoldOrganization = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    // 1. Check if there's exactly one user
+    const users = await ctx.db.query('users').collect()
+    if (users.length !== 1) {
+      throw new Error(`Expected exactly 1 user, found ${users.length}`)
+    }
+    const user = users[0]
+
+    // 2. Check if user already has an organization
+    if (user.organizationId) {
+      return {
+        organizationId: user.organizationId,
+        userId: user._id,
+        alreadyExists: true,
+      }
+    }
+
+    // 3. Create seed organization
+    const organizationId = await db.insertOrganization(ctx.db, {
+      name: 'Acme Consulting',
+      settings: {
+        timezone: 'America/New_York',
+        currency: 'USD',
+        fiscalYearStart: 1,
+        weekStartDay: 1,
+        defaultPaymentTerms: 30,
+        timeEntryRounding: 15,
+        requireApprovals: true,
+        allowFutureTimeEntries: false,
+      },
+      createdAt: Date.now(),
+    })
+
+    // 4. Update user with organization
+    await db.updateUser(ctx.db, user._id, {
+      organizationId,
+      name: user.name ?? 'Admin User',
+      costRate: 7500,
+      billRate: 15000,
+      skills: ['management', 'strategy'],
+      department: 'Leadership',
+      location: 'Headquarters',
+      isActive: true,
+    })
+
+    // 5. Create sample rate card
+    const rateCardId = await db.insertRateCard(ctx.db, {
+      organizationId,
+      name: 'Standard Rates',
+      isDefault: true,
+      createdAt: Date.now(),
+    })
+
+    // 6. Create rate card items
+    const standardRates = [
+      { serviceName: 'Strategy Consulting', rate: 25000 },
+      { serviceName: 'Project Management', rate: 17500 },
+      { serviceName: 'Development', rate: 15000 },
+      { serviceName: 'Design', rate: 12500 },
+      { serviceName: 'Quality Assurance', rate: 10000 },
+      { serviceName: 'Support', rate: 7500 },
+    ]
+
+    for (const item of standardRates) {
+      await db.insertRateCardItem(ctx.db, {
+        rateCardId,
+        serviceName: item.serviceName,
+        rate: item.rate,
+      })
+    }
+
+    return {
+      organizationId,
+      userId: user._id,
+      rateCardId,
+      rateCardItemCount: standardRates.length,
+      alreadyExists: false,
+    }
+  },
+})
