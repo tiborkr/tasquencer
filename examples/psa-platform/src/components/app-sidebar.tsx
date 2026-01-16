@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { Search, Shield, DollarSign } from 'lucide-react'
+import { Search, Shield, DollarSign, Clock } from 'lucide-react'
 
 import { NavMain } from '@/components/nav-main'
 import { NavUser } from '@/components/nav-user'
@@ -25,6 +25,17 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 {
                   title: 'Deals Pipeline',
                   renderLink: () => <Link to="/deals">Deals Pipeline</Link>,
+                },
+              ],
+            },
+            {
+              title: 'Time',
+              icon: Clock,
+              isActive: () => true,
+              items: [
+                {
+                  title: 'Timesheet',
+                  renderLink: () => <Link to="/timesheet">Timesheet</Link>,
                 },
               ],
             },
