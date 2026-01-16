@@ -74,6 +74,29 @@ export const getDeal = query({
 })
 
 /**
+ * Get deal by ID with company details
+ */
+export const getDealById = query({
+  args: {
+    dealId: v.id('deals'),
+  },
+  handler: async (ctx, args) => {
+    await assertUserHasScope(ctx, 'dealToDelivery:deals:view:own')
+
+    const deal = await db.getDeal(ctx.db, args.dealId)
+    if (!deal) return null
+
+    // Get company details for display
+    const company = await db.getCompany(ctx.db, deal.companyId)
+
+    return {
+      ...deal,
+      companyName: company?.name ?? 'Unknown Company',
+    }
+  },
+})
+
+/**
  * List deals by organization
  */
 export const getDeals = query({
@@ -518,6 +541,60 @@ export const updateDealStage = mutation({
     await db.updateDeal(ctx.db, args.dealId, updates)
 
     return { success: true, newProbability }
+  },
+})
+
+/**
+ * Qualify a deal with BANT criteria
+ */
+export const qualifyDeal = mutation({
+  args: {
+    dealId: v.id('deals'),
+    qualified: v.boolean(),
+    qualificationNotes: v.string(),
+    budgetConfirmed: v.optional(v.boolean()),
+    authorityConfirmed: v.optional(v.boolean()),
+    needConfirmed: v.optional(v.boolean()),
+    timelineConfirmed: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    await assertUserHasScope(ctx, 'dealToDelivery:deals:qualify')
+
+    // Build qualification notes with BANT details
+    const bantDetails = []
+    if (args.budgetConfirmed !== undefined) {
+      bantDetails.push(`Budget: ${args.budgetConfirmed ? 'Confirmed' : 'Not confirmed'}`)
+    }
+    if (args.authorityConfirmed !== undefined) {
+      bantDetails.push(`Authority: ${args.authorityConfirmed ? 'Confirmed' : 'Not confirmed'}`)
+    }
+    if (args.needConfirmed !== undefined) {
+      bantDetails.push(`Need: ${args.needConfirmed ? 'Confirmed' : 'Not confirmed'}`)
+    }
+    if (args.timelineConfirmed !== undefined) {
+      bantDetails.push(`Timeline: ${args.timelineConfirmed ? 'Confirmed' : 'Not confirmed'}`)
+    }
+
+    const fullNotes = bantDetails.length > 0
+      ? `${args.qualificationNotes}\n\nBANT Assessment:\n${bantDetails.join('\n')}`
+      : args.qualificationNotes
+
+    // Update deal based on qualification decision
+    if (args.qualified) {
+      await db.updateDeal(ctx.db, args.dealId, {
+        stage: 'Qualified',
+        probability: 25,
+        qualificationNotes: fullNotes,
+      })
+    } else {
+      await db.updateDeal(ctx.db, args.dealId, {
+        stage: 'Disqualified',
+        probability: 0,
+        qualificationNotes: fullNotes,
+      })
+    }
+
+    return { success: true, qualified: args.qualified }
   },
 })
 

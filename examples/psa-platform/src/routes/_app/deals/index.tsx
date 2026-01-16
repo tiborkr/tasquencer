@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, Link } from '@tanstack/react-router'
 import { useQuery, useMutation } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import { useState, useMemo, useEffect } from 'react'
@@ -32,6 +32,7 @@ import {
   Building2,
   User,
   Loader2,
+  ClipboardCheck,
 } from 'lucide-react'
 
 export const Route = createFileRoute('/_app/deals/')({
@@ -84,7 +85,7 @@ function DealCard({ deal, companies, users }: DealCardProps) {
   const probabilityColor = PROBABILITY_COLORS[deal.probability ?? 10] ?? PROBABILITY_COLORS[10]
 
   return (
-    <Card className="cursor-pointer hover:shadow-md transition-shadow">
+    <Card className="hover:shadow-md transition-shadow">
       <CardContent className="p-4 space-y-3">
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-2 text-muted-foreground">
@@ -113,6 +114,16 @@ function DealCard({ deal, companies, users }: DealCardProps) {
             <span className="truncate">{owner?.name ?? 'Unassigned'}</span>
           </div>
         </div>
+
+        {/* Action button based on stage */}
+        {deal.stage === 'Lead' && (
+          <Link to="/deals/$dealId/qualify" params={{ dealId: deal._id }}>
+            <Button size="sm" className="w-full mt-2">
+              <ClipboardCheck className="h-4 w-4 mr-2" />
+              Qualify Lead
+            </Button>
+          </Link>
+        )}
       </CardContent>
     </Card>
   )
