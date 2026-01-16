@@ -18,7 +18,7 @@ import {
 import { DealToDeliveryWorkItemHelpers } from './helpers'
 import { authComponent } from '../../auth'
 import { type HumanWorkItemOffer, isHumanOffer } from '@repo/tasquencer'
-import { assertUserHasScope } from '../../authorization'
+import { assertUserHasScope, assertUserInOrganization } from '../../authorization'
 
 // ============================================================================
 // VERSION MANAGER API EXPORTS
@@ -116,6 +116,7 @@ export const getDeals = query({
   },
   handler: async (ctx, args) => {
     await assertUserHasScope(ctx, 'dealToDelivery:deals:view:own')
+    await assertUserInOrganization(ctx, args.organizationId)
 
     if (args.stage) {
       return await listDealsByStage(ctx.db, args.organizationId, args.stage)
@@ -176,6 +177,7 @@ export const getProjects = query({
   },
   handler: async (ctx, args) => {
     await assertUserHasScope(ctx, 'dealToDelivery:projects:view:own')
+    await assertUserInOrganization(ctx, args.organizationId)
 
     if (args.status) {
       return await listProjectsByStatus(ctx.db, args.organizationId, args.status)
@@ -454,6 +456,7 @@ export const createDeal = mutation({
   },
   handler: async (ctx, args) => {
     await assertUserHasScope(ctx, 'dealToDelivery:deals:create')
+    await assertUserInOrganization(ctx, args.organizationId)
 
     const dealId = await db.insertDeal(ctx.db, {
       organizationId: args.organizationId,
@@ -1324,6 +1327,7 @@ export const getTeamAvailability = query({
   },
   handler: async (ctx, args) => {
     await assertUserHasScope(ctx, 'dealToDelivery:resources:view:team')
+    await assertUserInOrganization(ctx, args.organizationId)
 
     let users = await db.listActiveUsers(ctx.db, args.organizationId)
 
@@ -2457,6 +2461,7 @@ export const getUtilizationReport = query({
   },
   handler: async (ctx, args) => {
     await assertUserHasScope(ctx, 'dealToDelivery:reports:view:all')
+    await assertUserInOrganization(ctx, args.organizationId)
 
     const users = await db.listActiveUsers(ctx.db, args.organizationId)
 
@@ -2535,8 +2540,14 @@ export const getBudgetBurnReport = query({
 
     if (args.projectId) {
       const project = await db.getProject(ctx.db, args.projectId)
-      if (project) projects.push(project)
+      if (project) {
+        // Validate tenant boundary for project's organization
+        await assertUserInOrganization(ctx, project.organizationId)
+        projects.push(project)
+      }
     } else if (args.organizationId) {
+      // Validate tenant boundary for requested organization
+      await assertUserInOrganization(ctx, args.organizationId)
       const orgProjects = await listProjectsByOrganization(
         ctx.db,
         args.organizationId
@@ -2598,6 +2609,7 @@ export const getCompanies = query({
   },
   handler: async (ctx, args) => {
     await assertUserHasScope(ctx, 'dealToDelivery:deals:view:own')
+    await assertUserInOrganization(ctx, args.organizationId)
     return await db.listCompaniesByOrganization(ctx.db, args.organizationId)
   },
 })
@@ -2621,6 +2633,7 @@ export const createCompany = mutation({
   },
   handler: async (ctx, args) => {
     await assertUserHasScope(ctx, 'dealToDelivery:deals:create')
+    await assertUserInOrganization(ctx, args.organizationId)
 
     const companyId = await db.insertCompany(ctx.db, {
       organizationId: args.organizationId,
@@ -2678,6 +2691,7 @@ export const createContact = mutation({
   },
   handler: async (ctx, args) => {
     await assertUserHasScope(ctx, 'dealToDelivery:deals:create')
+    await assertUserInOrganization(ctx, args.organizationId)
 
     // If this is the primary contact, unset other primary contacts for this company
     if (args.isPrimary) {
@@ -2715,6 +2729,7 @@ export const getUsers = query({
   },
   handler: async (ctx, args) => {
     await assertUserHasScope(ctx, 'dealToDelivery:deals:view:own')
+    await assertUserInOrganization(ctx, args.organizationId)
     return await db.listUsersByOrganization(ctx.db, args.organizationId)
   },
 })
@@ -2758,6 +2773,7 @@ export const getSubmittedTimesheetsForApproval = query({
   },
   handler: async (ctx, args) => {
     await assertUserHasScope(ctx, 'dealToDelivery:time:approve')
+    await assertUserInOrganization(ctx, args.organizationId)
 
     // Get all time entries by status
     const status = args.status ?? 'Submitted'

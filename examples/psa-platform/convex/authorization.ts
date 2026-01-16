@@ -67,3 +67,31 @@ export async function assertUserHasScope(ctx: QueryCtx, scope: AppScope) {
     throw new Error(`User ${user.userId} does not have scope ${scope}`)
   }
 }
+
+import type { Id } from './_generated/dataModel'
+
+/**
+ * Asserts that the authenticated user belongs to the specified organization.
+ * This enforces tenant boundary isolation - users can only access data from their own organization.
+ *
+ * @throws Error if user is not authenticated or doesn't belong to the organization
+ */
+export async function assertUserInOrganization(
+  ctx: QueryCtx,
+  organizationId: Id<'organizations'>
+) {
+  const user = await authComponent.getAuthUser(ctx)
+  if (!user || !user.userId) {
+    throw new Error('User not authenticated')
+  }
+
+  // Get the user's document to check their organizationId
+  const userDoc = await ctx.db.get(user.userId as Id<'users'>)
+  if (!userDoc) {
+    throw new Error('User not found')
+  }
+
+  if (userDoc.organizationId !== organizationId) {
+    throw new Error('TENANT_BOUNDARY_VIOLATION')
+  }
+}

@@ -1084,4 +1084,479 @@ describe('UI-API Contract Tests (P4.5)', () => {
       ])
     })
   })
+
+  // ============================================================================
+  // TENANT BOUNDARY ENFORCEMENT
+  // ============================================================================
+
+  describe('Tenant Boundary Enforcement', () => {
+    /**
+     * These tests verify that users can only access data from their own organization.
+     * The assertUserInOrganization helper prevents cross-tenant data access.
+     */
+
+    it('users belong to exactly one organization', async () => {
+      const result = await t.run(async (ctx) => {
+        // Create two organizations
+        const org1Id = await db.insertOrganization(ctx.db, {
+          name: 'Organization 1',
+          settings: {},
+          createdAt: Date.now(),
+        })
+        const org2Id = await db.insertOrganization(ctx.db, {
+          name: 'Organization 2',
+          settings: {},
+          createdAt: Date.now(),
+        })
+
+        // Create a user in org1
+        const user1Id = await db.insertUser(ctx.db, {
+          organizationId: org1Id,
+          name: 'User in Org 1',
+          email: 'user@org1.com',
+          isActive: true,
+        })
+
+        // Create a user in org2
+        const user2Id = await db.insertUser(ctx.db, {
+          organizationId: org2Id,
+          name: 'User in Org 2',
+          email: 'user@org2.com',
+          isActive: true,
+        })
+
+        const user1 = await db.getUser(ctx.db, user1Id)
+        const user2 = await db.getUser(ctx.db, user2Id)
+
+        return { user1, user2, org1Id, org2Id }
+      })
+
+      // Each user belongs to their own organization
+      expect(result.user1?.organizationId).toBe(result.org1Id)
+      expect(result.user2?.organizationId).toBe(result.org2Id)
+      expect(result.user1?.organizationId).not.toBe(result.user2?.organizationId)
+    })
+
+    it('deals are isolated by organization', async () => {
+      const result = await t.run(async (ctx) => {
+        // Create two organizations with deals
+        const org1Id = await db.insertOrganization(ctx.db, {
+          name: 'Organization 1',
+          settings: {},
+          createdAt: Date.now(),
+        })
+        const org2Id = await db.insertOrganization(ctx.db, {
+          name: 'Organization 2',
+          settings: {},
+          createdAt: Date.now(),
+        })
+
+        // Setup for org1
+        const user1Id = await db.insertUser(ctx.db, {
+          organizationId: org1Id,
+          name: 'User 1',
+          email: 'user1@org1.com',
+          isActive: true,
+        })
+        const company1Id = await db.insertCompany(ctx.db, {
+          organizationId: org1Id,
+          name: 'Company 1',
+          billingAddress: {
+            street: '123 Main St',
+            city: 'City',
+            state: 'State',
+            postalCode: '12345',
+            country: 'US',
+          },
+          paymentTerms: 30,
+        })
+        const contact1Id = await db.insertContact(ctx.db, {
+          companyId: company1Id,
+          organizationId: org1Id,
+          name: 'Contact 1',
+          email: 'contact@company1.com',
+          phone: '555-1234',
+          isPrimary: true,
+        })
+        await db.insertDeal(ctx.db, {
+          organizationId: org1Id,
+          companyId: company1Id,
+          contactId: contact1Id,
+          ownerId: user1Id,
+          name: 'Deal in Org 1',
+          value: 1000000,
+          stage: 'Lead',
+          probability: 10,
+          createdAt: Date.now(),
+        })
+
+        // Setup for org2
+        const user2Id = await db.insertUser(ctx.db, {
+          organizationId: org2Id,
+          name: 'User 2',
+          email: 'user2@org2.com',
+          isActive: true,
+        })
+        const company2Id = await db.insertCompany(ctx.db, {
+          organizationId: org2Id,
+          name: 'Company 2',
+          billingAddress: {
+            street: '456 Oak Ave',
+            city: 'City',
+            state: 'State',
+            postalCode: '67890',
+            country: 'US',
+          },
+          paymentTerms: 30,
+        })
+        const contact2Id = await db.insertContact(ctx.db, {
+          companyId: company2Id,
+          organizationId: org2Id,
+          name: 'Contact 2',
+          email: 'contact@company2.com',
+          phone: '555-5678',
+          isPrimary: true,
+        })
+        await db.insertDeal(ctx.db, {
+          organizationId: org2Id,
+          companyId: company2Id,
+          contactId: contact2Id,
+          ownerId: user2Id,
+          name: 'Deal in Org 2',
+          value: 2000000,
+          stage: 'Qualified',
+          probability: 25,
+          createdAt: Date.now(),
+        })
+
+        // Query deals by organization
+        const org1Deals = await db.listDealsByOrganization(ctx.db, org1Id)
+        const org2Deals = await db.listDealsByOrganization(ctx.db, org2Id)
+
+        return { org1Deals, org2Deals, org1Id, org2Id }
+      })
+
+      // Each organization only sees their own deals
+      expect(result.org1Deals.length).toBe(1)
+      expect(result.org2Deals.length).toBe(1)
+      expect(result.org1Deals[0].organizationId).toBe(result.org1Id)
+      expect(result.org2Deals[0].organizationId).toBe(result.org2Id)
+      expect(result.org1Deals[0].name).toBe('Deal in Org 1')
+      expect(result.org2Deals[0].name).toBe('Deal in Org 2')
+    })
+
+    it('projects are isolated by organization', async () => {
+      const result = await t.run(async (ctx) => {
+        const { orgId, userId, companyId, contactId } = await setupTestData(ctx.db)
+
+        // Create another organization
+        const org2Id = await db.insertOrganization(ctx.db, {
+          name: 'Organization 2',
+          settings: {},
+          createdAt: Date.now(),
+        })
+
+        const user2Id = await db.insertUser(ctx.db, {
+          organizationId: org2Id,
+          name: 'User 2',
+          email: 'user2@org2.com',
+          isActive: true,
+        })
+
+        // Create deals in both orgs
+        const deal1Id = await db.insertDeal(ctx.db, {
+          organizationId: orgId,
+          companyId,
+          contactId,
+          ownerId: userId,
+          name: 'Deal 1',
+          value: 1000000,
+          stage: 'Won',
+          probability: 100,
+          createdAt: Date.now(),
+        })
+
+        const company2Id = await db.insertCompany(ctx.db, {
+          organizationId: org2Id,
+          name: 'Company 2',
+          billingAddress: {
+            street: '456 Oak Ave',
+            city: 'City',
+            state: 'State',
+            postalCode: '67890',
+            country: 'US',
+          },
+          paymentTerms: 30,
+        })
+
+        const contact2Id = await db.insertContact(ctx.db, {
+          companyId: company2Id,
+          organizationId: org2Id,
+          name: 'Contact 2',
+          email: 'contact@company2.com',
+          phone: '555-5678',
+          isPrimary: true,
+        })
+
+        const deal2Id = await db.insertDeal(ctx.db, {
+          organizationId: org2Id,
+          companyId: company2Id,
+          contactId: contact2Id,
+          ownerId: user2Id,
+          name: 'Deal 2',
+          value: 2000000,
+          stage: 'Won',
+          probability: 100,
+          createdAt: Date.now(),
+        })
+
+        // Create projects in both orgs
+        await db.insertProject(ctx.db, {
+          organizationId: orgId,
+          companyId,
+          dealId: deal1Id,
+          name: 'Project in Org 1',
+          status: 'Active',
+          startDate: Date.now(),
+          managerId: userId,
+          createdAt: Date.now(),
+        })
+
+        await db.insertProject(ctx.db, {
+          organizationId: org2Id,
+          companyId: company2Id,
+          dealId: deal2Id,
+          name: 'Project in Org 2',
+          status: 'Active',
+          startDate: Date.now(),
+          managerId: user2Id,
+          createdAt: Date.now(),
+        })
+
+        // Query projects by organization
+        const org1Projects = await db.listProjectsByOrganization(ctx.db, orgId)
+        const org2Projects = await db.listProjectsByOrganization(ctx.db, org2Id)
+
+        return { org1Projects, org2Projects, orgId, org2Id }
+      })
+
+      // Each organization only sees their own projects
+      expect(result.org1Projects.length).toBe(1)
+      expect(result.org2Projects.length).toBe(1)
+      expect(result.org1Projects[0].organizationId).toBe(result.orgId)
+      expect(result.org2Projects[0].organizationId).toBe(result.org2Id)
+      expect(result.org1Projects[0].name).toBe('Project in Org 1')
+      expect(result.org2Projects[0].name).toBe('Project in Org 2')
+    })
+
+    it('time entries are isolated by organization', async () => {
+      const result = await t.run(async (ctx) => {
+        const { orgId, userId, companyId, contactId } = await setupTestData(ctx.db)
+
+        // Create deal and project
+        const dealId = await db.insertDeal(ctx.db, {
+          organizationId: orgId,
+          companyId,
+          contactId,
+          ownerId: userId,
+          name: 'Test Deal',
+          value: 1000000,
+          stage: 'Won',
+          probability: 100,
+          createdAt: Date.now(),
+        })
+
+        const projectId = await db.insertProject(ctx.db, {
+          organizationId: orgId,
+          companyId,
+          dealId,
+          name: 'Test Project',
+          status: 'Active',
+          startDate: Date.now(),
+          managerId: userId,
+          createdAt: Date.now(),
+        })
+
+        // Create time entry
+        await db.insertTimeEntry(ctx.db, {
+          organizationId: orgId,
+          projectId,
+          userId,
+          date: Date.now(),
+          hours: 8,
+          billable: true,
+          notes: 'Test entry',
+          status: 'Draft',
+          createdAt: Date.now(),
+        })
+
+        // Query time entries
+        const timeEntries = await db.listTimeEntriesByProject(ctx.db, projectId)
+
+        return { timeEntries, orgId }
+      })
+
+      // Time entry belongs to the correct organization
+      expect(result.timeEntries.length).toBe(1)
+      expect(result.timeEntries[0].organizationId).toBe(result.orgId)
+    })
+
+    it('expenses are isolated by organization', async () => {
+      const result = await t.run(async (ctx) => {
+        const { orgId, userId, companyId, contactId } = await setupTestData(ctx.db)
+
+        // Create deal and project
+        const dealId = await db.insertDeal(ctx.db, {
+          organizationId: orgId,
+          companyId,
+          contactId,
+          ownerId: userId,
+          name: 'Test Deal',
+          value: 1000000,
+          stage: 'Won',
+          probability: 100,
+          createdAt: Date.now(),
+        })
+
+        const projectId = await db.insertProject(ctx.db, {
+          organizationId: orgId,
+          companyId,
+          dealId,
+          name: 'Test Project',
+          status: 'Active',
+          startDate: Date.now(),
+          managerId: userId,
+          createdAt: Date.now(),
+        })
+
+        // Create expense
+        await db.insertExpense(ctx.db, {
+          organizationId: orgId,
+          projectId,
+          userId,
+          type: 'Travel',
+          description: 'Test expense',
+          amount: 50000,
+          currency: 'USD',
+          date: Date.now(),
+          billable: true,
+          status: 'Draft',
+          createdAt: Date.now(),
+        })
+
+        // Query expenses
+        const expenses = await db.listExpensesByProject(ctx.db, projectId)
+
+        return { expenses, orgId }
+      })
+
+      // Expense belongs to the correct organization
+      expect(result.expenses.length).toBe(1)
+      expect(result.expenses[0].organizationId).toBe(result.orgId)
+    })
+
+    it('invoices are isolated by organization', async () => {
+      const result = await t.run(async (ctx) => {
+        const { orgId, companyId, contactId, userId } = await setupTestData(ctx.db)
+
+        // Create deal and project
+        const dealId = await db.insertDeal(ctx.db, {
+          organizationId: orgId,
+          companyId,
+          contactId,
+          ownerId: userId,
+          name: 'Test Deal',
+          value: 1000000,
+          stage: 'Won',
+          probability: 100,
+          createdAt: Date.now(),
+        })
+
+        const projectId = await db.insertProject(ctx.db, {
+          organizationId: orgId,
+          companyId,
+          dealId,
+          name: 'Test Project',
+          status: 'Active',
+          startDate: Date.now(),
+          managerId: userId,
+          createdAt: Date.now(),
+        })
+
+        // Create invoice
+        await db.insertInvoice(ctx.db, {
+          organizationId: orgId,
+          projectId,
+          companyId,
+          method: 'TimeAndMaterials',
+          status: 'Draft',
+          subtotal: 100000,
+          tax: 0,
+          total: 100000,
+          dueDate: Date.now() + 30 * 24 * 60 * 60 * 1000,
+          createdAt: Date.now(),
+        })
+
+        // Query invoices
+        const invoices = await db.listInvoicesByProject(ctx.db, projectId)
+
+        return { invoices, orgId }
+      })
+
+      // Invoice belongs to the correct organization
+      expect(result.invoices.length).toBe(1)
+      expect(result.invoices[0].organizationId).toBe(result.orgId)
+    })
+
+    it('bookings are isolated by organization', async () => {
+      const result = await t.run(async (ctx) => {
+        const { orgId, userId, companyId, contactId } = await setupTestData(ctx.db)
+
+        // Create deal and project
+        const dealId = await db.insertDeal(ctx.db, {
+          organizationId: orgId,
+          companyId,
+          contactId,
+          ownerId: userId,
+          name: 'Test Deal',
+          value: 1000000,
+          stage: 'Won',
+          probability: 100,
+          createdAt: Date.now(),
+        })
+
+        const projectId = await db.insertProject(ctx.db, {
+          organizationId: orgId,
+          companyId,
+          dealId,
+          name: 'Test Project',
+          status: 'Active',
+          startDate: Date.now(),
+          managerId: userId,
+          createdAt: Date.now(),
+        })
+
+        // Create booking
+        await db.insertBooking(ctx.db, {
+          organizationId: orgId,
+          userId,
+          projectId,
+          startDate: Date.now(),
+          endDate: Date.now() + 7 * 24 * 60 * 60 * 1000,
+          hoursPerDay: 8,
+          type: 'Confirmed',
+          createdAt: Date.now(),
+        })
+
+        // Query bookings
+        const bookings = await db.listBookingsByUser(ctx.db, userId)
+
+        return { bookings, orgId }
+      })
+
+      // Booking belongs to the correct organization
+      expect(result.bookings.length).toBe(1)
+      expect(result.bookings[0].organizationId).toBe(result.orgId)
+    })
+  })
 })
