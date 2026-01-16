@@ -1,5 +1,4 @@
 import { Builder } from '../../../tasquencer'
-import { createDealTask } from '../workItems/createDeal.workItem'
 import { qualifyLeadTask } from '../workItems/qualifyLead.workItem'
 import { disqualifyLeadTask } from '../workItems/disqualifyLead.workItem'
 import { createEstimateTask } from '../workItems/createEstimate.workItem'
@@ -10,11 +9,16 @@ import { reviseProposalTask } from '../workItems/reviseProposal.workItem'
 import { getProposalSignedTask } from '../workItems/getProposalSigned.workItem'
 import { archiveDealTask } from '../workItems/archiveDeal.workItem'
 import { getDealByWorkflowId } from '../db'
+
+// Deal is now created during workflow initialization (dealToDelivery.workflow.ts)
+// This dummy task just confirms the deal exists and transitions to qualifyLead
+const createDealDummyTask = Builder.dummyTask()
 const completeSalesTask = Builder.dummyTask()
+
 export const salesPhaseWorkflow = Builder.workflow('salesPhase')
   .startCondition('start')
   .endCondition('end')
-  .task('createDeal', createDealTask)
+  .dummyTask('createDeal', createDealDummyTask)
   .task('qualifyLead', qualifyLeadTask.withSplitType('xor'))
   .task('disqualifyLead', disqualifyLeadTask)
   .task('createEstimate', createEstimateTask)

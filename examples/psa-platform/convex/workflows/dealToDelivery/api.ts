@@ -1,7 +1,6 @@
 import { v } from 'convex/values'
 import { mutation, query } from '../../_generated/server'
 import type { Doc, Id } from '../../_generated/dataModel'
-import { dealToDeliveryVersionManager } from './definition'
 import * as db from './db'
 import {
   getDealByWorkflowId,
@@ -19,20 +18,21 @@ import { DealToDeliveryWorkItemHelpers } from './helpers'
 import { authComponent } from '../../auth'
 import { type HumanWorkItemOffer, isHumanOffer } from '@repo/tasquencer'
 import { assertUserHasScope, assertUserInOrganization, getCurrentUserId } from '../../authorization'
+import { getWorkflowTaskStates } from './api/workflow'
 
 // ============================================================================
 // VERSION MANAGER API EXPORTS
+// Re-exported from api/workflow.ts for backwards compatibility
 // ============================================================================
 
-export const {
+export {
   initializeRootWorkflow,
   initializeWorkItem,
   startWorkItem,
   completeWorkItem,
   failWorkItem,
   cancelWorkItem,
-  helpers: { getWorkflowTaskStates },
-} = dealToDeliveryVersionManager.apiForVersion('v1')
+} from './api/workflow'
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -442,37 +442,9 @@ export const getWorkflowStates = query({
 // DEAL MUTATIONS
 // ============================================================================
 
-/**
- * Create a new deal
- */
-export const createDeal = mutation({
-  args: {
-    organizationId: v.id('organizations'),
-    companyId: v.id('companies'),
-    contactId: v.id('contacts'),
-    name: v.string(),
-    value: v.number(),
-    ownerId: v.id('users'),
-  },
-  handler: async (ctx, args) => {
-    await assertUserHasScope(ctx, 'dealToDelivery:deals:create')
-    await assertUserInOrganization(ctx, args.organizationId)
-
-    const dealId = await db.insertDeal(ctx.db, {
-      organizationId: args.organizationId,
-      companyId: args.companyId,
-      contactId: args.contactId,
-      name: args.name,
-      value: args.value,
-      ownerId: args.ownerId,
-      stage: 'Lead',
-      probability: 10,
-      createdAt: Date.now(),
-    })
-
-    return { dealId }
-  },
-})
+// NOTE: createDeal has moved to api/deals.ts to follow workflow-first pattern
+// It now initializes the dealToDelivery workflow which creates the deal with
+// workflowId linkage, enabling audit trails and tracing.
 
 /**
  * Update a deal

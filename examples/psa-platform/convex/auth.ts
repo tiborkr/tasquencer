@@ -10,6 +10,7 @@ import { betterAuth } from 'better-auth'
 import { convex } from '@convex-dev/better-auth/plugins'
 
 // Typesafe way to pass Convex functions defined in this file
+// @ts-expect-error - Type depth issue with complex workflow types
 const authFunctions: AuthFunctions = internal.auth
 
 // Initialize the component

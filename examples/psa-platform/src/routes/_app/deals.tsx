@@ -5,6 +5,7 @@ export const Route = createFileRoute('/_app/deals')({
   component: RouteComponent,
   loader: async ({ context }) => {
     const workflowStructure = await context.convexClient.query(
+      // @ts-expect-error - Type depth issue with complex workflow types
       api.workflows.metadata.getWorkflowStructure,
       { workflow: { name: 'dealToDelivery', version: 'v1' } },
     )

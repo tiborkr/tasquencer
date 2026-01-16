@@ -229,8 +229,8 @@ function RouteComponent() {
     formCompanyId ? { companyId: formCompanyId } : 'skip'
   )
 
-  // Create deal mutation
-  const createDealMutation = useMutation(api.workflows.dealToDelivery.api.createDeal)
+  // Create deal mutation (uses workflow-first pattern from api/deals.ts)
+  const createDealMutation = useMutation(api.workflows.dealToDelivery.api.deals.createDeal)
   const createCompanyMutation = useMutation(api.workflows.dealToDelivery.api.createCompany)
   const createContactMutation = useMutation(api.workflows.dealToDelivery.api.createContact)
 

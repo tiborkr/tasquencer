@@ -15,6 +15,8 @@ import type * as authorization from "../authorization.js";
 import type * as http from "../http.js";
 import type * as tasquencer from "../tasquencer.js";
 import type * as workflows_dealToDelivery_api from "../workflows/dealToDelivery/api.js";
+import type * as workflows_dealToDelivery_api_deals from "../workflows/dealToDelivery/api/deals.js";
+import type * as workflows_dealToDelivery_api_workflow from "../workflows/dealToDelivery/api/workflow.js";
 import type * as workflows_dealToDelivery_authSetup from "../workflows/dealToDelivery/authSetup.js";
 import type * as workflows_dealToDelivery_db from "../workflows/dealToDelivery/db.js";
 import type * as workflows_dealToDelivery_definition from "../workflows/dealToDelivery/definition.js";
@@ -38,6 +40,8 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   tasquencer: typeof tasquencer;
   "workflows/dealToDelivery/api": typeof workflows_dealToDelivery_api;
+  "workflows/dealToDelivery/api/deals": typeof workflows_dealToDelivery_api_deals;
+  "workflows/dealToDelivery/api/workflow": typeof workflows_dealToDelivery_api_workflow;
   "workflows/dealToDelivery/authSetup": typeof workflows_dealToDelivery_authSetup;
   "workflows/dealToDelivery/db": typeof workflows_dealToDelivery_db;
   "workflows/dealToDelivery/definition": typeof workflows_dealToDelivery_definition;
