@@ -1390,6 +1390,16 @@ export const getUserBookings = query({
     endDate: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    // Get the target user to check organization
+    const targetUser = await db.getUser(ctx.db, args.userId)
+    if (!targetUser || !targetUser.organizationId) {
+      return []
+    }
+
+    // Validate caller belongs to same organization (cross-tenant protection)
+    await assertUserInOrganization(ctx, targetUser.organizationId)
+
+    // Requires at least view:own scope
     await assertUserHasScope(ctx, 'dealToDelivery:resources:view:own')
 
     let bookings = await db.listBookingsByUser(ctx.db, args.userId)
@@ -1426,22 +1436,36 @@ export const createBooking = mutation({
   handler: async (ctx, args) => {
     await assertUserHasScope(ctx, 'dealToDelivery:resources:book:team')
 
-    const user = await db.getUser(ctx.db, args.userId)
-    if (!user) {
+    const targetUser = await db.getUser(ctx.db, args.userId)
+    if (!targetUser) {
       throw new Error('USER_NOT_FOUND')
     }
 
-    if (!user.organizationId) {
+    if (!targetUser.organizationId) {
       throw new Error('USER_HAS_NO_ORGANIZATION')
     }
+
+    // Validate caller belongs to same organization as target user (cross-tenant protection)
+    await assertUserInOrganization(ctx, targetUser.organizationId)
 
     // Validate projectId for non-TimeOff bookings
     if (args.type !== 'TimeOff' && !args.projectId) {
       throw new Error('PROJECT_REQUIRED_FOR_BOOKING')
     }
 
+    // Validate project belongs to same organization if provided
+    if (args.projectId) {
+      const project = await db.getProject(ctx.db, args.projectId)
+      if (!project) {
+        throw new Error('PROJECT_NOT_FOUND')
+      }
+      if (project.organizationId !== targetUser.organizationId) {
+        throw new Error('PROJECT_ORGANIZATION_MISMATCH')
+      }
+    }
+
     const bookingId = await db.insertBooking(ctx.db, {
-      organizationId: user.organizationId,
+      organizationId: targetUser.organizationId,
       userId: args.userId,
       projectId: args.projectId,
       taskId: args.taskId,
@@ -1480,6 +1504,13 @@ export const updateBookingDetails = mutation({
   handler: async (ctx, args) => {
     await assertUserHasScope(ctx, 'dealToDelivery:resources:book:team')
 
+    // Validate caller belongs to booking's organization (cross-tenant protection)
+    const booking = await db.getBooking(ctx.db, args.bookingId)
+    if (!booking) {
+      throw new Error('BOOKING_NOT_FOUND')
+    }
+    await assertUserInOrganization(ctx, booking.organizationId)
+
     await db.updateBooking(ctx.db, args.bookingId, args.updates)
 
     return { success: true }
@@ -1499,7 +1530,12 @@ export const confirmBookings = mutation({
     let confirmedCount = 0
     for (const bookingId of args.bookingIds) {
       const booking = await db.getBooking(ctx.db, bookingId)
-      if (booking && booking.type === 'Tentative') {
+      if (!booking) continue
+
+      // Validate caller belongs to booking's organization (cross-tenant protection)
+      await assertUserInOrganization(ctx, booking.organizationId)
+
+      if (booking.type === 'Tentative') {
         await db.updateBooking(ctx.db, bookingId, { type: 'Confirmed' })
         confirmedCount++
       }
@@ -1518,6 +1554,13 @@ export const deleteBookingMutation = mutation({
   },
   handler: async (ctx, args) => {
     await assertUserHasScope(ctx, 'dealToDelivery:resources:book:team')
+
+    // Validate caller belongs to booking's organization (cross-tenant protection)
+    const booking = await db.getBooking(ctx.db, args.bookingId)
+    if (!booking) {
+      throw new Error('BOOKING_NOT_FOUND')
+    }
+    await assertUserInOrganization(ctx, booking.organizationId)
 
     await db.deleteBooking(ctx.db, args.bookingId)
 
