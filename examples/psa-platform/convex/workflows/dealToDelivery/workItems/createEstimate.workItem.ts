@@ -100,10 +100,12 @@ const createEstimateActions = authService.builders.workItemActions
         })
       }
 
-      // Update deal with estimate reference and new value
+      // Update deal with estimate reference, new value, and advance stage to Proposal
       await updateDeal(mutationCtx.db, dealId, {
         estimateId,
         value: total, // Update deal value to match estimate total
+        stage: 'Proposal', // Advance stage from Qualified to Proposal
+        probability: 50, // Proposal stage probability
       })
     },
   )

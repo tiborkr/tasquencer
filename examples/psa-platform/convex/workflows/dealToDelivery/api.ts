@@ -649,6 +649,22 @@ export const createEstimate = mutation({
       })
     }
 
+    // Advance deal stage to Proposal when estimate is created from Qualified deal
+    if (deal.stage === 'Qualified') {
+      await db.updateDeal(ctx.db, args.dealId, {
+        estimateId,
+        value: total,
+        stage: 'Proposal',
+        probability: 50,
+      })
+    } else {
+      // Just link the estimate for other stages
+      await db.updateDeal(ctx.db, args.dealId, {
+        estimateId,
+        value: total,
+      })
+    }
+
     return { estimateId, total }
   },
 })

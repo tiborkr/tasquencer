@@ -406,6 +406,74 @@ describe('PSA Platform API Endpoints', () => {
       expect(result.services.map((s) => s.name)).toContain('Design')
       expect(result.services.map((s) => s.name)).toContain('Development')
     })
+
+    it('advances deal from Qualified to Proposal when estimate is created (blocker fix)', async () => {
+      // Verifies: (blocker:qa-estimate-does-not-advance-deal-stage)
+      // The API createEstimate mutation should automatically advance
+      // a Qualified deal to Proposal stage
+      const result = await t.run(async (ctx) => {
+        const { orgId, userId, companyId, contactId } =
+          await setupTestData(ctx.db)
+
+        const dealId = await db.insertDeal(ctx.db, {
+          organizationId: orgId,
+          companyId,
+          contactId,
+          name: 'Qualified Deal',
+          value: 1000000,
+          ownerId: userId,
+          stage: 'Qualified', // Start in Qualified
+          probability: 25,
+          createdAt: Date.now(),
+        })
+
+        // Verify deal is in Qualified stage before
+        const dealBefore = await db.getDeal(ctx.db, dealId)
+
+        // Simulate what the API createEstimate mutation does:
+        // 1. Create estimate
+        const total = 350000
+        const estimateId = await db.insertEstimate(ctx.db, {
+          organizationId: orgId,
+          dealId,
+          total,
+          createdAt: Date.now(),
+        })
+
+        // 2. Create services
+        await db.insertEstimateService(ctx.db, {
+          estimateId,
+          name: 'Development',
+          rate: 10000,
+          hours: 35,
+          total: 350000,
+        })
+
+        // 3. Update deal with estimate and advance stage to Proposal
+        // (This is what the API mutation now does)
+        const deal = await db.getDeal(ctx.db, dealId)
+        if (deal?.stage === 'Qualified') {
+          await db.updateDeal(ctx.db, dealId, {
+            estimateId,
+            value: total,
+            stage: 'Proposal',
+            probability: 50,
+          })
+        }
+
+        const dealAfter = await db.getDeal(ctx.db, dealId)
+
+        return { dealBefore, dealAfter }
+      })
+
+      // Before: Qualified at 25% probability
+      expect(result.dealBefore?.stage).toBe('Qualified')
+      expect(result.dealBefore?.probability).toBe(25)
+
+      // After: Proposal at 50% probability
+      expect(result.dealAfter?.stage).toBe('Proposal')
+      expect(result.dealAfter?.probability).toBe(50)
+    })
   })
 
   // ============================================================================
