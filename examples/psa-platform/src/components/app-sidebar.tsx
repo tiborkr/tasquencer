@@ -37,6 +37,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   title: 'Projects',
                   renderLink: () => <Link to="/projects">Projects</Link>,
                 },
+                {
+                  title: 'Resources',
+                  renderLink: () => <Link to="/resources">Resources</Link>,
+                },
               ],
             },
             {
