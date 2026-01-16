@@ -50,11 +50,32 @@ export async function waitForFlush(t: TestContext) {
  * Create a basic authenticated user
  */
 export async function setupAuthenticatedUser(t: TestContext) {
-  const userId = await t.run(async (ctx) => {
-    return await ctx.db.insert('users', {})
+  const result = await t.run(async (ctx) => {
+    // Create an organization first
+    const orgId = await ctx.db.insert('organizations', {
+      name: 'Test Organization',
+      settings: {},
+      createdAt: Date.now(),
+    })
+
+    // Create a user with all required fields
+    const userId = await ctx.db.insert('users', {
+      organizationId: orgId,
+      email: 'test@example.com',
+      name: 'Test User',
+      role: 'admin',
+      costRate: 10000, // $100/hr in cents
+      billRate: 15000, // $150/hr in cents
+      skills: [],
+      department: 'Engineering',
+      location: 'Remote',
+      isActive: true,
+    })
+
+    return { userId, orgId }
   })
 
-  const mockAuthUser = makeMockAuthUser(userId as Id<'users'>)
+  const mockAuthUser = makeMockAuthUser(result.userId as Id<'users'>)
 
   const safeAuthSpy = vi
     .spyOn(authComponent, 'safeGetAuthUser')
@@ -63,7 +84,7 @@ export async function setupAuthenticatedUser(t: TestContext) {
     .spyOn(authComponent, 'getAuthUser')
     .mockResolvedValue(mockAuthUser)
 
-  return { userId, authSpies: [safeAuthSpy, authSpy] }
+  return { userId: result.userId, organizationId: result.orgId, authSpies: [safeAuthSpy, authSpy] }
 }
 
 // Dummy test to mark this as a test file (prevents Convex deployment)

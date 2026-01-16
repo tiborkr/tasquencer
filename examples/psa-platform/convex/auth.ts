@@ -18,7 +18,33 @@ export const authComponent = createClient<DataModel>(components.betterAuth, {
   triggers: {
     user: {
       onCreate: async (ctx, authUser) => {
-        const userId = await ctx.db.insert('users', {})
+        // Get or create the default organization
+        // TODO: In production, organization assignment should be more sophisticated
+        let defaultOrg = await ctx.db
+          .query('organizations')
+          .first()
+        if (!defaultOrg) {
+          const orgId = await ctx.db.insert('organizations', {
+            name: 'Default Organization',
+            settings: {},
+            createdAt: Date.now(),
+          })
+          defaultOrg = await ctx.db.get(orgId)
+        }
+
+        // Create the user with required fields
+        const userId = await ctx.db.insert('users', {
+          organizationId: defaultOrg!._id,
+          email: authUser.email ?? '',
+          name: authUser.name ?? 'New User',
+          role: 'teamMember', // Default role
+          costRate: 0, // Needs to be set by admin
+          billRate: 0, // Needs to be set by admin
+          skills: [],
+          department: '',
+          location: '',
+          isActive: true,
+        })
         await authComponent.setUserId(ctx, authUser._id, userId)
       },
       onDelete: async (ctx, authUser) => {
