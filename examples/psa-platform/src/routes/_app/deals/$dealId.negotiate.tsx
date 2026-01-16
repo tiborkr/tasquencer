@@ -88,13 +88,26 @@ function RouteComponent() {
     }
   }
 
-  const handleRevise = () => {
-    // Navigate to estimate form in edit mode to allow editing pricing/services
-    navigate({
-      to: '/deals/$dealId/estimate',
-      params: { dealId },
-      search: { mode: 'edit' },
-    })
+  const handleRevise = async () => {
+    // Workflow-first: Move deal back to Proposal stage before editing
+    // After editing, user must explicitly "Send Proposal" again to return to Negotiation
+    setIsSubmitting(true)
+    try {
+      await updateDealStage({
+        dealId: dealId as Id<'deals'>,
+        stage: 'Proposal',
+      })
+      // Navigate to estimate form in edit mode to allow editing pricing/services
+      navigate({
+        to: '/deals/$dealId/estimate',
+        params: { dealId },
+        search: { mode: 'edit' },
+      })
+    } catch (error) {
+      console.error('Failed to revert deal to Proposal stage:', error)
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   if (deal === undefined) {
@@ -307,11 +320,16 @@ function RouteComponent() {
               </div>
               <Button
                 onClick={handleRevise}
+                disabled={isSubmitting}
                 variant="outline"
                 className="border-yellow-300 hover:bg-yellow-50"
               >
-                <Edit className="h-4 w-4 mr-2" />
-                Edit Pricing
+                {isSubmitting ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Edit className="h-4 w-4 mr-2" />
+                )}
+                {isSubmitting ? 'Reverting...' : 'Revise Proposal'}
               </Button>
             </div>
           </div>

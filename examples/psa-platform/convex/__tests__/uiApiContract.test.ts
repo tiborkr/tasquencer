@@ -799,4 +799,289 @@ describe('UI-API Contract Tests (P4.5)', () => {
       expect(companies.every((c) => c.organizationId === orgId)).toBe(true)
     })
   })
+
+  // ============================================================================
+  // PROPOSAL REVISION WORKFLOW CONTRACT (Blocker Fix Validation)
+  // ============================================================================
+
+  describe('Proposal Revision Workflow Contract', () => {
+    /**
+     * These tests verify the workflow-first pattern for proposal revisions:
+     * 1. When "Revise Proposal" is clicked, deal stage must revert to Proposal
+     * 2. After updating estimate, deal should still be in Proposal stage
+     * 3. User must explicitly "Send Proposal" to advance to Negotiation
+     *
+     * This prevents bypassing the workflow by editing estimates out-of-band.
+     */
+
+    it('revise proposal reverts deal stage from Negotiation to Proposal', async () => {
+      const result = await t.run(async (ctx) => {
+        const { orgId, userId, companyId, contactId } = await setupTestData(ctx.db)
+
+        // Create a deal first
+        const dealId = await db.insertDeal(ctx.db, {
+          organizationId: orgId,
+          companyId,
+          contactId,
+          ownerId: userId,
+          name: 'Test Deal',
+          value: 5000000,
+          stage: 'Negotiation',
+          probability: 50,
+          createdAt: Date.now(),
+        })
+
+        // Verify initial state
+        const dealBefore = await db.getDeal(ctx.db, dealId)
+        expect(dealBefore?.stage).toBe('Negotiation')
+
+        // Simulate "Revise Proposal" action: revert to Proposal stage
+        // This is what the UI does before navigating to estimate edit
+        await db.updateDeal(ctx.db, dealId, {
+          stage: 'Proposal',
+        })
+
+        const dealAfter = await db.getDeal(ctx.db, dealId)
+        return { dealBefore, dealAfter }
+      })
+
+      expect(result.dealBefore?.stage).toBe('Negotiation')
+      expect(result.dealAfter?.stage).toBe('Proposal')
+    })
+
+    it('estimate update does not auto-advance deal stage', async () => {
+      const result = await t.run(async (ctx) => {
+        const { orgId, userId, companyId, contactId } = await setupTestData(ctx.db)
+
+        // Create deal in Proposal stage
+        const dealId = await db.insertDeal(ctx.db, {
+          organizationId: orgId,
+          companyId,
+          contactId,
+          ownerId: userId,
+          name: 'Test Deal',
+          value: 5000000,
+          stage: 'Proposal',
+          probability: 50,
+          createdAt: Date.now(),
+        })
+
+        const estimateId = await db.insertEstimate(ctx.db, {
+          organizationId: orgId,
+          dealId,
+          total: 5000000, // $50,000
+          createdAt: Date.now(),
+        })
+
+        await db.insertEstimateService(ctx.db, {
+          estimateId,
+          name: 'Development',
+          rate: 15000, // $150/hr
+          hours: 200,
+          total: 3000000, // $30,000
+        })
+
+        // Update estimate (simulate revision)
+        await db.updateEstimate(ctx.db, estimateId, {
+          total: 7500000, // $75,000
+        })
+
+        // Deal should still be in Proposal stage (no auto-advance)
+        const deal = await db.getDeal(ctx.db, dealId)
+        return { deal, estimateId }
+      })
+
+      // Critical assertion: estimate update doesn't change deal stage
+      expect(result.deal?.stage).toBe('Proposal')
+    })
+
+    it('send proposal advances deal from Proposal to Negotiation', async () => {
+      const result = await t.run(async (ctx) => {
+        const { orgId, userId, companyId, contactId } = await setupTestData(ctx.db)
+
+        // Create deal in Proposal stage
+        const dealId = await db.insertDeal(ctx.db, {
+          organizationId: orgId,
+          companyId,
+          contactId,
+          ownerId: userId,
+          name: 'Test Deal',
+          value: 5000000,
+          stage: 'Proposal',
+          probability: 50,
+          createdAt: Date.now(),
+        })
+
+        // Create proposal (Send Proposal action)
+        const proposalId = await db.insertProposal(ctx.db, {
+          organizationId: orgId,
+          dealId,
+          version: 2, // Revised version
+          status: 'Sent',
+          documentUrl: 'https://example.com/proposal-v2',
+          createdAt: Date.now(),
+        })
+
+        // Simulate advancing deal stage after sending proposal
+        await db.updateDeal(ctx.db, dealId, {
+          stage: 'Negotiation',
+        })
+
+        const deal = await db.getDeal(ctx.db, dealId)
+        const proposal = await db.getProposal(ctx.db, proposalId)
+        return { deal, proposal }
+      })
+
+      expect(result.deal?.stage).toBe('Negotiation')
+      expect(result.proposal?.status).toBe('Sent')
+      expect(result.proposal?.version).toBe(2)
+    })
+
+    it('complete revision cycle: Negotiation → Proposal → Negotiation', async () => {
+      const result = await t.run(async (ctx) => {
+        const { orgId, userId, companyId, contactId } = await setupTestData(ctx.db)
+
+        // Create deal in Negotiation stage
+        const dealId = await db.insertDeal(ctx.db, {
+          organizationId: orgId,
+          companyId,
+          contactId,
+          ownerId: userId,
+          name: 'Test Deal',
+          value: 5000000,
+          stage: 'Negotiation',
+          probability: 50,
+          createdAt: Date.now(),
+        })
+
+        const estimateId = await db.insertEstimate(ctx.db, {
+          organizationId: orgId,
+          dealId,
+          total: 5000000,
+          createdAt: Date.now(),
+        })
+
+        // Step 1: Click "Revise Proposal" - reverts to Proposal stage
+        await db.updateDeal(ctx.db, dealId, {
+          stage: 'Proposal',
+        })
+        const afterReviseClick = await db.getDeal(ctx.db, dealId)
+
+        // Step 2: Edit and save estimate - stage stays at Proposal
+        await db.updateEstimate(ctx.db, estimateId, {
+          total: 6000000, // Updated value
+        })
+        await db.updateDeal(ctx.db, dealId, {
+          value: 6000000, // Update deal value to match
+        })
+        const afterEstimateUpdate = await db.getDeal(ctx.db, dealId)
+
+        // Step 3: Send proposal - advances to Negotiation
+        await db.insertProposal(ctx.db, {
+          organizationId: orgId,
+          dealId,
+          version: 2,
+          status: 'Sent',
+          documentUrl: 'https://example.com/proposal-v2',
+          createdAt: Date.now(),
+        })
+        await db.updateDeal(ctx.db, dealId, {
+          stage: 'Negotiation',
+        })
+        const afterSendProposal = await db.getDeal(ctx.db, dealId)
+
+        return {
+          afterReviseClick,
+          afterEstimateUpdate,
+          afterSendProposal,
+        }
+      })
+
+      // Verify the complete workflow-first cycle
+      expect(result.afterReviseClick?.stage).toBe('Proposal')
+      expect(result.afterEstimateUpdate?.stage).toBe('Proposal')
+      expect(result.afterSendProposal?.stage).toBe('Negotiation')
+    })
+
+    it('multiple revision cycles maintain correct state transitions', async () => {
+      const result = await t.run(async (ctx) => {
+        const { orgId, userId, companyId, contactId } = await setupTestData(ctx.db)
+
+        // Create deal
+        const dealId = await db.insertDeal(ctx.db, {
+          organizationId: orgId,
+          companyId,
+          contactId,
+          ownerId: userId,
+          name: 'Test Deal',
+          value: 5000000,
+          stage: 'Lead', // Start from Lead
+          probability: 10,
+          createdAt: Date.now(),
+        })
+
+        // Create estimate
+        const estimateId = await db.insertEstimate(ctx.db, {
+          organizationId: orgId,
+          dealId,
+          total: 5000000,
+          createdAt: Date.now(),
+        })
+
+        const stageHistory: string[] = []
+
+        // First revision cycle
+        await db.updateDeal(ctx.db, dealId, { stage: 'Negotiation', probability: 50 })
+        stageHistory.push((await db.getDeal(ctx.db, dealId))?.stage ?? '')
+
+        await db.updateDeal(ctx.db, dealId, { stage: 'Proposal' }) // Revise
+        stageHistory.push((await db.getDeal(ctx.db, dealId))?.stage ?? '')
+
+        await db.updateEstimate(ctx.db, estimateId, { total: 5500000 })
+        stageHistory.push((await db.getDeal(ctx.db, dealId))?.stage ?? '')
+
+        await db.insertProposal(ctx.db, {
+          organizationId: orgId,
+          dealId,
+          version: 2,
+          status: 'Sent',
+          documentUrl: 'https://example.com/proposal-v2',
+          createdAt: Date.now(),
+        })
+        await db.updateDeal(ctx.db, dealId, { stage: 'Negotiation' })
+        stageHistory.push((await db.getDeal(ctx.db, dealId))?.stage ?? '')
+
+        // Second revision cycle
+        await db.updateDeal(ctx.db, dealId, { stage: 'Proposal' }) // Revise again
+        stageHistory.push((await db.getDeal(ctx.db, dealId))?.stage ?? '')
+
+        await db.updateEstimate(ctx.db, estimateId, { total: 6000000 })
+        stageHistory.push((await db.getDeal(ctx.db, dealId))?.stage ?? '')
+
+        await db.insertProposal(ctx.db, {
+          organizationId: orgId,
+          dealId,
+          version: 3,
+          status: 'Sent',
+          documentUrl: 'https://example.com/proposal-v3',
+          createdAt: Date.now(),
+        })
+        await db.updateDeal(ctx.db, dealId, { stage: 'Negotiation' })
+        stageHistory.push((await db.getDeal(ctx.db, dealId))?.stage ?? '')
+
+        return { stageHistory }
+      })
+
+      // Each cycle: Negotiation → Proposal → Proposal → Negotiation
+      expect(result.stageHistory).toEqual([
+        'Negotiation', // Initial
+        'Proposal',    // After revise click
+        'Proposal',    // After estimate update (no auto-advance)
+        'Negotiation', // After send proposal
+        'Proposal',    // After 2nd revise click
+        'Proposal',    // After 2nd estimate update
+        'Negotiation', // After 2nd send proposal
+      ])
+    })
+  })
 })

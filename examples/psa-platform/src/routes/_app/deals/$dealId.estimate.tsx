@@ -137,15 +137,20 @@ function RouteComponent() {
           dealId: dealId as Id<'deals'>,
           services,
         })
+        // In edit mode (revision), navigate to proposal page so user can re-send
+        // This ensures the workflow-first pattern: edit → send proposal
+        navigate({
+          to: '/deals/$dealId/proposal',
+          params: { dealId },
+        })
       } else {
         await createEstimateMutation({
           dealId: dealId as Id<'deals'>,
           services,
         })
+        // For new estimates, navigate back to deals pipeline
+        navigate({ to: '/deals' })
       }
-
-      // Navigate back to deals pipeline on success
-      navigate({ to: '/deals' })
     } catch (err) {
       console.error(`Failed to ${isEditMode ? 'update' : 'create'} estimate:`, err)
       setError(err instanceof Error ? err.message : `Failed to ${isEditMode ? 'update' : 'create'} estimate`)
