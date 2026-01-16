@@ -18,7 +18,7 @@ import {
 import { DealToDeliveryWorkItemHelpers } from './helpers'
 import { authComponent } from '../../auth'
 import { type HumanWorkItemOffer, isHumanOffer } from '@repo/tasquencer'
-import { assertUserHasScope, assertUserInOrganization } from '../../authorization'
+import { assertUserHasScope, assertUserInOrganization, getCurrentUserId } from '../../authorization'
 
 // ============================================================================
 // VERSION MANAGER API EXPORTS
@@ -489,6 +489,20 @@ export const updateDealDetails = mutation({
   handler: async (ctx, args) => {
     await assertUserHasScope(ctx, 'dealToDelivery:deals:edit:own')
 
+    const deal = await db.getDeal(ctx.db, args.dealId)
+    if (!deal) {
+      throw new Error('DEAL_NOT_FOUND')
+    }
+
+    // Validate tenant boundary
+    await assertUserInOrganization(ctx, deal.organizationId)
+
+    // Validate ownership: edit:own means user can only edit their own deals
+    const currentUserId = await getCurrentUserId(ctx)
+    if (deal.ownerId !== currentUserId) {
+      throw new Error('OWNERSHIP_VIOLATION')
+    }
+
     await db.updateDeal(ctx.db, args.dealId, args.updates)
 
     return { success: true }
@@ -519,6 +533,15 @@ export const updateDealStage = mutation({
     const deal = await db.getDeal(ctx.db, args.dealId)
     if (!deal) {
       throw new Error('DEAL_NOT_FOUND')
+    }
+
+    // Validate tenant boundary
+    await assertUserInOrganization(ctx, deal.organizationId)
+
+    // Validate ownership: edit:own means user can only edit their own deals
+    const currentUserId = await getCurrentUserId(ctx)
+    if (deal.ownerId !== currentUserId) {
+      throw new Error('OWNERSHIP_VIOLATION')
     }
 
     // Determine probability based on stage
@@ -1020,6 +1043,20 @@ export const updateProjectDetails = mutation({
   handler: async (ctx, args) => {
     await assertUserHasScope(ctx, 'dealToDelivery:projects:edit:own')
 
+    const project = await db.getProject(ctx.db, args.projectId)
+    if (!project) {
+      throw new Error('PROJECT_NOT_FOUND')
+    }
+
+    // Validate tenant boundary
+    await assertUserInOrganization(ctx, project.organizationId)
+
+    // Validate ownership: edit:own means user can only edit projects they manage
+    const currentUserId = await getCurrentUserId(ctx)
+    if (project.managerId !== currentUserId) {
+      throw new Error('OWNERSHIP_VIOLATION')
+    }
+
     await db.updateProject(ctx.db, args.projectId, args.updates)
 
     return { success: true }
@@ -1301,6 +1338,20 @@ export const updateTaskDetails = mutation({
   },
   handler: async (ctx, args) => {
     await assertUserHasScope(ctx, 'dealToDelivery:tasks:edit:own')
+
+    const task = await db.getTask(ctx.db, args.taskId)
+    if (!task) {
+      throw new Error('TASK_NOT_FOUND')
+    }
+
+    // Validate tenant boundary
+    await assertUserInOrganization(ctx, task.organizationId)
+
+    // Validate ownership: edit:own means user can only edit tasks they're assigned to
+    const currentUserId = await getCurrentUserId(ctx)
+    if (!task.assigneeIds.includes(currentUserId)) {
+      throw new Error('OWNERSHIP_VIOLATION')
+    }
 
     await db.updateTask(ctx.db, args.taskId, args.updates)
 
@@ -1723,6 +1774,15 @@ export const updateTimeEntryDetails = mutation({
       throw new Error('TIME_ENTRY_NOT_FOUND')
     }
 
+    // Validate tenant boundary
+    await assertUserInOrganization(ctx, entry.organizationId)
+
+    // Validate ownership: edit:own means user can only edit their own time entries
+    const currentUserId = await getCurrentUserId(ctx)
+    if (entry.userId !== currentUserId) {
+      throw new Error('OWNERSHIP_VIOLATION')
+    }
+
     if (entry.status !== 'Draft' && entry.status !== 'Rejected') {
       throw new Error('CANNOT_EDIT_SUBMITTED_ENTRY')
     }
@@ -1746,6 +1806,15 @@ export const submitTimeEntryMutation = mutation({
     const entry = await db.getTimeEntry(ctx.db, args.timeEntryId)
     if (!entry) {
       throw new Error('TIME_ENTRY_NOT_FOUND')
+    }
+
+    // Validate tenant boundary
+    await assertUserInOrganization(ctx, entry.organizationId)
+
+    // Validate ownership: users can only submit their own time entries
+    const currentUserId = await getCurrentUserId(ctx)
+    if (entry.userId !== currentUserId) {
+      throw new Error('OWNERSHIP_VIOLATION')
     }
 
     if (entry.status !== 'Draft' && entry.status !== 'Rejected') {

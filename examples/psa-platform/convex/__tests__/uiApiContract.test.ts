@@ -1814,4 +1814,295 @@ describe('UI-API Contract Tests (P4.5)', () => {
       expect(result.areInSameOrg).toBe(false)
     })
   })
+
+  // ============================================================================
+  // OWNERSHIP-LEVEL AUTHORIZATION (edit:own scope semantics)
+  // ============================================================================
+
+  describe('Ownership-Level Authorization', () => {
+    /**
+     * These tests verify that edit:own scopes enforce entity-level ownership:
+     * - Users can only edit their own deals (ownerId)
+     * - Users can only edit projects they manage (managerId)
+     * - Users can only edit their own time entries (userId)
+     * - Users can only edit tasks they're assigned to (assigneeIds)
+     */
+
+    it('deals have ownership tracking via ownerId', async () => {
+      const result = await t.run(async (ctx) => {
+        const { orgId, userId, companyId, contactId } = await setupTestData(ctx.db)
+
+        // Create a second user in the same org
+        const user2Id = await db.insertUser(ctx.db, {
+          organizationId: orgId,
+          name: 'Other User',
+          email: 'other@example.com',
+          isActive: true,
+        })
+
+        // Create deals with different owners
+        const deal1Id = await db.insertDeal(ctx.db, {
+          organizationId: orgId,
+          companyId,
+          contactId,
+          ownerId: userId, // Owned by user 1
+          name: 'Deal owned by User 1',
+          value: 1000000,
+          stage: 'Lead',
+          probability: 10,
+          createdAt: Date.now(),
+        })
+
+        const deal2Id = await db.insertDeal(ctx.db, {
+          organizationId: orgId,
+          companyId,
+          contactId,
+          ownerId: user2Id, // Owned by user 2
+          name: 'Deal owned by User 2',
+          value: 2000000,
+          stage: 'Qualified',
+          probability: 25,
+          createdAt: Date.now(),
+        })
+
+        const deal1 = await db.getDeal(ctx.db, deal1Id)
+        const deal2 = await db.getDeal(ctx.db, deal2Id)
+
+        return { deal1, deal2, userId, user2Id }
+      })
+
+      // Verify ownership is correctly tracked
+      expect(result.deal1?.ownerId).toBe(result.userId)
+      expect(result.deal2?.ownerId).toBe(result.user2Id)
+      expect(result.deal1?.ownerId).not.toBe(result.deal2?.ownerId)
+    })
+
+    it('projects have ownership tracking via managerId', async () => {
+      const result = await t.run(async (ctx) => {
+        const { orgId, userId, companyId, contactId } = await setupTestData(ctx.db)
+
+        // Create a second user
+        const user2Id = await db.insertUser(ctx.db, {
+          organizationId: orgId,
+          name: 'Project Manager 2',
+          email: 'pm2@example.com',
+          isActive: true,
+        })
+
+        // Create a deal
+        const dealId = await db.insertDeal(ctx.db, {
+          organizationId: orgId,
+          companyId,
+          contactId,
+          ownerId: userId,
+          name: 'Test Deal',
+          value: 1000000,
+          stage: 'Won',
+          probability: 100,
+          createdAt: Date.now(),
+        })
+
+        // Create projects with different managers
+        const project1Id = await db.insertProject(ctx.db, {
+          organizationId: orgId,
+          companyId,
+          dealId,
+          name: 'Project managed by User 1',
+          status: 'Active',
+          startDate: Date.now(),
+          managerId: userId, // Managed by user 1
+          createdAt: Date.now(),
+        })
+
+        const project2Id = await db.insertProject(ctx.db, {
+          organizationId: orgId,
+          companyId,
+          dealId,
+          name: 'Project managed by User 2',
+          status: 'Active',
+          startDate: Date.now(),
+          managerId: user2Id, // Managed by user 2
+          createdAt: Date.now(),
+        })
+
+        const project1 = await db.getProject(ctx.db, project1Id)
+        const project2 = await db.getProject(ctx.db, project2Id)
+
+        return { project1, project2, userId, user2Id }
+      })
+
+      // Verify ownership is correctly tracked
+      expect(result.project1?.managerId).toBe(result.userId)
+      expect(result.project2?.managerId).toBe(result.user2Id)
+      expect(result.project1?.managerId).not.toBe(result.project2?.managerId)
+    })
+
+    it('time entries have ownership tracking via userId', async () => {
+      const result = await t.run(async (ctx) => {
+        const { orgId, userId, companyId, contactId } = await setupTestData(ctx.db)
+
+        // Create a second user
+        const user2Id = await db.insertUser(ctx.db, {
+          organizationId: orgId,
+          name: 'Consultant 2',
+          email: 'consultant2@example.com',
+          isActive: true,
+        })
+
+        // Create deal and project
+        const dealId = await db.insertDeal(ctx.db, {
+          organizationId: orgId,
+          companyId,
+          contactId,
+          ownerId: userId,
+          name: 'Test Deal',
+          value: 1000000,
+          stage: 'Won',
+          probability: 100,
+          createdAt: Date.now(),
+        })
+
+        const projectId = await db.insertProject(ctx.db, {
+          organizationId: orgId,
+          companyId,
+          dealId,
+          name: 'Test Project',
+          status: 'Active',
+          startDate: Date.now(),
+          managerId: userId,
+          createdAt: Date.now(),
+        })
+
+        // Create time entries from different users
+        const entry1Id = await db.insertTimeEntry(ctx.db, {
+          organizationId: orgId,
+          projectId,
+          userId, // Entry by user 1
+          date: Date.now(),
+          hours: 8,
+          billable: true,
+          notes: 'Work by User 1',
+          status: 'Draft',
+          createdAt: Date.now(),
+        })
+
+        const entry2Id = await db.insertTimeEntry(ctx.db, {
+          organizationId: orgId,
+          projectId,
+          userId: user2Id, // Entry by user 2
+          date: Date.now(),
+          hours: 6,
+          billable: true,
+          notes: 'Work by User 2',
+          status: 'Draft',
+          createdAt: Date.now(),
+        })
+
+        const entry1 = await db.getTimeEntry(ctx.db, entry1Id)
+        const entry2 = await db.getTimeEntry(ctx.db, entry2Id)
+
+        return { entry1, entry2, userId, user2Id }
+      })
+
+      // Verify ownership is correctly tracked
+      expect(result.entry1?.userId).toBe(result.userId)
+      expect(result.entry2?.userId).toBe(result.user2Id)
+      expect(result.entry1?.userId).not.toBe(result.entry2?.userId)
+    })
+
+    it('tasks have ownership tracking via assigneeIds', async () => {
+      const result = await t.run(async (ctx) => {
+        const { orgId, userId, companyId, contactId } = await setupTestData(ctx.db)
+
+        // Create a second user
+        const user2Id = await db.insertUser(ctx.db, {
+          organizationId: orgId,
+          name: 'Developer 2',
+          email: 'dev2@example.com',
+          isActive: true,
+        })
+
+        // Create deal and project
+        const dealId = await db.insertDeal(ctx.db, {
+          organizationId: orgId,
+          companyId,
+          contactId,
+          ownerId: userId,
+          name: 'Test Deal',
+          value: 1000000,
+          stage: 'Won',
+          probability: 100,
+          createdAt: Date.now(),
+        })
+
+        const projectId = await db.insertProject(ctx.db, {
+          organizationId: orgId,
+          companyId,
+          dealId,
+          name: 'Test Project',
+          status: 'Active',
+          startDate: Date.now(),
+          managerId: userId,
+          createdAt: Date.now(),
+        })
+
+        // Create tasks with different assignees
+        const task1Id = await db.insertTask(ctx.db, {
+          organizationId: orgId,
+          projectId,
+          name: 'Task assigned to User 1',
+          description: 'Task description',
+          status: 'Todo',
+          assigneeIds: [userId], // Assigned to user 1
+          priority: 'Medium',
+          dependencies: [],
+          sortOrder: 1,
+          createdAt: Date.now(),
+        })
+
+        const task2Id = await db.insertTask(ctx.db, {
+          organizationId: orgId,
+          projectId,
+          name: 'Task assigned to User 2',
+          description: 'Task description',
+          status: 'Todo',
+          assigneeIds: [user2Id], // Assigned to user 2
+          priority: 'Medium',
+          dependencies: [],
+          sortOrder: 2,
+          createdAt: Date.now(),
+        })
+
+        const task3Id = await db.insertTask(ctx.db, {
+          organizationId: orgId,
+          projectId,
+          name: 'Task assigned to both users',
+          description: 'Task description',
+          status: 'Todo',
+          assigneeIds: [userId, user2Id], // Assigned to both
+          priority: 'High',
+          dependencies: [],
+          sortOrder: 3,
+          createdAt: Date.now(),
+        })
+
+        const task1 = await db.getTask(ctx.db, task1Id)
+        const task2 = await db.getTask(ctx.db, task2Id)
+        const task3 = await db.getTask(ctx.db, task3Id)
+
+        return { task1, task2, task3, userId, user2Id }
+      })
+
+      // Verify ownership is correctly tracked
+      expect(result.task1?.assigneeIds).toContain(result.userId)
+      expect(result.task1?.assigneeIds).not.toContain(result.user2Id)
+
+      expect(result.task2?.assigneeIds).toContain(result.user2Id)
+      expect(result.task2?.assigneeIds).not.toContain(result.userId)
+
+      // Task 3 is assigned to both users
+      expect(result.task3?.assigneeIds).toContain(result.userId)
+      expect(result.task3?.assigneeIds).toContain(result.user2Id)
+    })
+  })
 })

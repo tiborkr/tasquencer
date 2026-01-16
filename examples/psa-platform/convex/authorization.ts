@@ -71,6 +71,19 @@ export async function assertUserHasScope(ctx: QueryCtx, scope: AppScope) {
 import type { Id } from './_generated/dataModel'
 
 /**
+ * Gets the authenticated user's ID.
+ *
+ * @throws Error if user is not authenticated
+ */
+export async function getCurrentUserId(ctx: QueryCtx): Promise<Id<'users'>> {
+  const user = await authComponent.getAuthUser(ctx)
+  if (!user || !user.userId) {
+    throw new Error('User not authenticated')
+  }
+  return user.userId as Id<'users'>
+}
+
+/**
  * Asserts that the authenticated user belongs to the specified organization.
  * This enforces tenant boundary isolation - users can only access data from their own organization.
  *
