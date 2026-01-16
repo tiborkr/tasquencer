@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { Search, Shield, DollarSign, Clock, Receipt } from 'lucide-react'
+import { Search, Shield, DollarSign, Clock, Receipt, FileText } from 'lucide-react'
 
 import { NavMain } from '@/components/nav-main'
 import { NavUser } from '@/components/nav-user'
@@ -47,6 +47,17 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 {
                   title: 'My Expenses',
                   renderLink: () => <Link to="/expenses">My Expenses</Link>,
+                },
+              ],
+            },
+            {
+              title: 'Finance',
+              icon: FileText,
+              isActive: () => true,
+              items: [
+                {
+                  title: 'Invoices',
+                  renderLink: () => <Link to="/invoices">Invoices</Link>,
                 },
               ],
             },

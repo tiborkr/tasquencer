@@ -13,6 +13,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppTimesheetRouteImport } from './routes/_app/timesheet'
+import { Route as AppInvoicesRouteImport } from './routes/_app/invoices'
 import { Route as AppHomepageRouteImport } from './routes/_app/homepage'
 import { Route as AppExpensesRouteImport } from './routes/_app/expenses'
 import { Route as AppDealsRouteImport } from './routes/_app/deals'
@@ -54,6 +55,11 @@ const IndexRoute = IndexRouteImport.update({
 const AppTimesheetRoute = AppTimesheetRouteImport.update({
   id: '/timesheet',
   path: '/timesheet',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppInvoicesRoute = AppInvoicesRouteImport.update({
+  id: '/invoices',
+  path: '/invoices',
   getParentRoute: () => AppRoute,
 } as any)
 const AppHomepageRoute = AppHomepageRouteImport.update({
@@ -182,6 +188,7 @@ export interface FileRoutesByFullPath {
   '/deals': typeof AppDealsRouteWithChildren
   '/expenses': typeof AppExpensesRoute
   '/homepage': typeof AppHomepageRoute
+  '/invoices': typeof AppInvoicesRoute
   '/timesheet': typeof AppTimesheetRoute
   '/admin/groups': typeof AppAdminGroupsRouteWithChildren
   '/admin/roles': typeof AppAdminRolesRouteWithChildren
@@ -207,6 +214,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/expenses': typeof AppExpensesRoute
   '/homepage': typeof AppHomepageRoute
+  '/invoices': typeof AppInvoicesRoute
   '/timesheet': typeof AppTimesheetRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/admin': typeof AppAdminIndexRoute
@@ -233,6 +241,7 @@ export interface FileRoutesById {
   '/_app/deals': typeof AppDealsRouteWithChildren
   '/_app/expenses': typeof AppExpensesRoute
   '/_app/homepage': typeof AppHomepageRoute
+  '/_app/invoices': typeof AppInvoicesRoute
   '/_app/timesheet': typeof AppTimesheetRoute
   '/_app/admin/groups': typeof AppAdminGroupsRouteWithChildren
   '/_app/admin/roles': typeof AppAdminRolesRouteWithChildren
@@ -263,6 +272,7 @@ export interface FileRouteTypes {
     | '/deals'
     | '/expenses'
     | '/homepage'
+    | '/invoices'
     | '/timesheet'
     | '/admin/groups'
     | '/admin/roles'
@@ -288,6 +298,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/expenses'
     | '/homepage'
+    | '/invoices'
     | '/timesheet'
     | '/api/auth/$'
     | '/admin'
@@ -313,6 +324,7 @@ export interface FileRouteTypes {
     | '/_app/deals'
     | '/_app/expenses'
     | '/_app/homepage'
+    | '/_app/invoices'
     | '/_app/timesheet'
     | '/_app/admin/groups'
     | '/_app/admin/roles'
@@ -369,6 +381,13 @@ declare module '@tanstack/react-router' {
       path: '/timesheet'
       fullPath: '/timesheet'
       preLoaderRoute: typeof AppTimesheetRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/invoices': {
+      id: '/_app/invoices'
+      path: '/invoices'
+      fullPath: '/invoices'
+      preLoaderRoute: typeof AppInvoicesRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/homepage': {
@@ -645,6 +664,7 @@ interface AppRouteChildren {
   AppDealsRoute: typeof AppDealsRouteWithChildren
   AppExpensesRoute: typeof AppExpensesRoute
   AppHomepageRoute: typeof AppHomepageRoute
+  AppInvoicesRoute: typeof AppInvoicesRoute
   AppTimesheetRoute: typeof AppTimesheetRoute
 }
 
@@ -654,6 +674,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppDealsRoute: AppDealsRouteWithChildren,
   AppExpensesRoute: AppExpensesRoute,
   AppHomepageRoute: AppHomepageRoute,
+  AppInvoicesRoute: AppInvoicesRoute,
   AppTimesheetRoute: AppTimesheetRoute,
 }
 
