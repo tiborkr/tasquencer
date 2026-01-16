@@ -101,12 +101,24 @@ function RouteComponent() {
 
   // Add Entry form state
   const [formProjectId, setFormProjectId] = useState<Id<'projects'> | ''>('')
+  const [formTaskId, setFormTaskId] = useState<Id<'tasks'> | ''>('')
+  const [formServiceId, setFormServiceId] = useState<Id<'services'> | ''>('')
   const [formDate, setFormDate] = useState('')
   const [formHours, setFormHours] = useState('')
   const [formBillable, setFormBillable] = useState(true)
   const [formNotes, setFormNotes] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+
+  // Query tasks and services based on selected project
+  const projectTasks = useQuery(
+    api.workflows.dealToDelivery.api.listTasks,
+    formProjectId ? { projectId: formProjectId } : 'skip'
+  )
+  const projectServices = useQuery(
+    api.workflows.dealToDelivery.api.getProjectServices,
+    formProjectId ? { projectId: formProjectId } : 'skip'
+  )
 
   // Create time entry mutation
   const createTimeEntryMutation = useMutation(api.workflows.dealToDelivery.api.createTimeEntry)
@@ -167,11 +179,25 @@ function RouteComponent() {
   // Reset form
   const resetForm = () => {
     setFormProjectId('')
+    setFormTaskId('')
+    setFormServiceId('')
     setFormDate('')
     setFormHours('')
     setFormBillable(true)
     setFormNotes('')
     setFormError(null)
+  }
+
+  // Clear task and service when project changes
+  const handleProjectChange = (projectId: Id<'projects'>) => {
+    setFormProjectId(projectId)
+    setFormTaskId('')
+    setFormServiceId('')
+  }
+
+  // Quick hour button handler
+  const setQuickHours = (hours: number) => {
+    setFormHours(hours.toString())
   }
 
   // Open add entry dialog for a specific date
@@ -191,8 +217,8 @@ function RouteComponent() {
     }
 
     const hours = parseFloat(formHours)
-    if (isNaN(hours) || hours <= 0 || hours > 24) {
-      setFormError('Hours must be between 0.5 and 24')
+    if (isNaN(hours) || hours < 0.25 || hours > 24) {
+      setFormError('Hours must be between 0.25 and 24')
       return
     }
 
@@ -202,6 +228,8 @@ function RouteComponent() {
     try {
       await createTimeEntryMutation({
         projectId: formProjectId,
+        taskId: formTaskId || undefined,
+        serviceId: formServiceId || undefined,
         date: new Date(formDate).getTime(),
         hours,
         billable: formBillable,
@@ -431,7 +459,7 @@ function RouteComponent() {
               <Label>Project *</Label>
               <Select
                 value={formProjectId}
-                onValueChange={(value) => setFormProjectId(value as Id<'projects'>)}
+                onValueChange={(value) => handleProjectChange(value as Id<'projects'>)}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select project..." />
@@ -451,6 +479,48 @@ function RouteComponent() {
               )}
             </div>
 
+            {/* Task Selection */}
+            <div className="space-y-2">
+              <Label>Task</Label>
+              <Select
+                value={formTaskId}
+                onValueChange={(value) => setFormTaskId(value as Id<'tasks'>)}
+                disabled={!formProjectId}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={formProjectId ? "Select task (optional)..." : "Select project first"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {projectTasks?.map((task) => (
+                    <SelectItem key={task._id} value={task._id}>
+                      {task.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Service Selection */}
+            <div className="space-y-2">
+              <Label>Service</Label>
+              <Select
+                value={formServiceId}
+                onValueChange={(value) => setFormServiceId(value as Id<'services'>)}
+                disabled={!formProjectId}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={formProjectId ? "Select service (optional)..." : "Select project first"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {projectServices?.map((service) => (
+                    <SelectItem key={service._id} value={service._id}>
+                      {service.name} (${(service.rate / 100).toFixed(0)}/hr)
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             {/* Date */}
             <div className="space-y-2">
               <Label htmlFor="date">Date *</Label>
@@ -459,6 +529,7 @@ function RouteComponent() {
                 type="date"
                 value={formDate}
                 onChange={(e) => setFormDate(e.target.value)}
+                max={new Date().toISOString().split('T')[0]}
               />
             </div>
 
@@ -474,10 +545,49 @@ function RouteComponent() {
                   className="pl-9"
                   value={formHours}
                   onChange={(e) => setFormHours(e.target.value)}
-                  min="0.5"
+                  min="0.25"
                   max="24"
-                  step="0.5"
+                  step="0.25"
                 />
+              </div>
+              <div className="flex gap-2">
+                <span className="text-sm text-muted-foreground mr-1">Quick:</span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setQuickHours(1)}
+                  className="h-6 w-8 text-xs"
+                >
+                  1
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setQuickHours(2)}
+                  className="h-6 w-8 text-xs"
+                >
+                  2
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setQuickHours(4)}
+                  className="h-6 w-8 text-xs"
+                >
+                  4
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setQuickHours(8)}
+                  className="h-6 w-8 text-xs"
+                >
+                  8
+                </Button>
               </div>
             </div>
 

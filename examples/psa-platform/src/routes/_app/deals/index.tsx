@@ -34,6 +34,7 @@ import {
   Loader2,
   ClipboardCheck,
   FileText,
+  UserPlus,
 } from 'lucide-react'
 
 export const Route = createFileRoute('/_app/deals/')({
@@ -212,6 +213,29 @@ function RouteComponent() {
 
   // Create deal mutation
   const createDealMutation = useMutation(api.workflows.dealToDelivery.api.createDeal)
+  const createCompanyMutation = useMutation(api.workflows.dealToDelivery.api.createCompany)
+  const createContactMutation = useMutation(api.workflows.dealToDelivery.api.createContact)
+
+  // Nested dialogs state
+  const [newCompanyDialogOpen, setNewCompanyDialogOpen] = useState(false)
+  const [newContactDialogOpen, setNewContactDialogOpen] = useState(false)
+
+  // New Company form state
+  const [companyFormName, setCompanyFormName] = useState('')
+  const [companyFormStreet, setCompanyFormStreet] = useState('')
+  const [companyFormCity, setCompanyFormCity] = useState('')
+  const [companyFormState, setCompanyFormState] = useState('')
+  const [companyFormPostalCode, setCompanyFormPostalCode] = useState('')
+  const [companyFormCountry, setCompanyFormCountry] = useState('USA')
+  const [companyFormError, setCompanyFormError] = useState<string | null>(null)
+  const [isCreatingCompany, setIsCreatingCompany] = useState(false)
+
+  // New Contact form state
+  const [contactFormName, setContactFormName] = useState('')
+  const [contactFormEmail, setContactFormEmail] = useState('')
+  const [contactFormPhone, setContactFormPhone] = useState('')
+  const [contactFormError, setContactFormError] = useState<string | null>(null)
+  const [isCreatingContact, setIsCreatingContact] = useState(false)
 
   // Reset contact when company changes
   useEffect(() => {
@@ -234,6 +258,101 @@ function RouteComponent() {
     setFormOwnerId('')
     setFormNotes('')
     setFormError(null)
+  }
+
+  // Reset company form
+  const resetCompanyForm = () => {
+    setCompanyFormName('')
+    setCompanyFormStreet('')
+    setCompanyFormCity('')
+    setCompanyFormState('')
+    setCompanyFormPostalCode('')
+    setCompanyFormCountry('USA')
+    setCompanyFormError(null)
+  }
+
+  // Reset contact form
+  const resetContactForm = () => {
+    setContactFormName('')
+    setContactFormEmail('')
+    setContactFormPhone('')
+    setContactFormError(null)
+  }
+
+  // Handler for creating a new company
+  const handleCreateCompany = async () => {
+    if (!organizationId) {
+      setCompanyFormError('No organization found')
+      return
+    }
+    if (!companyFormName || !companyFormStreet || !companyFormCity || !companyFormState || !companyFormPostalCode) {
+      setCompanyFormError('Please fill in all required fields')
+      return
+    }
+
+    setIsCreatingCompany(true)
+    setCompanyFormError(null)
+
+    try {
+      const newCompanyId = await createCompanyMutation({
+        organizationId,
+        name: companyFormName,
+        billingAddress: {
+          street: companyFormStreet,
+          city: companyFormCity,
+          state: companyFormState,
+          postalCode: companyFormPostalCode,
+          country: companyFormCountry,
+        },
+        paymentTerms: 30,
+      })
+
+      // Auto-select the new company
+      setFormCompanyId(newCompanyId)
+      setNewCompanyDialogOpen(false)
+      resetCompanyForm()
+    } catch (error) {
+      console.error('Failed to create company:', error)
+      setCompanyFormError(error instanceof Error ? error.message : 'Failed to create company')
+    } finally {
+      setIsCreatingCompany(false)
+    }
+  }
+
+  // Handler for creating a new contact
+  const handleCreateContact = async () => {
+    if (!organizationId || !formCompanyId) {
+      setContactFormError('Please select a company first')
+      return
+    }
+    if (!contactFormName || !contactFormEmail || !contactFormPhone) {
+      setContactFormError('Please fill in all required fields')
+      return
+    }
+
+    setIsCreatingContact(true)
+    setContactFormError(null)
+
+    try {
+      const newContactId = await createContactMutation({
+        organizationId,
+        companyId: formCompanyId,
+        name: contactFormName,
+        email: contactFormEmail,
+        phone: contactFormPhone,
+        isPrimary: true,
+      })
+
+      // Auto-select the new contact
+      setFormContactId(newContactId)
+      setNewContactDialogOpen(false)
+      resetContactForm()
+    } catch (error) {
+      console.error('Failed to create contact:', error)
+      setContactFormError(error instanceof Error ? error.message : 'Failed to create contact')
+    } finally {
+      setIsCreatingContact(false)
+    }
   }
 
   const handleDialogChange = (open: boolean) => {
@@ -455,7 +574,19 @@ function RouteComponent() {
 
             {/* Company Selection */}
             <div className="space-y-2">
-              <Label>Company *</Label>
+              <div className="flex items-center justify-between">
+                <Label>Company *</Label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setNewCompanyDialogOpen(true)}
+                  className="h-6 text-xs"
+                >
+                  <Plus className="h-3 w-3 mr-1" />
+                  New Company
+                </Button>
+              </div>
               <Select
                 value={formCompanyId}
                 onValueChange={(value) => setFormCompanyId(value as Id<'companies'>)}
@@ -473,14 +604,27 @@ function RouteComponent() {
               </Select>
               {companies?.length === 0 && (
                 <p className="text-sm text-muted-foreground">
-                  No companies found. Create a company first.
+                  No companies found. Click "+ New Company" to create one.
                 </p>
               )}
             </div>
 
             {/* Contact Selection */}
             <div className="space-y-2">
-              <Label>Contact *</Label>
+              <div className="flex items-center justify-between">
+                <Label>Contact *</Label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setNewContactDialogOpen(true)}
+                  disabled={!formCompanyId}
+                  className="h-6 text-xs"
+                >
+                  <UserPlus className="h-3 w-3 mr-1" />
+                  New Contact
+                </Button>
+              </div>
               <Select
                 value={formContactId}
                 onValueChange={(value) => setFormContactId(value as Id<'contacts'>)}
@@ -499,7 +643,7 @@ function RouteComponent() {
               </Select>
               {formCompanyId && contacts?.length === 0 && (
                 <p className="text-sm text-muted-foreground">
-                  No contacts for this company. Create a contact first.
+                  No contacts for this company. Click "+ New Contact" to create one.
                 </p>
               )}
             </div>
@@ -571,6 +715,172 @@ function RouteComponent() {
             >
               {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Create Deal
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* New Company Dialog */}
+      <Dialog open={newCompanyDialogOpen} onOpenChange={(open) => {
+        setNewCompanyDialogOpen(open)
+        if (!open) resetCompanyForm()
+      }}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>New Company</DialogTitle>
+            <DialogDescription>
+              Create a new company to associate with this deal.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="companyName">Company Name *</Label>
+              <Input
+                id="companyName"
+                value={companyFormName}
+                onChange={(e) => setCompanyFormName(e.target.value)}
+                placeholder="Acme Corp"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="street">Street Address *</Label>
+              <Input
+                id="street"
+                value={companyFormStreet}
+                onChange={(e) => setCompanyFormStreet(e.target.value)}
+                placeholder="123 Main St"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="city">City *</Label>
+                <Input
+                  id="city"
+                  value={companyFormCity}
+                  onChange={(e) => setCompanyFormCity(e.target.value)}
+                  placeholder="San Francisco"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="state">State *</Label>
+                <Input
+                  id="state"
+                  value={companyFormState}
+                  onChange={(e) => setCompanyFormState(e.target.value)}
+                  placeholder="CA"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="postalCode">Postal Code *</Label>
+                <Input
+                  id="postalCode"
+                  value={companyFormPostalCode}
+                  onChange={(e) => setCompanyFormPostalCode(e.target.value)}
+                  placeholder="94105"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="country">Country</Label>
+                <Input
+                  id="country"
+                  value={companyFormCountry}
+                  onChange={(e) => setCompanyFormCountry(e.target.value)}
+                  placeholder="USA"
+                />
+              </div>
+            </div>
+
+            {companyFormError && (
+              <div className="text-sm text-destructive">
+                {companyFormError}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setNewCompanyDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreateCompany}
+              disabled={!companyFormName || !companyFormStreet || !companyFormCity || !companyFormState || !companyFormPostalCode || isCreatingCompany}
+            >
+              {isCreatingCompany && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Create Company
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* New Contact Dialog */}
+      <Dialog open={newContactDialogOpen} onOpenChange={(open) => {
+        setNewContactDialogOpen(open)
+        if (!open) resetContactForm()
+      }}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>New Contact</DialogTitle>
+            <DialogDescription>
+              Create a new contact for {companies?.find(c => c._id === formCompanyId)?.name ?? 'this company'}.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="contactName">Contact Name *</Label>
+              <Input
+                id="contactName"
+                value={contactFormName}
+                onChange={(e) => setContactFormName(e.target.value)}
+                placeholder="John Smith"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="contactEmail">Email *</Label>
+              <Input
+                id="contactEmail"
+                type="email"
+                value={contactFormEmail}
+                onChange={(e) => setContactFormEmail(e.target.value)}
+                placeholder="john@acme.com"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="contactPhone">Phone *</Label>
+              <Input
+                id="contactPhone"
+                type="tel"
+                value={contactFormPhone}
+                onChange={(e) => setContactFormPhone(e.target.value)}
+                placeholder="(555) 123-4567"
+              />
+            </div>
+
+            {contactFormError && (
+              <div className="text-sm text-destructive">
+                {contactFormError}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setNewContactDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreateContact}
+              disabled={!contactFormName || !contactFormEmail || !contactFormPhone || isCreatingContact}
+            >
+              {isCreatingContact && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Create Contact
             </Button>
           </DialogFooter>
         </DialogContent>
