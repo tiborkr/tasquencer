@@ -93,9 +93,11 @@ function RouteComponent() {
     setError(null)
 
     try {
+      // Convert rates from dollars to cents for storage
+      // User enters $200/hr, we store 20000 cents/hr
       const services = serviceLines.map(line => ({
         name: line.name.trim(),
-        rate: parseFloat(line.rate),
+        rate: Math.round(parseFloat(line.rate) * 100), // Convert dollars to cents
         hours: parseFloat(line.hours),
       }))
 
