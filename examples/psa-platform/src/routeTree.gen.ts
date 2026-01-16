@@ -35,6 +35,8 @@ import { Route as AppAdminUsersIndexRouteImport } from './routes/_app/admin/user
 import { Route as AppAdminRolesIndexRouteImport } from './routes/_app/admin/roles.index'
 import { Route as AppAdminGroupsIndexRouteImport } from './routes/_app/admin/groups.index'
 import { Route as AppDealsDealIdQualifyRouteImport } from './routes/_app/deals/$dealId.qualify'
+import { Route as AppDealsDealIdProposalRouteImport } from './routes/_app/deals/$dealId.proposal'
+import { Route as AppDealsDealIdNegotiateRouteImport } from './routes/_app/deals/$dealId.negotiate'
 import { Route as AppDealsDealIdEstimateRouteImport } from './routes/_app/deals/$dealId.estimate'
 import { Route as AppAuditTraceIdVisualizerRouteImport } from './routes/_app/audit/$traceId.visualizer'
 import { Route as AppAdminRolesRoleIdRouteImport } from './routes/_app/admin/roles.$roleId'
@@ -170,6 +172,16 @@ const AppDealsDealIdQualifyRoute = AppDealsDealIdQualifyRouteImport.update({
   path: '/$dealId/qualify',
   getParentRoute: () => AppDealsRoute,
 } as any)
+const AppDealsDealIdProposalRoute = AppDealsDealIdProposalRouteImport.update({
+  id: '/$dealId/proposal',
+  path: '/$dealId/proposal',
+  getParentRoute: () => AppDealsRoute,
+} as any)
+const AppDealsDealIdNegotiateRoute = AppDealsDealIdNegotiateRouteImport.update({
+  id: '/$dealId/negotiate',
+  path: '/$dealId/negotiate',
+  getParentRoute: () => AppDealsRoute,
+} as any)
 const AppDealsDealIdEstimateRoute = AppDealsDealIdEstimateRouteImport.update({
   id: '/$dealId/estimate',
   path: '/$dealId/estimate',
@@ -223,6 +235,8 @@ export interface FileRoutesByFullPath {
   '/admin/roles/$roleId': typeof AppAdminRolesRoleIdRoute
   '/audit/$traceId/visualizer': typeof AppAuditTraceIdVisualizerRoute
   '/deals/$dealId/estimate': typeof AppDealsDealIdEstimateRoute
+  '/deals/$dealId/negotiate': typeof AppDealsDealIdNegotiateRoute
+  '/deals/$dealId/proposal': typeof AppDealsDealIdProposalRoute
   '/deals/$dealId/qualify': typeof AppDealsDealIdQualifyRoute
   '/admin/groups/': typeof AppAdminGroupsIndexRoute
   '/admin/roles/': typeof AppAdminRolesIndexRoute
@@ -248,6 +262,8 @@ export interface FileRoutesByTo {
   '/admin/roles/$roleId': typeof AppAdminRolesRoleIdRoute
   '/audit/$traceId/visualizer': typeof AppAuditTraceIdVisualizerRoute
   '/deals/$dealId/estimate': typeof AppDealsDealIdEstimateRoute
+  '/deals/$dealId/negotiate': typeof AppDealsDealIdNegotiateRoute
+  '/deals/$dealId/proposal': typeof AppDealsDealIdProposalRoute
   '/deals/$dealId/qualify': typeof AppDealsDealIdQualifyRoute
   '/admin/groups': typeof AppAdminGroupsIndexRoute
   '/admin/roles': typeof AppAdminRolesIndexRoute
@@ -282,6 +298,8 @@ export interface FileRoutesById {
   '/_app/admin/roles/$roleId': typeof AppAdminRolesRoleIdRoute
   '/_app/audit/$traceId/visualizer': typeof AppAuditTraceIdVisualizerRoute
   '/_app/deals/$dealId/estimate': typeof AppDealsDealIdEstimateRoute
+  '/_app/deals/$dealId/negotiate': typeof AppDealsDealIdNegotiateRoute
+  '/_app/deals/$dealId/proposal': typeof AppDealsDealIdProposalRoute
   '/_app/deals/$dealId/qualify': typeof AppDealsDealIdQualifyRoute
   '/_app/admin/groups/': typeof AppAdminGroupsIndexRoute
   '/_app/admin/roles/': typeof AppAdminRolesIndexRoute
@@ -316,6 +334,8 @@ export interface FileRouteTypes {
     | '/admin/roles/$roleId'
     | '/audit/$traceId/visualizer'
     | '/deals/$dealId/estimate'
+    | '/deals/$dealId/negotiate'
+    | '/deals/$dealId/proposal'
     | '/deals/$dealId/qualify'
     | '/admin/groups/'
     | '/admin/roles/'
@@ -341,6 +361,8 @@ export interface FileRouteTypes {
     | '/admin/roles/$roleId'
     | '/audit/$traceId/visualizer'
     | '/deals/$dealId/estimate'
+    | '/deals/$dealId/negotiate'
+    | '/deals/$dealId/proposal'
     | '/deals/$dealId/qualify'
     | '/admin/groups'
     | '/admin/roles'
@@ -374,6 +396,8 @@ export interface FileRouteTypes {
     | '/_app/admin/roles/$roleId'
     | '/_app/audit/$traceId/visualizer'
     | '/_app/deals/$dealId/estimate'
+    | '/_app/deals/$dealId/negotiate'
+    | '/_app/deals/$dealId/proposal'
     | '/_app/deals/$dealId/qualify'
     | '/_app/admin/groups/'
     | '/_app/admin/roles/'
@@ -573,6 +597,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppDealsDealIdQualifyRouteImport
       parentRoute: typeof AppDealsRoute
     }
+    '/_app/deals/$dealId/proposal': {
+      id: '/_app/deals/$dealId/proposal'
+      path: '/$dealId/proposal'
+      fullPath: '/deals/$dealId/proposal'
+      preLoaderRoute: typeof AppDealsDealIdProposalRouteImport
+      parentRoute: typeof AppDealsRoute
+    }
+    '/_app/deals/$dealId/negotiate': {
+      id: '/_app/deals/$dealId/negotiate'
+      path: '/$dealId/negotiate'
+      fullPath: '/deals/$dealId/negotiate'
+      preLoaderRoute: typeof AppDealsDealIdNegotiateRouteImport
+      parentRoute: typeof AppDealsRoute
+    }
     '/_app/deals/$dealId/estimate': {
       id: '/_app/deals/$dealId/estimate'
       path: '/$dealId/estimate'
@@ -702,12 +740,16 @@ const AppAuditRouteWithChildren = AppAuditRoute._addFileChildren(
 interface AppDealsRouteChildren {
   AppDealsIndexRoute: typeof AppDealsIndexRoute
   AppDealsDealIdEstimateRoute: typeof AppDealsDealIdEstimateRoute
+  AppDealsDealIdNegotiateRoute: typeof AppDealsDealIdNegotiateRoute
+  AppDealsDealIdProposalRoute: typeof AppDealsDealIdProposalRoute
   AppDealsDealIdQualifyRoute: typeof AppDealsDealIdQualifyRoute
 }
 
 const AppDealsRouteChildren: AppDealsRouteChildren = {
   AppDealsIndexRoute: AppDealsIndexRoute,
   AppDealsDealIdEstimateRoute: AppDealsDealIdEstimateRoute,
+  AppDealsDealIdNegotiateRoute: AppDealsDealIdNegotiateRoute,
+  AppDealsDealIdProposalRoute: AppDealsDealIdProposalRoute,
   AppDealsDealIdQualifyRoute: AppDealsDealIdQualifyRoute,
 }
 

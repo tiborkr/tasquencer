@@ -35,6 +35,8 @@ import {
   ClipboardCheck,
   FileText,
   UserPlus,
+  Send,
+  Handshake,
 } from 'lucide-react'
 
 export const Route = createFileRoute('/_app/deals/')({
@@ -131,6 +133,22 @@ function DealCard({ deal, companies, users }: DealCardProps) {
             <Button size="sm" className="w-full mt-2" variant="outline">
               <FileText className="h-4 w-4 mr-2" />
               Create Estimate
+            </Button>
+          </Link>
+        )}
+        {deal.stage === 'Proposal' && (
+          <Link to="/deals/$dealId/proposal" params={{ dealId: deal._id }}>
+            <Button size="sm" className="w-full mt-2" variant="outline">
+              <Send className="h-4 w-4 mr-2" />
+              Send Proposal
+            </Button>
+          </Link>
+        )}
+        {deal.stage === 'Negotiation' && (
+          <Link to="/deals/$dealId/negotiate" params={{ dealId: deal._id }}>
+            <Button size="sm" className="w-full mt-2" variant="outline">
+              <Handshake className="h-4 w-4 mr-2" />
+              Get Signature
             </Button>
           </Link>
         )}
