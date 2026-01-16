@@ -1524,4 +1524,265 @@ describe('PSA Platform API Endpoints', () => {
       })
     })
   })
+
+  // ============================================================================
+  // TIMESHEET APPROVAL ENDPOINT TESTS
+  // ============================================================================
+
+  describe('Timesheet Approval Endpoints', () => {
+    describe('getSubmittedTimesheetsForApproval', () => {
+      it('groups submitted time entries by user and week', async () => {
+        const result = await t.run(async (ctx) => {
+          const { orgId, userId, managerId, companyId } =
+            await setupTestData(ctx.db)
+
+          const projectId = await db.insertProject(ctx.db, {
+            organizationId: orgId,
+            companyId,
+            name: 'Test Project',
+            status: 'Active',
+            startDate: Date.now(),
+            managerId,
+            createdAt: Date.now(),
+          })
+
+          // Create submitted time entries for user
+          const now = Date.now()
+          const monday = now - (new Date(now).getDay() - 1) * 24 * 60 * 60 * 1000
+
+          await db.insertTimeEntry(ctx.db, {
+            organizationId: orgId,
+            projectId,
+            userId,
+            date: monday,
+            hours: 8,
+            billable: true,
+            status: 'Submitted',
+            createdAt: Date.now(),
+          })
+
+          await db.insertTimeEntry(ctx.db, {
+            organizationId: orgId,
+            projectId,
+            userId,
+            date: monday + 24 * 60 * 60 * 1000, // Tuesday
+            hours: 6,
+            billable: true,
+            status: 'Submitted',
+            createdAt: Date.now(),
+          })
+
+          // Query submitted timesheets
+          const entries = await db.listTimeEntriesByStatus(
+            ctx.db,
+            orgId,
+            'Submitted'
+          )
+
+          return entries
+        })
+
+        expect(result).toHaveLength(2)
+        expect(result[0].status).toBe('Submitted')
+        expect(result[0].hours).toBe(8)
+        expect(result[1].hours).toBe(6)
+      })
+
+      it('returns empty for organization with no submitted entries', async () => {
+        const result = await t.run(async (ctx) => {
+          const { orgId } = await setupTestData(ctx.db)
+
+          return await db.listTimeEntriesByStatus(ctx.db, orgId, 'Submitted')
+        })
+
+        expect(result).toHaveLength(0)
+      })
+
+      it('filters by status correctly', async () => {
+        const result = await t.run(async (ctx) => {
+          const { orgId, userId, managerId, companyId } =
+            await setupTestData(ctx.db)
+
+          const projectId = await db.insertProject(ctx.db, {
+            organizationId: orgId,
+            companyId,
+            name: 'Test Project',
+            status: 'Active',
+            startDate: Date.now(),
+            managerId,
+            createdAt: Date.now(),
+          })
+
+          // Create entries with different statuses
+          await db.insertTimeEntry(ctx.db, {
+            organizationId: orgId,
+            projectId,
+            userId,
+            date: Date.now(),
+            hours: 4,
+            billable: true,
+            status: 'Draft',
+            createdAt: Date.now(),
+          })
+
+          await db.insertTimeEntry(ctx.db, {
+            organizationId: orgId,
+            projectId,
+            userId,
+            date: Date.now(),
+            hours: 8,
+            billable: true,
+            status: 'Submitted',
+            createdAt: Date.now(),
+          })
+
+          await db.insertTimeEntry(ctx.db, {
+            organizationId: orgId,
+            projectId,
+            userId,
+            date: Date.now(),
+            hours: 6,
+            billable: true,
+            status: 'Approved',
+            createdAt: Date.now(),
+          })
+
+          const submitted = await db.listTimeEntriesByStatus(
+            ctx.db,
+            orgId,
+            'Submitted'
+          )
+          const approved = await db.listTimeEntriesByStatus(
+            ctx.db,
+            orgId,
+            'Approved'
+          )
+
+          return { submitted, approved }
+        })
+
+        expect(result.submitted).toHaveLength(1)
+        expect(result.submitted[0].hours).toBe(8)
+        expect(result.approved).toHaveLength(1)
+        expect(result.approved[0].hours).toBe(6)
+      })
+    })
+  })
+
+  // ============================================================================
+  // PROJECT SERVICES ENDPOINT TESTS
+  // ============================================================================
+
+  describe('Project Services Endpoints', () => {
+    describe('getProjectServices', () => {
+      it('returns services for a project with budget', async () => {
+        const result = await t.run(async (ctx) => {
+          const { orgId, managerId, companyId } = await setupTestData(ctx.db)
+
+          const projectId = await db.insertProject(ctx.db, {
+            organizationId: orgId,
+            companyId,
+            name: 'Test Project',
+            status: 'Active',
+            startDate: Date.now(),
+            managerId,
+            createdAt: Date.now(),
+          })
+
+          const budgetId = await db.insertBudget(ctx.db, {
+            organizationId: orgId,
+            projectId,
+            type: 'TimeAndMaterials',
+            totalAmount: 100000,
+            createdAt: Date.now(),
+          })
+
+          await db.updateProject(ctx.db, projectId, { budgetId })
+
+          // Add services to budget
+          await db.insertService(ctx.db, {
+            organizationId: orgId,
+            budgetId,
+            name: 'Development',
+            rate: 15000, // $150/hr
+            estimatedHours: 40,
+            totalAmount: 600000,
+          })
+
+          await db.insertService(ctx.db, {
+            organizationId: orgId,
+            budgetId,
+            name: 'Design',
+            rate: 12500, // $125/hr
+            estimatedHours: 20,
+            totalAmount: 250000,
+          })
+
+          const budget = await db.getBudgetByProject(ctx.db, projectId)
+          if (!budget) return []
+          return await db.listServicesByBudget(ctx.db, budget._id)
+        })
+
+        expect(result).toHaveLength(2)
+        expect(result[0].name).toBe('Development')
+        expect(result[0].rate).toBe(15000)
+        expect(result[1].name).toBe('Design')
+        expect(result[1].rate).toBe(12500)
+      })
+
+      it('returns empty array for project without budget', async () => {
+        const result = await t.run(async (ctx) => {
+          const { orgId, managerId, companyId } = await setupTestData(ctx.db)
+
+          const projectId = await db.insertProject(ctx.db, {
+            organizationId: orgId,
+            companyId,
+            name: 'Test Project',
+            status: 'Active',
+            startDate: Date.now(),
+            managerId,
+            createdAt: Date.now(),
+          })
+
+          const budget = await db.getBudgetByProject(ctx.db, projectId)
+          if (!budget) return []
+          return await db.listServicesByBudget(ctx.db, budget._id)
+        })
+
+        expect(result).toHaveLength(0)
+      })
+
+      it('returns empty array for budget without services', async () => {
+        const result = await t.run(async (ctx) => {
+          const { orgId, managerId, companyId } = await setupTestData(ctx.db)
+
+          const projectId = await db.insertProject(ctx.db, {
+            organizationId: orgId,
+            companyId,
+            name: 'Test Project',
+            status: 'Active',
+            startDate: Date.now(),
+            managerId,
+            createdAt: Date.now(),
+          })
+
+          const budgetId = await db.insertBudget(ctx.db, {
+            organizationId: orgId,
+            projectId,
+            type: 'TimeAndMaterials',
+            totalAmount: 100000,
+            createdAt: Date.now(),
+          })
+
+          await db.updateProject(ctx.db, projectId, { budgetId })
+
+          const budget = await db.getBudgetByProject(ctx.db, projectId)
+          if (!budget) return []
+          return await db.listServicesByBudget(ctx.db, budget._id)
+        })
+
+        expect(result).toHaveLength(0)
+      })
+    })
+  })
 })

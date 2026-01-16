@@ -20,6 +20,7 @@ import { Route as AppHomepageRouteImport } from './routes/_app/homepage'
 import { Route as AppExpensesRouteImport } from './routes/_app/expenses'
 import { Route as AppDealsRouteImport } from './routes/_app/deals'
 import { Route as AppAuditRouteImport } from './routes/_app/audit'
+import { Route as AppApprovalsTimesheetsRouteImport } from './routes/_app/approvals-timesheets'
 import { Route as AppAdminRouteImport } from './routes/_app/admin'
 import { Route as AppDealsIndexRouteImport } from './routes/_app/deals/index'
 import { Route as AppAuditIndexRouteImport } from './routes/_app/audit/index'
@@ -92,6 +93,11 @@ const AppDealsRoute = AppDealsRouteImport.update({
 const AppAuditRoute = AppAuditRouteImport.update({
   id: '/audit',
   path: '/audit',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppApprovalsTimesheetsRoute = AppApprovalsTimesheetsRouteImport.update({
+  id: '/approvals-timesheets',
+  path: '/approvals-timesheets',
   getParentRoute: () => AppRoute,
 } as any)
 const AppAdminRoute = AppAdminRouteImport.update({
@@ -196,6 +202,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/admin': typeof AppAdminRouteWithChildren
+  '/approvals-timesheets': typeof AppApprovalsTimesheetsRoute
   '/audit': typeof AppAuditRouteWithChildren
   '/deals': typeof AppDealsRouteWithChildren
   '/expenses': typeof AppExpensesRoute
@@ -226,6 +233,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/approvals-timesheets': typeof AppApprovalsTimesheetsRoute
   '/expenses': typeof AppExpensesRoute
   '/homepage': typeof AppHomepageRoute
   '/invoices': typeof AppInvoicesRoute
@@ -253,6 +261,7 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
   '/_app/admin': typeof AppAdminRouteWithChildren
+  '/_app/approvals-timesheets': typeof AppApprovalsTimesheetsRoute
   '/_app/audit': typeof AppAuditRouteWithChildren
   '/_app/deals': typeof AppDealsRouteWithChildren
   '/_app/expenses': typeof AppExpensesRoute
@@ -286,6 +295,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/admin'
+    | '/approvals-timesheets'
     | '/audit'
     | '/deals'
     | '/expenses'
@@ -316,6 +326,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/login'
+    | '/approvals-timesheets'
     | '/expenses'
     | '/homepage'
     | '/invoices'
@@ -342,6 +353,7 @@ export interface FileRouteTypes {
     | '/_app'
     | '/login'
     | '/_app/admin'
+    | '/_app/approvals-timesheets'
     | '/_app/audit'
     | '/_app/deals'
     | '/_app/expenses'
@@ -454,6 +466,13 @@ declare module '@tanstack/react-router' {
       path: '/audit'
       fullPath: '/audit'
       preLoaderRoute: typeof AppAuditRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/approvals-timesheets': {
+      id: '/_app/approvals-timesheets'
+      path: '/approvals-timesheets'
+      fullPath: '/approvals-timesheets'
+      preLoaderRoute: typeof AppApprovalsTimesheetsRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/admin': {
@@ -698,6 +717,7 @@ const AppDealsRouteWithChildren = AppDealsRoute._addFileChildren(
 
 interface AppRouteChildren {
   AppAdminRoute: typeof AppAdminRouteWithChildren
+  AppApprovalsTimesheetsRoute: typeof AppApprovalsTimesheetsRoute
   AppAuditRoute: typeof AppAuditRouteWithChildren
   AppDealsRoute: typeof AppDealsRouteWithChildren
   AppExpensesRoute: typeof AppExpensesRoute
@@ -710,6 +730,7 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppAdminRoute: AppAdminRouteWithChildren,
+  AppApprovalsTimesheetsRoute: AppApprovalsTimesheetsRoute,
   AppAuditRoute: AppAuditRouteWithChildren,
   AppDealsRoute: AppDealsRouteWithChildren,
   AppExpensesRoute: AppExpensesRoute,

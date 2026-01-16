@@ -2571,3 +2571,166 @@ export const getCurrentUser = query({
     return user
   },
 })
+
+// ============================================================================
+// TIMESHEET APPROVAL ENDPOINTS
+// ============================================================================
+
+/**
+ * Get submitted timesheets for approval
+ * Groups time entries by user and week for manager review
+ */
+export const getSubmittedTimesheetsForApproval = query({
+  args: {
+    organizationId: v.id('organizations'),
+    status: v.optional(
+      v.union(
+        v.literal('Submitted'),
+        v.literal('Approved'),
+        v.literal('Rejected')
+      )
+    ),
+    projectId: v.optional(v.id('projects')),
+    weekStart: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    await assertUserHasScope(ctx, 'dealToDelivery:time:approve')
+
+    // Get all time entries by status
+    const status = args.status ?? 'Submitted'
+    let entries = await db.listTimeEntriesByStatus(
+      ctx.db,
+      args.organizationId,
+      status
+    )
+
+    // Filter by project if specified
+    if (args.projectId) {
+      entries = entries.filter((e) => e.projectId === args.projectId)
+    }
+
+    // Filter by week if specified
+    if (args.weekStart) {
+      const weekEnd = args.weekStart + 7 * 24 * 60 * 60 * 1000
+      entries = entries.filter(
+        (e) => e.date >= args.weekStart! && e.date < weekEnd
+      )
+    }
+
+    // Get unique user IDs and project IDs
+    const userIds = [...new Set(entries.map((e) => e.userId))]
+    const projectIds = [...new Set(entries.map((e) => e.projectId))]
+
+    // Load users and projects in parallel
+    const [users, projects] = await Promise.all([
+      Promise.all(userIds.map((id) => ctx.db.get(id))),
+      Promise.all(projectIds.map((id) => ctx.db.get(id))),
+    ])
+
+    const userMap = new Map(
+      users.filter(Boolean).map((u) => [u!._id, u!])
+    )
+    const projectMap = new Map(
+      projects.filter(Boolean).map((p) => [p!._id, p!])
+    )
+
+    // Group entries by user and week
+    interface TimesheetGroup {
+      userId: Id<'users'>
+      user: { name: string; email: string } | null
+      weekStart: number
+      entries: Array<{
+        _id: Id<'timeEntries'>
+        date: number
+        hours: number
+        billable: boolean
+        status: Doc<'timeEntries'>['status']
+        notes?: string
+        project: { _id: Id<'projects'>; name: string } | null
+      }>
+      totalHours: number
+      billableHours: number
+    }
+
+    const groupedByUserWeek = new Map<string, TimesheetGroup>()
+
+    for (const entry of entries) {
+      // Calculate week start for this entry
+      const entryDate = new Date(entry.date)
+      const day = entryDate.getDay()
+      const diff = entryDate.getDate() - day + (day === 0 ? -6 : 1)
+      const entryWeekStart = new Date(entryDate)
+      entryWeekStart.setDate(diff)
+      entryWeekStart.setHours(0, 0, 0, 0)
+      const weekStartMs = entryWeekStart.getTime()
+
+      const key = `${entry.userId}-${weekStartMs}`
+      const user = userMap.get(entry.userId)
+      const project = projectMap.get(entry.projectId)
+
+      if (!groupedByUserWeek.has(key)) {
+        groupedByUserWeek.set(key, {
+          userId: entry.userId,
+          user: user ? { name: user.name ?? 'Unknown', email: user.email ?? '' } : null,
+          weekStart: weekStartMs,
+          entries: [],
+          totalHours: 0,
+          billableHours: 0,
+        })
+      }
+
+      const group = groupedByUserWeek.get(key)!
+      group.entries.push({
+        _id: entry._id,
+        date: entry.date,
+        hours: entry.hours,
+        billable: entry.billable,
+        status: entry.status,
+        notes: entry.notes,
+        project: project ? { _id: project._id, name: project.name } : null,
+      })
+      group.totalHours += entry.hours
+      if (entry.billable) {
+        group.billableHours += entry.hours
+      }
+    }
+
+    // Convert to array and sort by week (newest first), then by user
+    const timesheets = Array.from(groupedByUserWeek.values())
+      .sort((a, b) => {
+        if (b.weekStart !== a.weekStart) return b.weekStart - a.weekStart
+        return (a.user?.name ?? '').localeCompare(b.user?.name ?? '')
+      })
+
+    // Calculate summary stats
+    const summary = {
+      pendingCount: status === 'Submitted' ? timesheets.length : 0,
+      pendingHours: status === 'Submitted'
+        ? timesheets.reduce((sum, t) => sum + t.totalHours, 0)
+        : 0,
+      approvedCount: status === 'Approved' ? timesheets.length : 0,
+      rejectedCount: status === 'Rejected' ? timesheets.length : 0,
+    }
+
+    return { timesheets, summary }
+  },
+})
+
+/**
+ * Get services for a project's budget
+ */
+export const getProjectServices = query({
+  args: {
+    projectId: v.id('projects'),
+  },
+  handler: async (ctx, args) => {
+    await assertUserHasScope(ctx, 'dealToDelivery:projects:view:own')
+
+    const budget = await db.getBudgetByProject(ctx.db, args.projectId)
+    if (!budget) {
+      return []
+    }
+
+    return await db.listServicesByBudget(ctx.db, budget._id)
+  },
+})
