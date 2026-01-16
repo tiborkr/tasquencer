@@ -1,8 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useQuery } from 'convex/react'
+import { useQuery, useMutation } from 'convex/react'
 import { api } from '@/convex/_generated/api'
-import { useState, useMemo } from 'react'
-import type { Doc } from '@/convex/_generated/dataModel'
+import { useState, useMemo, useEffect } from 'react'
+import type { Doc, Id } from '@/convex/_generated/dataModel'
 import { Card, CardContent } from '@repo/ui/components/card'
 import { Badge } from '@repo/ui/components/badge'
 import { Button } from '@repo/ui/components/button'
@@ -157,40 +157,108 @@ function RouteComponent() {
   const [ownerFilter, setOwnerFilter] = useState<string>('all')
   const [newDealDialogOpen, setNewDealDialogOpen] = useState(false)
 
-  // Queries - for now we use getMyDeals which doesn't need organizationId
+  // Get current user to determine organization
+  const currentUser = useQuery(api.workflows.dealToDelivery.api.getCurrentUser)
+  const organizationId = currentUser?.organizationId
+
+  // Query deals
   const myDeals = useQuery(api.workflows.dealToDelivery.api.getMyDeals)
 
-  // For a full implementation, we'd need to query companies and users
-  // For now, we'll use empty arrays and show basic deal info
-  const companies: Doc<'companies'>[] = []
-  const users: Doc<'users'>[] = []
+  // Query companies and users for the organization
+  const companies = useQuery(
+    api.workflows.dealToDelivery.api.getCompanies,
+    organizationId ? { organizationId } : 'skip'
+  )
+  const users = useQuery(
+    api.workflows.dealToDelivery.api.getUsers,
+    organizationId ? { organizationId } : 'skip'
+  )
 
   // New Deal form state
+  const [formCompanyId, setFormCompanyId] = useState<Id<'companies'> | ''>('')
+  const [formContactId, setFormContactId] = useState<Id<'contacts'> | ''>('')
   const [formName, setFormName] = useState('')
   const [formValue, setFormValue] = useState('')
+  const [formOwnerId, setFormOwnerId] = useState<Id<'users'> | ''>('')
   const [formNotes, setFormNotes] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
 
-  // Handler for creating a new deal - placeholder until full implementation
+  // Query contacts based on selected company
+  const contacts = useQuery(
+    api.workflows.dealToDelivery.api.getContacts,
+    formCompanyId ? { companyId: formCompanyId } : 'skip'
+  )
+
+  // Create deal mutation
+  const createDealMutation = useMutation(api.workflows.dealToDelivery.api.createDeal)
+
+  // Reset contact when company changes
+  useEffect(() => {
+    setFormContactId('')
+  }, [formCompanyId])
+
+  // Set default owner to current user when dialog opens
+  useEffect(() => {
+    if (newDealDialogOpen && currentUser && !formOwnerId) {
+      setFormOwnerId(currentUser._id)
+    }
+  }, [newDealDialogOpen, currentUser, formOwnerId])
+
+  // Reset form when dialog closes
+  const resetForm = () => {
+    setFormCompanyId('')
+    setFormContactId('')
+    setFormName('')
+    setFormValue('')
+    setFormOwnerId('')
+    setFormNotes('')
+    setFormError(null)
+  }
+
+  const handleDialogChange = (open: boolean) => {
+    setNewDealDialogOpen(open)
+    if (!open) {
+      resetForm()
+    }
+  }
+
+  // Handler for creating a new deal
   const handleCreateDeal = async () => {
-    if (!formName || !formValue) return
+    if (!organizationId) {
+      setFormError('No organization found')
+      return
+    }
+    if (!formCompanyId || !formContactId || !formName || !formValue || !formOwnerId) {
+      setFormError('Please fill in all required fields')
+      return
+    }
+
     setIsSubmitting(true)
+    setFormError(null)
+
     try {
-      // TODO: Call createDeal mutation once company/contact management is in place
-      console.log('Creating deal:', { name: formName, value: formValue, notes: formNotes })
-      // Simulated delay
-      await new Promise(resolve => setTimeout(resolve, 500))
+      // Value is in dollars, convert to cents
+      const valueInCents = Math.round(parseFloat(formValue) * 100)
+
+      await createDealMutation({
+        organizationId,
+        companyId: formCompanyId,
+        contactId: formContactId,
+        name: formName,
+        value: valueInCents,
+        ownerId: formOwnerId,
+      })
+
       setNewDealDialogOpen(false)
-      setFormName('')
-      setFormValue('')
-      setFormNotes('')
+      resetForm()
+    } catch (error) {
+      console.error('Failed to create deal:', error)
+      setFormError(error instanceof Error ? error.message : 'Failed to create deal')
     } finally {
       setIsSubmitting(false)
     }
   }
-
-  // Note: ownerFilter will be used in full implementation with users query
-  void ownerFilter
 
   // Filter deals based on search query and owner
   const filteredDeals = useMemo(() => {
@@ -206,13 +274,18 @@ function RouteComponent() {
       )
     }
 
+    // Filter by owner
+    if (ownerFilter === 'me' && currentUser) {
+      filtered = filtered.filter((deal) => deal.ownerId === currentUser._id)
+    }
+
     // Filter active deals only (not Won or Lost)
     filtered = filtered.filter((deal) =>
       ['Lead', 'Qualified', 'Proposal', 'Negotiation'].includes(deal.stage ?? '')
     )
 
     return filtered
-  }, [myDeals, searchQuery, ownerFilter])
+  }, [myDeals, searchQuery, ownerFilter, currentUser])
 
   // Stage summaries
   const stageSummaries = useMemo(() => {
@@ -226,7 +299,7 @@ function RouteComponent() {
     })
   }, [filteredDeals])
 
-  if (myDeals === undefined) {
+  if (myDeals === undefined || currentUser === undefined) {
     return (
       <div className="p-6 lg:p-8">
         <div className="animate-pulse space-y-8">
@@ -331,15 +404,15 @@ function RouteComponent() {
               key={stage}
               stage={stage}
               deals={filteredDeals}
-              companies={companies}
-              users={users}
+              companies={companies ?? []}
+              users={users ?? []}
             />
           ))}
         </div>
       )}
 
-      {/* New Deal Dialog - Placeholder for now */}
-      <Dialog open={newDealDialogOpen} onOpenChange={setNewDealDialogOpen}>
+      {/* New Deal Dialog */}
+      <Dialog open={newDealDialogOpen} onOpenChange={handleDialogChange}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle>Create New Deal</DialogTitle>
@@ -349,6 +422,7 @@ function RouteComponent() {
           </DialogHeader>
 
           <div className="space-y-4 py-4">
+            {/* Deal Name */}
             <div className="space-y-2">
               <Label htmlFor="name">Deal Name *</Label>
               <Input
@@ -359,6 +433,58 @@ function RouteComponent() {
               />
             </div>
 
+            {/* Company Selection */}
+            <div className="space-y-2">
+              <Label>Company *</Label>
+              <Select
+                value={formCompanyId}
+                onValueChange={(value) => setFormCompanyId(value as Id<'companies'>)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select company..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {companies?.map((company) => (
+                    <SelectItem key={company._id} value={company._id}>
+                      {company.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {companies?.length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  No companies found. Create a company first.
+                </p>
+              )}
+            </div>
+
+            {/* Contact Selection */}
+            <div className="space-y-2">
+              <Label>Contact *</Label>
+              <Select
+                value={formContactId}
+                onValueChange={(value) => setFormContactId(value as Id<'contacts'>)}
+                disabled={!formCompanyId}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={formCompanyId ? "Select contact..." : "Select company first"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {contacts?.map((contact) => (
+                    <SelectItem key={contact._id} value={contact._id}>
+                      {contact.name} ({contact.email})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {formCompanyId && contacts?.length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  No contacts for this company. Create a contact first.
+                </p>
+              )}
+            </div>
+
+            {/* Deal Value */}
             <div className="space-y-2">
               <Label htmlFor="value">Deal Value ($) *</Label>
               <Input
@@ -367,9 +493,32 @@ function RouteComponent() {
                 value={formValue}
                 onChange={(e) => setFormValue(e.target.value)}
                 placeholder="50000"
+                min="0"
+                step="0.01"
               />
             </div>
 
+            {/* Owner Selection */}
+            <div className="space-y-2">
+              <Label>Deal Owner *</Label>
+              <Select
+                value={formOwnerId}
+                onValueChange={(value) => setFormOwnerId(value as Id<'users'>)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select owner..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {users?.map((user) => (
+                    <SelectItem key={user._id} value={user._id}>
+                      {user.name} {user._id === currentUser?._id ? '(me)' : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Notes */}
             <div className="space-y-2">
               <Label htmlFor="notes">Notes</Label>
               <Textarea
@@ -381,21 +530,23 @@ function RouteComponent() {
               />
             </div>
 
-            <div className="text-sm text-muted-foreground">
-              Note: Full deal creation requires company and contact selection.
-              This feature will be enhanced with company/contact management.
-            </div>
+            {/* Error message */}
+            {formError && (
+              <div className="text-sm text-destructive">
+                {formError}
+              </div>
+            )}
           </div>
 
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => setNewDealDialogOpen(false)}
+              onClick={() => handleDialogChange(false)}
             >
               Cancel
             </Button>
             <Button
-              disabled={!formName || !formValue || isSubmitting}
+              disabled={!formName || !formValue || !formCompanyId || !formContactId || !formOwnerId || isSubmitting}
               onClick={handleCreateDeal}
             >
               {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}

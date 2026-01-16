@@ -2331,3 +2331,166 @@ export const getBudgetBurnReport = query({
     return { projects: data }
   },
 })
+
+// ============================================================================
+// COMPANY QUERIES
+// ============================================================================
+
+/**
+ * Get company by ID
+ */
+export const getCompany = query({
+  args: {
+    companyId: v.id('companies'),
+  },
+  handler: async (ctx, args) => {
+    await assertUserHasScope(ctx, 'dealToDelivery:deals:view:own')
+    return await db.getCompany(ctx.db, args.companyId)
+  },
+})
+
+/**
+ * List companies by organization
+ */
+export const getCompanies = query({
+  args: {
+    organizationId: v.id('organizations'),
+  },
+  handler: async (ctx, args) => {
+    await assertUserHasScope(ctx, 'dealToDelivery:deals:view:own')
+    return await db.listCompaniesByOrganization(ctx.db, args.organizationId)
+  },
+})
+
+/**
+ * Create a new company
+ */
+export const createCompany = mutation({
+  args: {
+    organizationId: v.id('organizations'),
+    name: v.string(),
+    billingAddress: v.object({
+      street: v.string(),
+      city: v.string(),
+      state: v.string(),
+      postalCode: v.string(),
+      country: v.string(),
+    }),
+    paymentTerms: v.optional(v.number()),
+    defaultRateCardId: v.optional(v.id('rateCards')),
+  },
+  handler: async (ctx, args) => {
+    await assertUserHasScope(ctx, 'dealToDelivery:deals:create')
+
+    const companyId = await db.insertCompany(ctx.db, {
+      organizationId: args.organizationId,
+      name: args.name,
+      billingAddress: args.billingAddress,
+      paymentTerms: args.paymentTerms ?? 30,
+      defaultRateCardId: args.defaultRateCardId,
+    })
+
+    return companyId
+  },
+})
+
+// ============================================================================
+// CONTACT QUERIES
+// ============================================================================
+
+/**
+ * Get contact by ID
+ */
+export const getContact = query({
+  args: {
+    contactId: v.id('contacts'),
+  },
+  handler: async (ctx, args) => {
+    await assertUserHasScope(ctx, 'dealToDelivery:deals:view:own')
+    return await db.getContact(ctx.db, args.contactId)
+  },
+})
+
+/**
+ * List contacts by company
+ */
+export const getContacts = query({
+  args: {
+    companyId: v.id('companies'),
+  },
+  handler: async (ctx, args) => {
+    await assertUserHasScope(ctx, 'dealToDelivery:deals:view:own')
+    return await db.listContactsByCompany(ctx.db, args.companyId)
+  },
+})
+
+/**
+ * Create a new contact
+ */
+export const createContact = mutation({
+  args: {
+    companyId: v.id('companies'),
+    organizationId: v.id('organizations'),
+    name: v.string(),
+    email: v.string(),
+    phone: v.string(),
+    isPrimary: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    await assertUserHasScope(ctx, 'dealToDelivery:deals:create')
+
+    // If this is the primary contact, unset other primary contacts for this company
+    if (args.isPrimary) {
+      const existingContacts = await db.listContactsByCompany(ctx.db, args.companyId)
+      for (const contact of existingContacts) {
+        if (contact.isPrimary) {
+          await db.updateContact(ctx.db, contact._id, { isPrimary: false })
+        }
+      }
+    }
+
+    const contactId = await db.insertContact(ctx.db, {
+      companyId: args.companyId,
+      organizationId: args.organizationId,
+      name: args.name,
+      email: args.email,
+      phone: args.phone,
+      isPrimary: args.isPrimary ?? false,
+    })
+
+    return contactId
+  },
+})
+
+// ============================================================================
+// USER QUERIES
+// ============================================================================
+
+/**
+ * List users by organization (for owner selection)
+ */
+export const getUsers = query({
+  args: {
+    organizationId: v.id('organizations'),
+  },
+  handler: async (ctx, args) => {
+    await assertUserHasScope(ctx, 'dealToDelivery:deals:view:own')
+    return await db.listUsersByOrganization(ctx.db, args.organizationId)
+  },
+})
+
+/**
+ * Get current user with organization
+ */
+export const getCurrentUser = query({
+  args: {},
+  handler: async (ctx) => {
+    const authUser = await authComponent.getAuthUser(ctx)
+    if (!authUser.userId) {
+      return null
+    }
+
+    const user = await ctx.db.get(authUser.userId as Id<'users'>)
+    return user
+  },
+})
