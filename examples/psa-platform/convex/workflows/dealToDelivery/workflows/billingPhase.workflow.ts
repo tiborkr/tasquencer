@@ -1,4 +1,5 @@
 import { Builder } from '../../../tasquencer'
+import { DealToDeliveryWorkItemHelpers } from '../helpers'
 import { sendInvoiceTask } from '../workItems/sendInvoice.workItem'
 import { sendViaEmailTask } from '../workItems/sendViaEmail.workItem'
 import { sendViaPdfTask } from '../workItems/sendViaPdf.workItem'
@@ -15,7 +16,7 @@ import { assertProjectExists } from '../exceptions'
 const startApprovalsTask = Builder.dummyTask()
 
 const confirmDeliveryTask = Builder.dummyTask()
-  .withJoinType('or')
+  .withJoinType('xor')
 
 const completeBillingTask = Builder.dummyTask()
 export const billingPhaseWorkflow = Builder.workflow('billingPhase')
@@ -25,7 +26,7 @@ export const billingPhaseWorkflow = Builder.workflow('billingPhase')
   .compositeTask('approveTimesheets', Builder.compositeTask(timesheetApprovalWorkflow))
   .compositeTask('approveExpenses', Builder.compositeTask(expenseApprovalWorkflow))
   .compositeTask('generateInvoice', Builder.compositeTask(invoiceGenerationWorkflow).withJoinType('xor'))
-  .task('sendInvoice', sendInvoiceTask.withSplitType('or'))
+  .task('sendInvoice', sendInvoiceTask.withSplitType('xor'))
   .task('sendViaEmail', sendViaEmailTask)
   .task('sendViaPdf', sendViaPdfTask)
   .task('sendViaPortal', sendViaPortalTask)
@@ -43,9 +44,33 @@ export const billingPhaseWorkflow = Builder.workflow('billingPhase')
       .task('sendViaEmail')
       .task('sendViaPdf')
       .task('sendViaPortal')
-      .route(async ({ route }) => {
-      return [route.toTask('sendViaEmail'), route.toTask('sendViaPdf'), route.toTask('sendViaPortal')]
-    })
+      .route(async ({ mutationCtx, route, workItem }) => {
+        // Get the selected delivery method from work item metadata
+        // The sendInvoice work item stores the user's method choice on completion
+        const workItemIds = await workItem.getAllWorkItemIds()
+
+        for (const workItemId of workItemIds) {
+          const metadata = await DealToDeliveryWorkItemHelpers.getWorkItemMetadata(
+            mutationCtx.db,
+            workItemId
+          )
+
+          if (metadata?.payload.type === 'sendInvoice' && metadata.payload.method) {
+            switch (metadata.payload.method) {
+              case 'email':
+                return route.toTask('sendViaEmail')
+              case 'pdf':
+                return route.toTask('sendViaPdf')
+              case 'portal':
+                return route.toTask('sendViaPortal')
+            }
+          }
+        }
+
+        // Fallback: if no method found, default to email
+        // This should not happen in normal operation
+        return route.toTask('sendViaEmail')
+      })
   )
   .connectTask('sendViaEmail', (to) => to.task('confirmDelivery'))
   .connectTask('sendViaPdf', (to) => to.task('confirmDelivery'))

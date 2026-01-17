@@ -86,12 +86,14 @@ const sendInvoiceWorkItemActions = authService.builders.workItemActions
         throw new Error("Invoice not found");
       }
 
-      // Update metadata with selected method
+      // Store the selected delivery method in work item metadata for routing
+      // The workflow router will read this to determine the delivery task
       await updateWorkItemMetadataPayload(mutationCtx, workItem.id, {
         type: "sendInvoice",
         taskName: "Send Invoice",
         priority: "normal",
         invoiceId: payload.invoiceId,
+        method: payload.method,
       });
 
       await workItem.complete();

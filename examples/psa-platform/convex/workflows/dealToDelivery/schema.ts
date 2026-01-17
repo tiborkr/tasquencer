@@ -832,6 +832,8 @@ const dealToDeliveryWorkItems = defineWorkItemMetadataTable("deals").withPayload
       taskName: v.string(),
       priority: workItemPriority,
       invoiceId: v.optional(v.id("invoices")),
+      // Delivery method selected (set on complete)
+      method: v.optional(v.union(v.literal("email"), v.literal("pdf"), v.literal("portal"))),
     }),
     v.object({
       type: v.literal("sendViaEmail"),
