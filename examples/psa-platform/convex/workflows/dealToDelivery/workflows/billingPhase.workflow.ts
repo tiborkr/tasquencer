@@ -23,9 +23,31 @@ export const billingPhaseWorkflow = Builder.workflow('billingPhase')
   .startCondition('start')
   .endCondition('end')
   .dummyTask('startApprovals', startApprovalsTask)
-  .compositeTask('approveTimesheets', Builder.compositeTask(timesheetApprovalWorkflow))
-  .compositeTask('approveExpenses', Builder.compositeTask(expenseApprovalWorkflow))
-  .compositeTask('generateInvoice', Builder.compositeTask(invoiceGenerationWorkflow).withJoinType('xor'))
+  .compositeTask('approveTimesheets', Builder.compositeTask(timesheetApprovalWorkflow)
+    .withActivities({
+      onEnabled: async ({ workflow }) => {
+        // Initialize the timesheet approval child workflow when this composite task is enabled
+        await workflow.initialize()
+      },
+    })
+  )
+  .compositeTask('approveExpenses', Builder.compositeTask(expenseApprovalWorkflow)
+    .withActivities({
+      onEnabled: async ({ workflow }) => {
+        // Initialize the expense approval child workflow when this composite task is enabled
+        await workflow.initialize()
+      },
+    })
+  )
+  .compositeTask('generateInvoice', Builder.compositeTask(invoiceGenerationWorkflow)
+    .withJoinType('xor')
+    .withActivities({
+      onEnabled: async ({ workflow }) => {
+        // Initialize the invoice generation child workflow when this composite task is enabled
+        await workflow.initialize()
+      },
+    })
+  )
   .task('sendInvoice', sendInvoiceTask.withSplitType('xor'))
   .task('sendViaEmail', sendViaEmailTask)
   .task('sendViaPdf', sendViaPdfTask)
