@@ -52,7 +52,8 @@ const taskStatus = v.union(
   v.literal("Todo"),
   v.literal("InProgress"),
   v.literal("Review"),
-  v.literal("Done")
+  v.literal("Done"),
+  v.literal("OnHold")
 );
 
 // Task priority values
