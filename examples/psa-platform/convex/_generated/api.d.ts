@@ -18,6 +18,8 @@ import type * as workflows_dealToDelivery_api_deals from "../workflows/dealToDel
 import type * as workflows_dealToDelivery_api_permissions from "../workflows/dealToDelivery/api/permissions.js";
 import type * as workflows_dealToDelivery_api_workItems from "../workflows/dealToDelivery/api/workItems.js";
 import type * as workflows_dealToDelivery_api_workflow from "../workflows/dealToDelivery/api/workflow.js";
+import type * as workflows_dealToDelivery_authSetup from "../workflows/dealToDelivery/authSetup.js";
+import type * as workflows_dealToDelivery_authorization from "../workflows/dealToDelivery/authorization.js";
 import type * as workflows_dealToDelivery_db from "../workflows/dealToDelivery/db.js";
 import type * as workflows_dealToDelivery_db_bookings from "../workflows/dealToDelivery/db/bookings.js";
 import type * as workflows_dealToDelivery_db_budgets from "../workflows/dealToDelivery/db/budgets.js";
@@ -42,6 +44,7 @@ import type * as workflows_dealToDelivery_domain_services_authorizationService f
 import type * as workflows_dealToDelivery_exceptions from "../workflows/dealToDelivery/exceptions.js";
 import type * as workflows_dealToDelivery_helpers from "../workflows/dealToDelivery/helpers.js";
 import type * as workflows_dealToDelivery_scopes from "../workflows/dealToDelivery/scopes.js";
+import type * as workflows_dealToDelivery_workItems_authHelpers from "../workflows/dealToDelivery/workItems/authHelpers.js";
 import type * as workflows_dealToDelivery_workItems_helpers from "../workflows/dealToDelivery/workItems/helpers.js";
 import type * as workflows_dealToDelivery_workItems_helpersAuth from "../workflows/dealToDelivery/workItems/helpersAuth.js";
 import type * as workflows_metadata from "../workflows/metadata.js";
@@ -63,6 +66,8 @@ declare const fullApi: ApiFromModules<{
   "workflows/dealToDelivery/api/permissions": typeof workflows_dealToDelivery_api_permissions;
   "workflows/dealToDelivery/api/workItems": typeof workflows_dealToDelivery_api_workItems;
   "workflows/dealToDelivery/api/workflow": typeof workflows_dealToDelivery_api_workflow;
+  "workflows/dealToDelivery/authSetup": typeof workflows_dealToDelivery_authSetup;
+  "workflows/dealToDelivery/authorization": typeof workflows_dealToDelivery_authorization;
   "workflows/dealToDelivery/db": typeof workflows_dealToDelivery_db;
   "workflows/dealToDelivery/db/bookings": typeof workflows_dealToDelivery_db_bookings;
   "workflows/dealToDelivery/db/budgets": typeof workflows_dealToDelivery_db_budgets;
@@ -87,6 +92,7 @@ declare const fullApi: ApiFromModules<{
   "workflows/dealToDelivery/exceptions": typeof workflows_dealToDelivery_exceptions;
   "workflows/dealToDelivery/helpers": typeof workflows_dealToDelivery_helpers;
   "workflows/dealToDelivery/scopes": typeof workflows_dealToDelivery_scopes;
+  "workflows/dealToDelivery/workItems/authHelpers": typeof workflows_dealToDelivery_workItems_authHelpers;
   "workflows/dealToDelivery/workItems/helpers": typeof workflows_dealToDelivery_workItems_helpers;
   "workflows/dealToDelivery/workItems/helpersAuth": typeof workflows_dealToDelivery_workItems_helpersAuth;
   "workflows/metadata": typeof workflows_metadata;
