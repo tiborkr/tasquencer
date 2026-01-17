@@ -23,6 +23,7 @@ import {
 
 export {
   internalInitializeRootWorkflow as initializeRootWorkflow,
+  internalInitializeWorkItem as initializeWorkItem,
   internalStartWorkItem as startWorkItem,
   internalCompleteWorkItem as completeWorkItem,
   internalFailWorkItem as failWorkItem,

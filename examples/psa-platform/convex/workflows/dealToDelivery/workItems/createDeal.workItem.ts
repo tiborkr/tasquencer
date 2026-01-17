@@ -9,11 +9,8 @@
 import { Builder } from "../../../tasquencer";
 import { z } from "zod";
 import { zid } from "convex-helpers/server/zod4";
-import { startAndClaimWorkItem, cleanupWorkItemOnCancel } from "./helpers";
-import {
-  initializeRootWorkItemAuth,
-  updateWorkItemAggregateTableId,
-} from "./helpersAuth";
+import { cleanupWorkItemOnCancel } from "./helpers";
+import { initializeDealWorkItemAuth } from "./helpersAuth";
 import { authService } from "../../../authorization";
 import { insertDeal } from "../db/deals";
 import { getWorkflowIdsForWorkItem } from "../db/workItemContext";
@@ -33,25 +30,16 @@ const createDealWorkItemActions = authService.builders.workItemActions
   .initialize(
     z.object({}), // No payload needed for initialize - deal data comes in complete
     dealsCreatePolicy,
-    async ({ mutationCtx, workItem }) => {
-      const workItemId = await workItem.initialize();
-
-      // Initialize work item metadata using domain-layer function
-      // Note: This is a root work item that creates the aggregate (deal),
-      // so we use initializeRootWorkItemAuth with no dealId yet.
-      // The dealId will be set in complete via updateWorkItemAggregateTableId.
-      await initializeRootWorkItemAuth(mutationCtx, workItemId, {
-        scope: "dealToDelivery:deals:create",
-        payload: {
-          type: "createDeal",
-          taskName: "Create Deal",
-          priority: "normal",
-        },
-      });
+    async ({ workItem }) => {
+      // For root work items that create their aggregate (deal), we just initialize
+      // the work item here. Metadata is created in complete after the deal exists.
+      await workItem.initialize();
     }
   )
-  .start(z.never(), dealsCreatePolicy, async ({ mutationCtx, workItem }) => {
-    await startAndClaimWorkItem(mutationCtx, workItem);
+  .start(z.never(), dealsCreatePolicy, async ({ workItem }) => {
+    // For root work items that create their aggregate, we just start the work item
+    // without claiming since metadata doesn't exist yet (created in complete).
+    await workItem.start();
   })
   .complete(
     z.object({
@@ -84,8 +72,18 @@ const createDealWorkItemActions = authService.builders.workItemActions
         createdAt: Date.now(),
       });
 
-      // Update work item metadata with the deal ID using domain-layer function
-      await updateWorkItemAggregateTableId(mutationCtx, workItem.id, dealId);
+      // Create work item metadata now that we have the deal ID
+      // This is done in complete (not initialize) because createDeal is a root
+      // work item that creates its aggregate.
+      await initializeDealWorkItemAuth(mutationCtx, workItem.id, {
+        scope: "dealToDelivery:deals:create",
+        dealId,
+        payload: {
+          type: "createDeal",
+          taskName: "Create Deal",
+          priority: "normal",
+        },
+      });
 
       // Complete the work item to advance the workflow
       await workItem.complete();
