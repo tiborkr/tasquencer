@@ -38,6 +38,7 @@ import type * as workflows_dealToDelivery_db_timeEntries from "../workflows/deal
 import type * as workflows_dealToDelivery_db_users from "../workflows/dealToDelivery/db/users.js";
 import type * as workflows_dealToDelivery_db_workItemContext from "../workflows/dealToDelivery/db/workItemContext.js";
 import type * as workflows_dealToDelivery_definition from "../workflows/dealToDelivery/definition.js";
+import type * as workflows_dealToDelivery_domain_services_authorizationService from "../workflows/dealToDelivery/domain/services/authorizationService.js";
 import type * as workflows_dealToDelivery_exceptions from "../workflows/dealToDelivery/exceptions.js";
 import type * as workflows_dealToDelivery_helpers from "../workflows/dealToDelivery/helpers.js";
 import type * as workflows_dealToDelivery_scopes from "../workflows/dealToDelivery/scopes.js";
@@ -82,6 +83,7 @@ declare const fullApi: ApiFromModules<{
   "workflows/dealToDelivery/db/users": typeof workflows_dealToDelivery_db_users;
   "workflows/dealToDelivery/db/workItemContext": typeof workflows_dealToDelivery_db_workItemContext;
   "workflows/dealToDelivery/definition": typeof workflows_dealToDelivery_definition;
+  "workflows/dealToDelivery/domain/services/authorizationService": typeof workflows_dealToDelivery_domain_services_authorizationService;
   "workflows/dealToDelivery/exceptions": typeof workflows_dealToDelivery_exceptions;
   "workflows/dealToDelivery/helpers": typeof workflows_dealToDelivery_helpers;
   "workflows/dealToDelivery/scopes": typeof workflows_dealToDelivery_scopes;

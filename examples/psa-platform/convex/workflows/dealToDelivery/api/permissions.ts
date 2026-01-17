@@ -5,16 +5,19 @@
  * UI components use these to determine what actions are available
  * before attempting them.
  *
+ * TENET-AUTHZ: All permission checks properly validate user scopes.
+ *
  * Reference: .review/recipes/psa-platform/specs/02-authorization.md
  * Pattern: examples/er/convex/workflows/er/api/permissions.ts
  */
 import { v } from 'convex/values'
 import { query } from '../../../_generated/server'
-
-// TODO: Import these once implemented (PRIORITY 2)
-// import { assertUserHasScope } from '../domain/services/authorizationService'
-// import { DealToDeliveryWorkItemHelpers } from '../helpers'
-// import { authComponent } from '../../../tasquencer'
+import { authComponent } from '../../../auth'
+import { userHasScope } from '@repo/tasquencer/components/authorization/helpers'
+import { components } from '../../../_generated/api'
+import type { Id } from '../../../_generated/dataModel'
+import type { AppScope } from '../../../authorization'
+import { DealToDeliveryWorkItemHelpers } from '../helpers'
 
 /**
  * Checks if the current user can create a new deal.
@@ -23,17 +26,21 @@ import { query } from '../../../_generated/server'
  * @returns true if user has deals:create scope
  */
 export const canCreateDeal = query({
-  handler: async (_ctx) => {
-    // TODO: Implement once authSetup is complete (PRIORITY 2)
-    // try {
-    //   await assertUserHasScope(ctx, 'deals:create')
-    //   return true
-    // } catch {
-    //   return false
-    // }
-
-    // Stub: Allow all authenticated users until auth is implemented
-    return true
+  handler: async (ctx) => {
+    try {
+      const authUser = await authComponent.safeGetAuthUser(ctx)
+      if (!authUser || !authUser.userId) {
+        return false
+      }
+      return await userHasScope(
+        ctx,
+        components.tasquencerAuthorization,
+        authUser.userId,
+        'dealToDelivery:deals:create' as AppScope,
+      )
+    } catch {
+      return false
+    }
   },
 })
 
@@ -46,23 +53,26 @@ export const canCreateDeal = query({
  */
 export const canClaimWorkItem = query({
   args: { workItemId: v.id('tasquencerWorkItems') },
-  handler: async (_ctx, _args) => {
-    // TODO: Implement once authSetup is complete (PRIORITY 2)
-    // const authUser = await authComponent.safeGetAuthUser(ctx)
-    // if (!authUser) return false
-    // return DealToDeliveryWorkItemHelpers.canUserClaimWorkItem(
-    //   ctx,
-    //   authUser.userId,
-    //   args.workItemId
-    // )
-
-    // Stub: Allow all authenticated users until auth is implemented
-    return true
+  handler: async (ctx, args) => {
+    try {
+      const authUser = await authComponent.safeGetAuthUser(ctx)
+      if (!authUser || !authUser.userId) {
+        return false
+      }
+      return await DealToDeliveryWorkItemHelpers.canUserClaimWorkItem(
+        ctx,
+        authUser.userId as Id<'users'>,
+        args.workItemId,
+      )
+    } catch {
+      return false
+    }
   },
 })
 
 /**
  * Checks if the current user can complete a specific work item.
+ * Only the user who claimed the work item can complete it.
  * Used by UI to show/hide the "Complete" button on work items.
  *
  * @param args.workItemId - The work item to check
@@ -70,19 +80,32 @@ export const canClaimWorkItem = query({
  */
 export const canCompleteWorkItem = query({
   args: { workItemId: v.id('tasquencerWorkItems') },
-  handler: async (_ctx, _args) => {
-    // TODO: Implement once authSetup is complete (PRIORITY 2)
-    // Only the user who claimed the work item can complete it
-    // const authUser = await authComponent.safeGetAuthUser(ctx)
-    // if (!authUser) return false
-    // return DealToDeliveryWorkItemHelpers.canUserCompleteWorkItem(
-    //   ctx,
-    //   authUser.userId,
-    //   args.workItemId
-    // )
-
-    // Stub: Allow all authenticated users until auth is implemented
-    return true
+  handler: async (ctx, args) => {
+    try {
+      const authUser = await authComponent.safeGetAuthUser(ctx)
+      if (!authUser || !authUser.userId) {
+        return false
+      }
+      // User can complete if they have claimed the work item
+      const metadata = await DealToDeliveryWorkItemHelpers.getWorkItemMetadata(
+        ctx.db,
+        args.workItemId,
+      )
+      if (!metadata) {
+        return false
+      }
+      // Check if the work item is claimed by this user
+      if (
+        metadata.claim &&
+        'userId' in metadata.claim &&
+        metadata.claim.userId === authUser.userId
+      ) {
+        return true
+      }
+      return false
+    } catch {
+      return false
+    }
   },
 })
 
@@ -95,16 +118,20 @@ export const canCompleteWorkItem = query({
  */
 export const hasScope = query({
   args: { scope: v.string() },
-  handler: async (_ctx, _args) => {
-    // TODO: Implement once authSetup is complete (PRIORITY 2)
-    // try {
-    //   await assertUserHasScope(ctx, args.scope)
-    //   return true
-    // } catch {
-    //   return false
-    // }
-
-    // Stub: Allow all scopes until auth is implemented
-    return true
+  handler: async (ctx, args) => {
+    try {
+      const authUser = await authComponent.safeGetAuthUser(ctx)
+      if (!authUser || !authUser.userId) {
+        return false
+      }
+      return await userHasScope(
+        ctx,
+        components.tasquencerAuthorization,
+        authUser.userId,
+        args.scope as AppScope,
+      )
+    } catch {
+      return false
+    }
   },
 })
