@@ -159,9 +159,10 @@ function DealsPage() {
                       </div>
                     ) : (
                       stageDeals.map((deal) => (
-                        <a
+                        <Link
                           key={deal._id}
-                          href={`/deals/${deal._id}`}
+                          to="/deals/$dealId"
+                          params={{ dealId: deal._id }}
                           className="block"
                         >
                           <Card className="cursor-pointer hover:shadow-md transition-shadow hover:border-primary/30">
@@ -219,7 +220,7 @@ function DealsPage() {
                               </div>
                             </CardContent>
                           </Card>
-                        </a>
+                        </Link>
                       ))
                     )}
                   </div>

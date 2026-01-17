@@ -173,6 +173,87 @@ function RejectionModal({
   )
 }
 
+// Bulk Rejection Modal
+function BulkRejectionModal({
+  isOpen,
+  onClose,
+  selectedCount,
+  totalHours,
+  onReject,
+}: {
+  isOpen: boolean
+  onClose: () => void
+  selectedCount: number
+  totalHours: number
+  onReject: (comments: string) => Promise<void>
+}) {
+  const [comments, setComments] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const handleReject = async () => {
+    if (!comments.trim()) {
+      toast.error('Please provide a reason for rejection')
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      await onReject(comments)
+      setComments('')
+      onClose()
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : 'Failed to reject timesheets'
+      )
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  return (
+    <Dialog open={isOpen} onOpenChange={() => onClose()}>
+      <DialogContent className="sm:max-w-[500px]">
+        <DialogHeader>
+          <DialogTitle>Reject Selected Timesheets</DialogTitle>
+          <DialogDescription>
+            Rejecting <strong>{selectedCount}</strong> timesheet{selectedCount !== 1 ? 's' : ''} (
+            {formatHours(totalHours)} hours total)
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="py-4">
+          <Label htmlFor="bulk-rejection-comments">Reason for Rejection *</Label>
+          <Textarea
+            id="bulk-rejection-comments"
+            className="mt-2"
+            rows={4}
+            placeholder="Please explain why these timesheets are being rejected..."
+            value={comments}
+            onChange={(e) => setComments(e.target.value)}
+          />
+          <p className="text-xs text-muted-foreground mt-2">
+            This reason will be sent to all affected team members.
+          </p>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={handleReject}
+            disabled={isSubmitting || !comments.trim()}
+          >
+            {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            Reject {selectedCount} Timesheet{selectedCount !== 1 ? 's' : ''}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 // Timesheet Card Component
 function TimesheetCard({
   timesheet,
@@ -385,6 +466,7 @@ function TimesheetApprovalPage() {
     totalHours: number
     entries: Array<{ _id: Id<'timeEntries'> }>
   } | null>(null)
+  const [bulkRejectionEntries, setBulkRejectionEntries] = useState<Array<{ _id: Id<'timeEntries'> }> | null>(null)
 
   // Fetch timesheets for approval
   const data = useQuery(
@@ -470,6 +552,36 @@ function TimesheetApprovalPage() {
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : 'Failed to approve timesheets'
+      )
+    }
+  }
+
+  // Bulk reject selected
+  const handleBulkReject = () => {
+    if (selectedIds.size === 0 || !data) return
+
+    const selectedTimesheets = data.timesheets.filter((ts) =>
+      selectedIds.has(ts.id)
+    )
+    const allEntries = selectedTimesheets.flatMap((ts) =>
+      ts.entries.map((e) => ({ _id: e._id }))
+    )
+    setBulkRejectionEntries(allEntries)
+  }
+
+  // Handle bulk rejection submit
+  const handleBulkRejectSubmit = async (comments: string) => {
+    if (!bulkRejectionEntries || bulkRejectionEntries.length === 0) return
+
+    try {
+      const entryIds = bulkRejectionEntries.map((e) => e._id)
+      await rejectEntries({ timeEntryIds: entryIds, comments })
+      toast.success(`Rejected ${selectedIds.size} timesheets`)
+      setSelectedIds(new Set())
+      setBulkRejectionEntries(null)
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : 'Failed to reject timesheets'
       )
     }
   }
@@ -591,6 +703,10 @@ function TimesheetApprovalPage() {
               <Button variant="outline" size="sm" onClick={clearSelection}>
                 Cancel
               </Button>
+              <Button variant="outline" size="sm" onClick={handleBulkReject}>
+                <X className="h-4 w-4 mr-1" />
+                Reject Selected
+              </Button>
               <Button size="sm" onClick={handleBulkApprove}>
                 <Check className="h-4 w-4 mr-1" />
                 Approve All
@@ -599,12 +715,21 @@ function TimesheetApprovalPage() {
           </div>
         )}
 
-        {/* Rejection Modal */}
+        {/* Single Timesheet Rejection Modal */}
         <RejectionModal
           isOpen={!!rejectionTarget}
           onClose={() => setRejectionTarget(null)}
           timesheet={rejectionTarget}
           onReject={handleReject}
+        />
+
+        {/* Bulk Rejection Modal */}
+        <BulkRejectionModal
+          isOpen={!!bulkRejectionEntries}
+          onClose={() => setBulkRejectionEntries(null)}
+          selectedCount={selectedIds.size}
+          totalHours={selectedHours}
+          onReject={handleBulkRejectSubmit}
         />
       </div>
     </div>
