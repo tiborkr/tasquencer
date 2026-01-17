@@ -723,6 +723,7 @@ const dealToDeliveryWorkItems = defineWorkItemMetadataTable("deals").withPayload
       type: v.literal("reviewTimesheet"),
       taskName: v.string(),
       priority: workItemPriority,
+      decision: v.optional(v.union(v.literal("approve"), v.literal("reject"))),
     }),
     v.object({
       type: v.literal("approveTimesheet"),

@@ -6,6 +6,9 @@ import { createBookingsTask } from '../workItems/createBookings.workItem'
 import { reviewBookingsTask } from '../workItems/reviewBookings.workItem'
 import { checkConfirmationNeededTask } from '../workItems/checkConfirmationNeeded.workItem'
 import { confirmBookingsTask } from '../workItems/confirmBookings.workItem'
+import { getProjectByWorkflowId } from '../db/projects'
+import { listBookingsByProject } from '../db/bookings'
+import { assertProjectExists } from '../exceptions'
 const completeAllocationTask = Builder.dummyTask()
   .withJoinType('xor')
 export const resourcePlanningWorkflow = Builder.workflow('resourcePlanning')
@@ -29,17 +32,28 @@ export const resourcePlanningWorkflow = Builder.workflow('resourcePlanning')
       .task('filterBySkillsRole')
       .task('checkConfirmationNeeded')
       .route(async ({ route }) => {
-      const routes = [route.toTask('filterBySkillsRole'), route.toTask('checkConfirmationNeeded')]
-      return routes[Math.floor(Math.random() * routes.length)]!
+      // TODO: Track decision in work item metadata to enable proper routing
+      // For now, default to proceeding. User would need to explicitly request more filtering.
+      // Reference: .review/recipes/psa-platform/specs/05-workflow-resource-planning.md
+      return route.toTask('checkConfirmationNeeded')
     })
   )
   .connectTask('checkConfirmationNeeded', (to) =>
     to
       .task('confirmBookings')
       .task('completeAllocation')
-      .route(async ({ route }) => {
-      const routes = [route.toTask('confirmBookings'), route.toTask('completeAllocation')]
-      return routes[Math.floor(Math.random() * routes.length)]!
+      .route(async ({ mutationCtx, route, parent }) => {
+      // Check if there are any Tentative bookings needing confirmation
+      const project = await getProjectByWorkflowId(mutationCtx.db, parent.workflow.id)
+      assertProjectExists(project, { workflowId: parent.workflow.id })
+
+      const bookings = await listBookingsByProject(mutationCtx.db, project._id)
+      const hasTentativeBookings = bookings.some(b => b.type === 'Tentative')
+
+      if (hasTentativeBookings) {
+        return route.toTask('confirmBookings')
+      }
+      return route.toTask('completeAllocation')
     })
   )
   .connectTask('confirmBookings', (to) => to.task('completeAllocation'))

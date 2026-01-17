@@ -2,8 +2,10 @@ import { Builder } from '../../../tasquencer'
 import { evaluateConditionTask } from '../workItems/evaluateCondition.workItem'
 import { executePrimaryBranchTask } from '../workItems/executePrimaryBranch.workItem'
 import { executeAlternateBranchTask } from '../workItems/executeAlternateBranch.workItem'
+
 const mergeOutcomesTask = Builder.dummyTask()
   .withJoinType('xor')
+
 export const conditionalExecutionWorkflow = Builder.workflow('conditionalExecution')
   .startCondition('start')
   .endCondition('end')
@@ -17,9 +19,12 @@ export const conditionalExecutionWorkflow = Builder.workflow('conditionalExecuti
       .task('executePrimaryBranch')
       .task('executeAlternateBranch')
       .route(async ({ route }) => {
-      const routes = [route.toTask('executePrimaryBranch'), route.toTask('executeAlternateBranch')]
-      return routes[Math.floor(Math.random() * routes.length)]!
-    })
+        // TODO: Track condition evaluation result in work item metadata
+        // For now, default to primary branch (happy path).
+        // The evaluateCondition work item should store its result for proper routing.
+        // Reference: Internal scaffolder pattern - conditional execution
+        return route.toTask('executePrimaryBranch')
+      })
   )
   .connectTask('executePrimaryBranch', (to) => to.task('mergeOutcomes'))
   .connectTask('executeAlternateBranch', (to) => to.task('mergeOutcomes'))

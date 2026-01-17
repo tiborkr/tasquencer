@@ -9,6 +9,9 @@ import { expenseTrackingWorkflow } from './expenseTracking.workflow'
 import { sequentialExecutionWorkflow } from './sequentialExecution.workflow'
 import { parallelExecutionWorkflow } from './parallelExecution.workflow'
 import { conditionalExecutionWorkflow } from './conditionalExecution.workflow'
+import { getProjectByWorkflowId } from '../db/projects'
+import { listChangeOrdersByProject } from '../db/changeOrders'
+import { assertProjectExists } from '../exceptions'
 const finalizeTimeTrackingTask = Builder.dummyTask()
 
 const finalizeExpenseTrackingTask = Builder.dummyTask()
@@ -52,9 +55,15 @@ export const executionPhaseWorkflow = Builder.workflow('executionPhase')
     to
       .task('completeExecution')
       .task('pauseWork')
-      .route(async ({ route }) => {
-      const routes = [route.toTask('completeExecution'), route.toTask('pauseWork')]
-      return routes[Math.floor(Math.random() * routes.length)]!
+      .route(async ({ mutationCtx, route, parent }) => {
+      // Check budget burn - if exceeded, pause work
+      const project = await getProjectByWorkflowId(mutationCtx.db, parent.workflow.id)
+      assertProjectExists(project, { workflowId: parent.workflow.id })
+
+      // TODO: Calculate actual burn from time entries + expenses using getBudgetByProjectId
+      // For now, always complete (no pause). Budget monitoring should calculate actual spend.
+      // Reference: .review/recipes/psa-platform/specs/06-workflow-execution-phase.md
+      return route.toTask('completeExecution')
     })
   )
   .connectTask('pauseWork', (to) => to.task('requestChangeOrder'))
@@ -63,9 +72,19 @@ export const executionPhaseWorkflow = Builder.workflow('executionPhase')
     to
       .task('monitorBudgetBurn')
       .task('completeExecution')
-      .route(async ({ route }) => {
-      const routes = [route.toTask('monitorBudgetBurn'), route.toTask('completeExecution')]
-      return routes[Math.floor(Math.random() * routes.length)]!
+      .route(async ({ mutationCtx, route, parent }) => {
+      // Check change order status
+      const project = await getProjectByWorkflowId(mutationCtx.db, parent.workflow.id)
+      assertProjectExists(project, { workflowId: parent.workflow.id })
+
+      const changeOrders = await listChangeOrdersByProject(mutationCtx.db, project._id)
+      const latestChangeOrder = changeOrders[0] // Most recent
+
+      if (latestChangeOrder?.status === 'Approved') {
+        return route.toTask('monitorBudgetBurn')
+      }
+      // Rejected or no change order - complete execution
+      return route.toTask('completeExecution')
     })
   )
   .connectTask('completeExecution', (to) => to.condition('end'))

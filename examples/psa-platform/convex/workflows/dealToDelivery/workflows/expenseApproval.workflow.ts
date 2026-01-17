@@ -18,9 +18,11 @@ export const expenseApprovalWorkflow = Builder.workflow('expenseApproval')
       .task('approveExpense')
       .task('rejectExpense')
       .route(async ({ route }) => {
-      const routes = [route.toTask('approveExpense'), route.toTask('rejectExpense')]
-      return routes[Math.floor(Math.random() * routes.length)]!
-    })
+        // TODO: Track approval decision in work item metadata to enable proper routing
+        // For now, default to approve path. Rejection would require storing decision during reviewExpense completion.
+        // Reference: .review/recipes/psa-platform/specs/10-workflow-expense-approval.md
+        return route.toTask('approveExpense')
+      })
   )
   .connectTask('approveExpense', (to) => to.task('completeExpenseApproval'))
   .connectTask('rejectExpense', (to) => to.task('reviseExpense'))

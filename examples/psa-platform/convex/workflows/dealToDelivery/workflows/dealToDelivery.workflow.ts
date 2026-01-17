@@ -4,7 +4,11 @@ import { planningPhaseWorkflow } from './planningPhase.workflow'
 import { executionPhaseWorkflow } from './executionPhase.workflow'
 import { billingPhaseWorkflow } from './billingPhase.workflow'
 import { closePhaseWorkflow } from './closePhase.workflow'
+import { getDealByWorkflowId } from '../db/deals'
+import { assertDealExists } from '../exceptions'
+
 const handleDealLostTask = Builder.dummyTask()
+
 export const dealToDeliveryWorkflow = Builder.workflow('dealToDelivery')
   .startCondition('start')
   .endCondition('end')
@@ -19,10 +23,17 @@ export const dealToDeliveryWorkflow = Builder.workflow('dealToDelivery')
     to
       .task('planning')
       .task('handleDealLost')
-      .route(async ({ route }) => {
-      const routes = [route.toTask('planning'), route.toTask('handleDealLost')]
-      return routes[Math.floor(Math.random() * routes.length)]!
-    })
+      .route(async ({ mutationCtx, route, parent }) => {
+        // Route based on deal outcome from sales phase
+        const deal = await getDealByWorkflowId(mutationCtx.db, parent.workflow.id)
+        assertDealExists(deal, { workflowId: parent.workflow.id })
+
+        // Won → continue to planning, Lost/Disqualified → handle lost
+        if (deal.stage === 'Won') {
+          return route.toTask('planning')
+        }
+        return route.toTask('handleDealLost')
+      })
   )
   .connectTask('planning', (to) => to.task('execution'))
   .connectTask('execution', (to) => to.task('billing'))

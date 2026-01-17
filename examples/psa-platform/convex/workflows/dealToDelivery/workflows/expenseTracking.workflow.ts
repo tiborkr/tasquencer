@@ -31,8 +31,10 @@ export const expenseTrackingWorkflow = Builder.workflow('expenseTracking')
       .task('logSubcontractorExpense')
       .task('logOtherExpense')
       .route(async ({ route }) => {
-      const routes = [route.toTask('logSoftwareExpense'), route.toTask('logTravelExpense'), route.toTask('logMaterialsExpense'), route.toTask('logSubcontractorExpense'), route.toTask('logOtherExpense')]
-      return routes[Math.floor(Math.random() * routes.length)]!
+      // TODO: Track selected expense type in work item metadata to enable proper routing
+      // For now, default to logOtherExpense.
+      // Reference: .review/recipes/psa-platform/specs/08-workflow-expense-tracking.md
+      return route.toTask('logOtherExpense')
     })
   )
   .connectTask('logSoftwareExpense', (to) => to.task('attachReceipt'))
@@ -46,8 +48,10 @@ export const expenseTrackingWorkflow = Builder.workflow('expenseTracking')
       .task('setBillableRate')
       .task('submitExpense')
       .route(async ({ route }) => {
-      const routes = [route.toTask('setBillableRate'), route.toTask('submitExpense')]
-      return routes[Math.floor(Math.random() * routes.length)]!
+      // TODO: Track billable decision in work item metadata to enable proper routing
+      // For now, default to submitExpense (non-billable path).
+      // Reference: .review/recipes/psa-platform/specs/08-workflow-expense-tracking.md
+      return route.toTask('submitExpense')
     })
   )
   .connectTask('setBillableRate', (to) => to.task('submitExpense'))

@@ -19,7 +19,6 @@ import { authComponent } from "../../../auth";
 import { getTimeEntry } from "../db/timeEntries";
 import { getRootWorkflowAndDealForWorkItem } from "../db/workItemContext";
 import { assertTimeEntryExists, assertAuthenticatedUser } from "../exceptions";
-import { DealToDeliveryWorkItemHelpers } from "../helpers";
 import type { Id } from "../../../_generated/dataModel";
 
 // Policy: Requires 'dealToDelivery:time:approve' scope
@@ -111,21 +110,15 @@ const reviewTimesheetWorkItemActions = authService.builders.workItemActions
         }
       }
 
-      // Update work item metadata with decision
-      const metadata = await DealToDeliveryWorkItemHelpers.getWorkItemMetadata(
-        mutationCtx.db,
-        workItem.id
-      );
-      if (metadata) {
-        await updateWorkItemMetadataPayload(mutationCtx, workItem.id, {
-          type: "reviewTimesheet",
-          taskName: "Review Timesheet",
-          priority: "normal",
-        });
-      }
+      // Store the decision in work item metadata for routing
+      // The workflow router will read this to determine the next task (approve vs reject)
+      await updateWorkItemMetadataPayload(mutationCtx, workItem.id, {
+        type: "reviewTimesheet",
+        taskName: "Review Timesheet",
+        priority: "normal",
+        decision: payload.decision,
+      });
 
-      // The decision is stored in the work item result for routing
-      // The workflow router will read this to determine the next task
       await workItem.complete();
     }
   )

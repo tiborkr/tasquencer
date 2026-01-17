@@ -22,9 +22,11 @@ export const timeTrackingWorkflow = Builder.workflow('timeTracking')
       .task('importFromCalendar')
       .task('autoFromBookings')
       .route(async ({ route }) => {
-      const routes = [route.toTask('useTimer'), route.toTask('manualEntry'), route.toTask('importFromCalendar'), route.toTask('autoFromBookings')]
-      return routes[Math.floor(Math.random() * routes.length)]!
-    })
+        // TODO: Track selected method in work item metadata to enable proper routing
+        // For now, default to manual entry as the most common path.
+        // Reference: .review/recipes/psa-platform/specs/07-workflow-time-tracking.md
+        return route.toTask('manualEntry')
+      })
   )
   .connectTask('useTimer', (to) => to.task('submitTimeEntry'))
   .connectTask('manualEntry', (to) => to.task('submitTimeEntry'))

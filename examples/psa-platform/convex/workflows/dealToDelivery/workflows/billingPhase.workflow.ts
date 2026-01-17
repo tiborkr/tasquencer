@@ -8,6 +8,10 @@ import { checkMoreBillingTask } from '../workItems/checkMoreBilling.workItem'
 import { timesheetApprovalWorkflow } from './timesheetApproval.workflow'
 import { expenseApprovalWorkflow } from './expenseApproval.workflow'
 import { invoiceGenerationWorkflow } from './invoiceGeneration.workflow'
+import { getProjectByWorkflowId } from '../db/projects'
+import { listBillableUninvoicedTimeEntries } from '../db/timeEntries'
+import { listBillableUninvoicedExpenses } from '../db/expenses'
+import { assertProjectExists } from '../exceptions'
 const startApprovalsTask = Builder.dummyTask()
 
 const confirmDeliveryTask = Builder.dummyTask()
@@ -52,9 +56,18 @@ export const billingPhaseWorkflow = Builder.workflow('billingPhase')
     to
       .task('generateInvoice')
       .task('completeBilling')
-      .route(async ({ route }) => {
-      const routes = [route.toTask('generateInvoice'), route.toTask('completeBilling')]
-      return routes[Math.floor(Math.random() * routes.length)]!
+      .route(async ({ mutationCtx, route, parent }) => {
+      // Check for uninvoiced billable items
+      const project = await getProjectByWorkflowId(mutationCtx.db, parent.workflow.id)
+      assertProjectExists(project, { workflowId: parent.workflow.id })
+
+      const uninvoicedTime = await listBillableUninvoicedTimeEntries(mutationCtx.db, project._id)
+      const uninvoicedExpenses = await listBillableUninvoicedExpenses(mutationCtx.db, project._id)
+
+      if (uninvoicedTime.length > 0 || uninvoicedExpenses.length > 0) {
+        return route.toTask('generateInvoice')
+      }
+      return route.toTask('completeBilling')
     })
   )
   .connectTask('completeBilling', (to) => to.condition('end'))
