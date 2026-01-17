@@ -14,6 +14,7 @@ import type * as auth from "../auth.js";
 import type * as authorization from "../authorization.js";
 import type * as http from "../http.js";
 import type * as tasquencer from "../tasquencer.js";
+import type * as testing_tasquencer from "../testing/tasquencer.js";
 import type * as workflows_dealToDelivery_api_companies from "../workflows/dealToDelivery/api/companies.js";
 import type * as workflows_dealToDelivery_api_deals from "../workflows/dealToDelivery/api/deals.js";
 import type * as workflows_dealToDelivery_api_estimates from "../workflows/dealToDelivery/api/estimates.js";
@@ -73,6 +74,7 @@ declare const fullApi: ApiFromModules<{
   authorization: typeof authorization;
   http: typeof http;
   tasquencer: typeof tasquencer;
+  "testing/tasquencer": typeof testing_tasquencer;
   "workflows/dealToDelivery/api/companies": typeof workflows_dealToDelivery_api_companies;
   "workflows/dealToDelivery/api/deals": typeof workflows_dealToDelivery_api_deals;
   "workflows/dealToDelivery/api/estimates": typeof workflows_dealToDelivery_api_estimates;
