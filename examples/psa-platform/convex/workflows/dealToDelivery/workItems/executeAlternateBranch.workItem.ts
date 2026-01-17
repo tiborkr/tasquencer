@@ -16,6 +16,7 @@ import { startAndClaimWorkItem, cleanupWorkItemOnCancel } from "./helpers";
 import { initializeDealWorkItemAuth } from "./helpersAuth";
 import { authService } from "../../../authorization";
 import { getProject } from "../db/projects";
+import { getDeal } from "../db/deals";
 import { assertProjectExists, assertDealExists } from "../exceptions";
 import { DealToDeliveryWorkItemHelpers } from "../helpers";
 
@@ -44,7 +45,7 @@ const executeAlternateBranchWorkItemActions = authService.builders.workItemActio
       const project = await getProject(mutationCtx.db, payload.projectId);
       assertProjectExists(project, { projectId: payload.projectId });
 
-      const deal = await mutationCtx.db.get(project.dealId!);
+      const deal = await getDeal(mutationCtx.db, project.dealId!);
       assertDealExists(deal, { dealId: project.dealId });
 
       await initializeDealWorkItemAuth(mutationCtx, workItemId, {

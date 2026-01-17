@@ -17,6 +17,7 @@ import { initializeDealWorkItemAuth } from "./helpersAuth";
 import { authService } from "../../../authorization";
 import { getTask, updateTask } from "../db/tasks";
 import { getProject } from "../db/projects";
+import { getDeal } from "../db/deals";
 import { assertTaskExists, assertProjectExists, assertDealExists } from "../exceptions";
 import { DealToDeliveryWorkItemHelpers } from "../helpers";
 
@@ -48,7 +49,7 @@ const completeTaskWorkItemActions = authService.builders.workItemActions
       const project = await getProject(mutationCtx.db, task.projectId);
       assertProjectExists(project, { projectId: task.projectId });
 
-      const deal = await mutationCtx.db.get(project.dealId!);
+      const deal = await getDeal(mutationCtx.db, project.dealId!);
       assertDealExists(deal, { dealId: project.dealId });
 
       await initializeDealWorkItemAuth(mutationCtx, workItemId, {

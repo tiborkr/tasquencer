@@ -15,6 +15,8 @@ import { zid } from "convex-helpers/server/zod4";
 import { startAndClaimWorkItem, cleanupWorkItemOnCancel } from "./helpers";
 import { initializeDealWorkItemAuth } from "./helpersAuth";
 import { authService } from "../../../authorization";
+import { getProject } from "../db/projects";
+import { getDeal } from "../db/deals";
 import { listTasksByProject } from "../db/tasks";
 import { assertProjectExists, assertDealExists } from "../exceptions";
 import { DealToDeliveryWorkItemHelpers } from "../helpers";
@@ -41,11 +43,11 @@ const getNextTaskWorkItemActions = authService.builders.workItemActions
     async ({ mutationCtx, workItem }, payload) => {
       const workItemId = await workItem.initialize();
 
-      const project = await mutationCtx.db.get(payload.projectId);
+      const project = await getProject(mutationCtx.db, payload.projectId);
       assertProjectExists(project, { projectId: payload.projectId });
 
       // Get the deal for this project
-      const deal = await mutationCtx.db.get(project.dealId!);
+      const deal = await getDeal(mutationCtx.db, project.dealId!);
       assertDealExists(deal, { dealId: project.dealId });
 
       await initializeDealWorkItemAuth(mutationCtx, workItemId, {
@@ -68,7 +70,7 @@ const getNextTaskWorkItemActions = authService.builders.workItemActions
     }),
     tasksViewPolicy,
     async ({ mutationCtx, workItem }, payload) => {
-      const project = await mutationCtx.db.get(payload.projectId);
+      const project = await getProject(mutationCtx.db, payload.projectId);
       assertProjectExists(project, { projectId: payload.projectId });
 
       // Find next pending task using deterministic selection (TENET-ROUTING-DETERMINISM)

@@ -14,9 +14,11 @@ import { authComponent } from "../../../auth";
 import { assertAuthenticatedUser, assertDealExists } from "../exceptions";
 import { DealToDeliveryWorkItemHelpers } from "../helpers";
 import {
+  getDeal,
   getDealByWorkflowId,
   updateDealStage,
 } from "../db/deals";
+import { getProject, updateProjectStatus } from "../db/projects";
 import { ConstraintViolationError, DataIntegrityError } from "@repo/tasquencer";
 
 /**
@@ -106,7 +108,7 @@ export async function transitionDealStageForWorkItem(
   dealId: Id<"deals">,
   nextStage: DealStage
 ): Promise<void> {
-  const deal = await mutationCtx.db.get(dealId);
+  const deal = await getDeal(mutationCtx.db, dealId);
   assertDealExists(deal, { dealId });
 
   if (deal.stage === nextStage) {
@@ -167,7 +169,7 @@ export async function revertDealStageForWorkItem(
     return;
   }
 
-  const deal = await mutationCtx.db.get(dealId);
+  const deal = await getDeal(mutationCtx.db, dealId);
   if (deal && deal.stage !== previousStage) {
     await updateDealStage(mutationCtx.db, dealId, previousStage);
   }
@@ -388,7 +390,7 @@ export async function transitionProjectStatusForWorkItem(
   projectId: Id<"projects">,
   nextStatus: ProjectStatus
 ): Promise<void> {
-  const project = await mutationCtx.db.get(projectId);
+  const project = await getProject(mutationCtx.db, projectId);
   if (!project) {
     throw new DataIntegrityError("PROJECT_NOT_FOUND", { projectId });
   }
@@ -418,7 +420,7 @@ export async function transitionProjectStatusForWorkItem(
     });
   }
 
-  await mutationCtx.db.patch(projectId, { status: nextStatus });
+  await updateProjectStatus(mutationCtx.db, projectId, nextStatus);
 }
 
 /**
@@ -445,9 +447,9 @@ export async function revertProjectStatusForWorkItem(
     return;
   }
 
-  const project = await mutationCtx.db.get(projectId);
+  const project = await getProject(mutationCtx.db, projectId);
   if (project && project.status !== previousStatus) {
-    await mutationCtx.db.patch(projectId, { status: previousStatus });
+    await updateProjectStatus(mutationCtx.db, projectId, previousStatus);
   }
 
   const { previousStatus: _ignored, ...restPayload } = payloadWithStatus;

@@ -15,11 +15,12 @@ import { zid } from "convex-helpers/server/zod4";
 import { startAndClaimWorkItem, cleanupWorkItemOnCancel } from "./helpers";
 import { initializeDealWorkItemAuth } from "./helpersAuth";
 import { authService } from "../../../authorization";
-import { getProject, updateProjectStatus } from "../db/projects";
+import { getProject, getProjectByDealId, updateProjectStatus } from "../db/projects";
+import { getDeal } from "../db/deals";
 import { listTasksByProject, updateTaskStatus } from "../db/tasks";
 import { getRootWorkflowAndProjectForWorkItem } from "../db/workItemContext";
 import { DealToDeliveryWorkItemHelpers } from "../helpers";
-import { assertProjectExists } from "../exceptions";
+import { assertProjectExists, assertDealExists } from "../exceptions";
 import type { Id, Doc } from "../../../_generated/dataModel";
 
 // Policy: Requires 'dealToDelivery:projects:edit:own' scope
@@ -149,24 +150,18 @@ async function cleanupPauseWorkOnCancel(
     if (payload.type === "pauseWork" && payload.previousStatus) {
       // Revert project status
       const dealId = metadata.aggregateTableId as Id<"deals">;
-      const deal = await mutationCtx.db.get(dealId);
-      if (deal) {
-        // Get project through deal
-        const projects = await mutationCtx.db
-          .query("projects")
-          .withIndex("by_organization", (q) =>
-            q.eq("organizationId", deal.organizationId)
-          )
-          .filter((q) => q.eq(q.field("dealId"), deal._id))
-          .first();
+      const deal = await getDeal(mutationCtx.db, dealId);
+      assertDealExists(deal, { dealId });
 
-        if (projects) {
-          await updateProjectStatus(
-            mutationCtx.db,
-            projects._id,
-            payload.previousStatus
-          );
-        }
+      // Get project through deal using domain function
+      const project = await getProjectByDealId(mutationCtx.db, deal._id);
+
+      if (project) {
+        await updateProjectStatus(
+          mutationCtx.db,
+          project._id,
+          payload.previousStatus
+        );
       }
     }
 
