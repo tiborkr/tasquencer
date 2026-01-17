@@ -35,6 +35,7 @@ import {
   listMilestonesByProject,
 } from '../db'
 import { getUser } from '../db/users'
+import { getCompany } from '../db/companies'
 import { authComponent } from '../../../auth'
 
 // =============================================================================
@@ -207,8 +208,8 @@ export const listProjectsWithMetrics = query({
       filteredProjects.map(async (project) => {
         // Load company, manager, budget, and metrics in parallel
         const [company, manager, budget, hours, expenses] = await Promise.all([
-          project.companyId ? ctx.db.get(project.companyId) : null,
-          project.managerId ? ctx.db.get(project.managerId) : null,
+          project.companyId ? getCompany(ctx.db, project.companyId) : null,
+          project.managerId ? getUser(ctx.db, project.managerId) : null,
           getBudgetByProjectId(ctx.db, project._id),
           calculateProjectHours(ctx.db, project._id),
           calculateProjectExpenses(ctx.db, project._id),

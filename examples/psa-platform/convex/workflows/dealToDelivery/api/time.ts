@@ -25,6 +25,7 @@ import {
   calculateProjectHours,
 } from '../db/timeEntries'
 import { getUser } from '../db/users'
+import { getProject } from '../db/projects'
 
 // ============================================================================
 // QUERIES
@@ -454,7 +455,7 @@ export const getTimesheetsForApproval = query({
         const projectSummary = await Promise.all(
           Array.from(projectHoursMap.entries()).map(
             async ([projectId, hours]) => {
-              const project = await ctx.db.get(projectId as Id<'projects'>)
+              const project = await getProject(ctx.db, projectId as Id<'projects'>)
               return {
                 projectId: projectId as Id<'projects'>,
                 projectName: project?.name ?? 'Unknown Project',
@@ -467,7 +468,7 @@ export const getTimesheetsForApproval = query({
         // Load full entry details with project names
         const enrichedEntries = await Promise.all(
           ts.entries.map(async (entry) => {
-            const project = await ctx.db.get(entry.projectId)
+            const project = await getProject(ctx.db, entry.projectId)
             return {
               ...entry,
               project: project

@@ -17,6 +17,7 @@ import { requirePsaStaffMember } from '../domain/services/authorizationService'
 import { DealToDeliveryWorkItemHelpers } from '../helpers'
 import { authComponent } from '../../../auth'
 import { isHumanOffer, isHumanClaim } from '@repo/tasquencer'
+import { getProject } from '../db/projects'
 
 /**
  * Maps work item metadata to a standardized response format.
@@ -228,7 +229,7 @@ export const getTasksByProject = query({
     await requirePsaStaffMember(ctx)
 
     // Projects are linked to deals; work items are keyed by deal
-    const project = await ctx.db.get(args.projectId)
+    const project = await getProject(ctx.db, args.projectId)
     if (!project || !project.dealId) {
       return []
     }
