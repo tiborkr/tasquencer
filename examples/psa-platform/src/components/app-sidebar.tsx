@@ -40,13 +40,17 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               ],
             },
             {
-              title: 'Time',
+              title: 'Time & Expense',
               icon: Clock,
               isActive: () => true,
               items: [
                 {
                   title: 'Timesheet',
                   renderLink: () => <Link to="/timesheet">Timesheet</Link>,
+                },
+                {
+                  title: 'Expenses',
+                  renderLink: () => <Link to="/expenses">Expenses</Link>,
                 },
               ],
             },
