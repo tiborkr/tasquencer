@@ -1,5 +1,148 @@
-import { Builder } from '../../../tasquencer'
+/**
+ * ManualEntry Work Item
+ *
+ * Manually enter time with hours and details.
+ *
+ * Entry condition: User selected "manual" method
+ * Exit condition: Time entry created with status = "Draft"
+ *
+ * Reference: .review/recipes/psa-platform/specs/07-workflow-time-tracking.md
+ */
+import { Builder } from "../../../tasquencer";
+import { z } from "zod";
+import { zid } from "convex-helpers/server/zod4";
+import { startAndClaimWorkItem, cleanupWorkItemOnCancel } from "./helpers";
+import { initializeDealWorkItemAuth } from "./helpersAuth";
+import { authService } from "../../../authorization";
+import { authComponent } from "../../../auth";
+import { getProject } from "../db/projects";
+import { insertTimeEntry } from "../db/timeEntries";
+import { getRootWorkflowAndDealForWorkItem } from "../db/workItemContext";
+import { assertProjectExists, assertAuthenticatedUser } from "../exceptions";
+import type { Id } from "../../../_generated/dataModel";
 
-export const manualEntryWorkItem = Builder.workItem('manualEntry')
+// Policy: Requires 'dealToDelivery:time:create:own' scope
+const timeCreatePolicy = authService.policies.requireScope(
+  "dealToDelivery:time:create:own"
+);
 
-export const manualEntryTask = Builder.task(manualEntryWorkItem)
+/**
+ * Actions for the manualEntry work item.
+ *
+ * - initialize: Sets up work item metadata with project context
+ * - start: Claims the work item for the current user
+ * - complete: Creates time entry with manually entered hours
+ * - fail: Marks the work item as failed
+ */
+const manualEntryWorkItemActions = authService.builders.workItemActions
+  .initialize(
+    z.object({
+      projectId: zid("projects"),
+      date: z.number().optional(),
+    }),
+    timeCreatePolicy,
+    async ({ mutationCtx, workItem }, payload) => {
+      const workItemId = await workItem.initialize();
+
+      // Get deal from workflow context for metadata
+      const { deal } = await getRootWorkflowAndDealForWorkItem(
+        mutationCtx.db,
+        workItemId
+      );
+
+      // Validate project exists
+      const project = await getProject(mutationCtx.db, payload.projectId);
+      assertProjectExists(project, { projectId: payload.projectId });
+
+      await initializeDealWorkItemAuth(mutationCtx, workItemId, {
+        scope: "dealToDelivery:time:create:own",
+        dealId: deal._id,
+        payload: {
+          type: "manualEntry",
+          taskName: "Manual Time Entry",
+          priority: "normal",
+        },
+      });
+    }
+  )
+  .start(z.never(), timeCreatePolicy, async ({ mutationCtx, workItem }) => {
+    await startAndClaimWorkItem(mutationCtx, workItem);
+  })
+  .complete(
+    z.object({
+      projectId: zid("projects"),
+      taskId: zid("tasks").optional(),
+      serviceId: zid("services").optional(),
+      date: z.number(), // Entry date
+      hours: z.number(), // Hours worked (decimal)
+      notes: z.string().optional(),
+      billable: z.boolean().default(true),
+    }),
+    timeCreatePolicy,
+    async ({ mutationCtx, workItem }, payload) => {
+      const authUser = await authComponent.safeGetAuthUser(mutationCtx);
+      assertAuthenticatedUser(authUser, {
+        operation: "manualEntry:complete",
+        workItemId: workItem.id,
+      });
+
+      const userId = authUser.userId as Id<"users">;
+      const now = Date.now();
+
+      // Validate project exists
+      const project = await getProject(mutationCtx.db, payload.projectId);
+      assertProjectExists(project, { projectId: payload.projectId });
+
+      // Validate hours (per spec: 0.25 - 24 range)
+      if (payload.hours < 0.25) {
+        throw new Error("Hours must be at least 0.25 (15 minutes)");
+      }
+      if (payload.hours > 24) {
+        throw new Error("Hours cannot exceed 24 per day");
+      }
+
+      // Validate not a future date
+      if (payload.date > now) {
+        throw new Error("Cannot submit time for future dates");
+      }
+
+      // Create time entry with status = "Draft"
+      await insertTimeEntry(mutationCtx.db, {
+        organizationId: project.organizationId,
+        userId,
+        projectId: payload.projectId,
+        taskId: payload.taskId,
+        serviceId: payload.serviceId,
+        date: payload.date,
+        hours: payload.hours,
+        billable: payload.billable,
+        status: "Draft",
+        notes: payload.notes,
+        createdAt: now,
+      });
+
+      await workItem.complete();
+    }
+  )
+  .fail(z.any().optional(), timeCreatePolicy, async ({ workItem }) => {
+    await workItem.fail();
+  });
+
+/**
+ * The manualEntry work item with actions and lifecycle activities.
+ */
+export const manualEntryWorkItem = Builder.workItem("manualEntry")
+  .withActions(manualEntryWorkItemActions.build())
+  .withActivities({
+    onCanceled: async ({ mutationCtx, workItem }) => {
+      await cleanupWorkItemOnCancel(mutationCtx, workItem.id);
+    },
+    onFailed: async ({ mutationCtx, workItem }) => {
+      await cleanupWorkItemOnCancel(mutationCtx, workItem.id);
+    },
+  });
+
+/**
+ * The manualEntry task.
+ */
+export const manualEntryTask = Builder.task(manualEntryWorkItem);
