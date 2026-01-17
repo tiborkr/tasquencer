@@ -754,6 +754,8 @@ const dealToDeliveryWorkItems = defineWorkItemMetadataTable("deals").withPayload
       taskName: v.string(),
       priority: workItemPriority,
       expenseId: v.optional(v.id("expenses")),
+      // Decision captured during review (set on complete)
+      decision: v.optional(v.union(v.literal("approve"), v.literal("reject"))),
     }),
     v.object({
       type: v.literal("approveExpense"),

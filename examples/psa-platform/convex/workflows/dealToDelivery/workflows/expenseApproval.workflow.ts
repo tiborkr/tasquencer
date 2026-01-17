@@ -1,4 +1,5 @@
 import { Builder } from '../../../tasquencer'
+import { DealToDeliveryWorkItemHelpers } from '../helpers'
 import { reviewExpenseTask } from '../workItems/reviewExpense.workItem'
 import { approveExpenseTask } from '../workItems/approveExpense.workItem'
 import { rejectExpenseTask } from '../workItems/rejectExpense.workItem'
@@ -17,10 +18,28 @@ export const expenseApprovalWorkflow = Builder.workflow('expenseApproval')
     to
       .task('approveExpense')
       .task('rejectExpense')
-      .route(async ({ route }) => {
-        // TODO: Track approval decision in work item metadata to enable proper routing
-        // For now, default to approve path. Rejection would require storing decision during reviewExpense completion.
-        // Reference: .review/recipes/psa-platform/specs/10-workflow-expense-approval.md
+      .route(async ({ mutationCtx, route, workItem }) => {
+        // Get the review decision from work item metadata
+        // The reviewExpense work item stores the decision in metadata on completion
+        const workItemIds = await workItem.getAllWorkItemIds()
+
+        for (const workItemId of workItemIds) {
+          const metadata = await DealToDeliveryWorkItemHelpers.getWorkItemMetadata(
+            mutationCtx.db,
+            workItemId
+          )
+
+          if (metadata?.payload.type === 'reviewExpense' && metadata.payload.decision) {
+            if (metadata.payload.decision === 'approve') {
+              return route.toTask('approveExpense')
+            } else if (metadata.payload.decision === 'reject') {
+              return route.toTask('rejectExpense')
+            }
+          }
+        }
+
+        // Fallback: if no decision found, default to approve
+        // This should not happen in normal operation
         return route.toTask('approveExpense')
       })
   )

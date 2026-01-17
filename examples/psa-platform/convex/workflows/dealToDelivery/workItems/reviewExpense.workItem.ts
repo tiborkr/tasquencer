@@ -19,7 +19,6 @@ import { authComponent } from "../../../auth";
 import { getExpense } from "../db/expenses";
 import { getRootWorkflowAndDealForWorkItem } from "../db/workItemContext";
 import { assertExpenseExists, assertAuthenticatedUser } from "../exceptions";
-import { DealToDeliveryWorkItemHelpers } from "../helpers";
 import type { Id } from "../../../_generated/dataModel";
 
 // Policy: Requires 'dealToDelivery:expenses:approve' scope
@@ -113,22 +112,16 @@ const reviewExpenseWorkItemActions = authService.builders.workItemActions
         );
       }
 
-      // Update work item metadata with decision
-      const metadata = await DealToDeliveryWorkItemHelpers.getWorkItemMetadata(
-        mutationCtx.db,
-        workItem.id
-      );
-      if (metadata) {
-        await updateWorkItemMetadataPayload(mutationCtx, workItem.id, {
-          type: "reviewExpense",
-          taskName: "Review Expense",
-          priority: "normal",
-          expenseId: payload.expenseId,
-        });
-      }
+      // Store the decision in work item metadata for routing
+      // The workflow router will read this to determine the next task (approve vs reject)
+      await updateWorkItemMetadataPayload(mutationCtx, workItem.id, {
+        type: "reviewExpense",
+        taskName: "Review Expense",
+        priority: "normal",
+        expenseId: payload.expenseId,
+        decision: payload.decision,
+      });
 
-      // The decision is stored in the work item result for routing
-      // The workflow router will read this to determine the next task
       await workItem.complete();
     }
   )
