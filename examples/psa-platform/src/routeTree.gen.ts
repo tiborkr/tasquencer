@@ -21,6 +21,7 @@ import { Route as AppAuditIndexRouteImport } from './routes/_app/audit/index'
 import { Route as AppAdminIndexRouteImport } from './routes/_app/admin/index'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as AppDealsNewRouteImport } from './routes/_app/deals/new'
+import { Route as AppDealsDealIdRouteImport } from './routes/_app/deals/$dealId'
 import { Route as AppAuditTraceIdRouteImport } from './routes/_app/audit/$traceId'
 import { Route as AppAdminUsersRouteImport } from './routes/_app/admin/users'
 import { Route as AppAdminRolesRouteImport } from './routes/_app/admin/roles'
@@ -29,6 +30,12 @@ import { Route as AppAuditTraceIdIndexRouteImport } from './routes/_app/audit/$t
 import { Route as AppAdminUsersIndexRouteImport } from './routes/_app/admin/users.index'
 import { Route as AppAdminRolesIndexRouteImport } from './routes/_app/admin/roles.index'
 import { Route as AppAdminGroupsIndexRouteImport } from './routes/_app/admin/groups.index'
+import { Route as AppDealsDealIdSignRouteImport } from './routes/_app/deals/$dealId/sign'
+import { Route as AppDealsDealIdSendProposalRouteImport } from './routes/_app/deals/$dealId/send-proposal'
+import { Route as AppDealsDealIdQualifyRouteImport } from './routes/_app/deals/$dealId/qualify'
+import { Route as AppDealsDealIdProposalRouteImport } from './routes/_app/deals/$dealId/proposal'
+import { Route as AppDealsDealIdNegotiateRouteImport } from './routes/_app/deals/$dealId/negotiate'
+import { Route as AppDealsDealIdEstimateRouteImport } from './routes/_app/deals/$dealId/estimate'
 import { Route as AppAuditTraceIdVisualizerRouteImport } from './routes/_app/audit/$traceId.visualizer'
 import { Route as AppAdminRolesRoleIdRouteImport } from './routes/_app/admin/roles.$roleId'
 import { Route as AppAdminGroupsGroupIdRouteImport } from './routes/_app/admin/groups.$groupId'
@@ -93,6 +100,11 @@ const AppDealsNewRoute = AppDealsNewRouteImport.update({
   path: '/new',
   getParentRoute: () => AppDealsRoute,
 } as any)
+const AppDealsDealIdRoute = AppDealsDealIdRouteImport.update({
+  id: '/$dealId',
+  path: '/$dealId',
+  getParentRoute: () => AppDealsRoute,
+} as any)
 const AppAuditTraceIdRoute = AppAuditTraceIdRouteImport.update({
   id: '/$traceId',
   path: '/$traceId',
@@ -133,6 +145,37 @@ const AppAdminGroupsIndexRoute = AppAdminGroupsIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppAdminGroupsRoute,
 } as any)
+const AppDealsDealIdSignRoute = AppDealsDealIdSignRouteImport.update({
+  id: '/sign',
+  path: '/sign',
+  getParentRoute: () => AppDealsDealIdRoute,
+} as any)
+const AppDealsDealIdSendProposalRoute =
+  AppDealsDealIdSendProposalRouteImport.update({
+    id: '/send-proposal',
+    path: '/send-proposal',
+    getParentRoute: () => AppDealsDealIdRoute,
+  } as any)
+const AppDealsDealIdQualifyRoute = AppDealsDealIdQualifyRouteImport.update({
+  id: '/qualify',
+  path: '/qualify',
+  getParentRoute: () => AppDealsDealIdRoute,
+} as any)
+const AppDealsDealIdProposalRoute = AppDealsDealIdProposalRouteImport.update({
+  id: '/proposal',
+  path: '/proposal',
+  getParentRoute: () => AppDealsDealIdRoute,
+} as any)
+const AppDealsDealIdNegotiateRoute = AppDealsDealIdNegotiateRouteImport.update({
+  id: '/negotiate',
+  path: '/negotiate',
+  getParentRoute: () => AppDealsDealIdRoute,
+} as any)
+const AppDealsDealIdEstimateRoute = AppDealsDealIdEstimateRouteImport.update({
+  id: '/estimate',
+  path: '/estimate',
+  getParentRoute: () => AppDealsDealIdRoute,
+} as any)
 const AppAuditTraceIdVisualizerRoute =
   AppAuditTraceIdVisualizerRouteImport.update({
     id: '/visualizer',
@@ -167,6 +210,7 @@ export interface FileRoutesByFullPath {
   '/admin/roles': typeof AppAdminRolesRouteWithChildren
   '/admin/users': typeof AppAdminUsersRouteWithChildren
   '/audit/$traceId': typeof AppAuditTraceIdRouteWithChildren
+  '/deals/$dealId': typeof AppDealsDealIdRouteWithChildren
   '/deals/new': typeof AppDealsNewRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/admin/': typeof AppAdminIndexRoute
@@ -175,6 +219,12 @@ export interface FileRoutesByFullPath {
   '/admin/groups/$groupId': typeof AppAdminGroupsGroupIdRoute
   '/admin/roles/$roleId': typeof AppAdminRolesRoleIdRoute
   '/audit/$traceId/visualizer': typeof AppAuditTraceIdVisualizerRoute
+  '/deals/$dealId/estimate': typeof AppDealsDealIdEstimateRoute
+  '/deals/$dealId/negotiate': typeof AppDealsDealIdNegotiateRoute
+  '/deals/$dealId/proposal': typeof AppDealsDealIdProposalRoute
+  '/deals/$dealId/qualify': typeof AppDealsDealIdQualifyRoute
+  '/deals/$dealId/send-proposal': typeof AppDealsDealIdSendProposalRoute
+  '/deals/$dealId/sign': typeof AppDealsDealIdSignRoute
   '/admin/groups/': typeof AppAdminGroupsIndexRoute
   '/admin/roles/': typeof AppAdminRolesIndexRoute
   '/admin/users/': typeof AppAdminUsersIndexRoute
@@ -185,6 +235,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/homepage': typeof AppHomepageRoute
+  '/deals/$dealId': typeof AppDealsDealIdRouteWithChildren
   '/deals/new': typeof AppDealsNewRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/admin': typeof AppAdminIndexRoute
@@ -193,6 +244,12 @@ export interface FileRoutesByTo {
   '/admin/groups/$groupId': typeof AppAdminGroupsGroupIdRoute
   '/admin/roles/$roleId': typeof AppAdminRolesRoleIdRoute
   '/audit/$traceId/visualizer': typeof AppAuditTraceIdVisualizerRoute
+  '/deals/$dealId/estimate': typeof AppDealsDealIdEstimateRoute
+  '/deals/$dealId/negotiate': typeof AppDealsDealIdNegotiateRoute
+  '/deals/$dealId/proposal': typeof AppDealsDealIdProposalRoute
+  '/deals/$dealId/qualify': typeof AppDealsDealIdQualifyRoute
+  '/deals/$dealId/send-proposal': typeof AppDealsDealIdSendProposalRoute
+  '/deals/$dealId/sign': typeof AppDealsDealIdSignRoute
   '/admin/groups': typeof AppAdminGroupsIndexRoute
   '/admin/roles': typeof AppAdminRolesIndexRoute
   '/admin/users': typeof AppAdminUsersIndexRoute
@@ -212,6 +269,7 @@ export interface FileRoutesById {
   '/_app/admin/roles': typeof AppAdminRolesRouteWithChildren
   '/_app/admin/users': typeof AppAdminUsersRouteWithChildren
   '/_app/audit/$traceId': typeof AppAuditTraceIdRouteWithChildren
+  '/_app/deals/$dealId': typeof AppDealsDealIdRouteWithChildren
   '/_app/deals/new': typeof AppDealsNewRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/_app/admin/': typeof AppAdminIndexRoute
@@ -220,6 +278,12 @@ export interface FileRoutesById {
   '/_app/admin/groups/$groupId': typeof AppAdminGroupsGroupIdRoute
   '/_app/admin/roles/$roleId': typeof AppAdminRolesRoleIdRoute
   '/_app/audit/$traceId/visualizer': typeof AppAuditTraceIdVisualizerRoute
+  '/_app/deals/$dealId/estimate': typeof AppDealsDealIdEstimateRoute
+  '/_app/deals/$dealId/negotiate': typeof AppDealsDealIdNegotiateRoute
+  '/_app/deals/$dealId/proposal': typeof AppDealsDealIdProposalRoute
+  '/_app/deals/$dealId/qualify': typeof AppDealsDealIdQualifyRoute
+  '/_app/deals/$dealId/send-proposal': typeof AppDealsDealIdSendProposalRoute
+  '/_app/deals/$dealId/sign': typeof AppDealsDealIdSignRoute
   '/_app/admin/groups/': typeof AppAdminGroupsIndexRoute
   '/_app/admin/roles/': typeof AppAdminRolesIndexRoute
   '/_app/admin/users/': typeof AppAdminUsersIndexRoute
@@ -239,6 +303,7 @@ export interface FileRouteTypes {
     | '/admin/roles'
     | '/admin/users'
     | '/audit/$traceId'
+    | '/deals/$dealId'
     | '/deals/new'
     | '/api/auth/$'
     | '/admin/'
@@ -247,6 +312,12 @@ export interface FileRouteTypes {
     | '/admin/groups/$groupId'
     | '/admin/roles/$roleId'
     | '/audit/$traceId/visualizer'
+    | '/deals/$dealId/estimate'
+    | '/deals/$dealId/negotiate'
+    | '/deals/$dealId/proposal'
+    | '/deals/$dealId/qualify'
+    | '/deals/$dealId/send-proposal'
+    | '/deals/$dealId/sign'
     | '/admin/groups/'
     | '/admin/roles/'
     | '/admin/users/'
@@ -257,6 +328,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/homepage'
+    | '/deals/$dealId'
     | '/deals/new'
     | '/api/auth/$'
     | '/admin'
@@ -265,6 +337,12 @@ export interface FileRouteTypes {
     | '/admin/groups/$groupId'
     | '/admin/roles/$roleId'
     | '/audit/$traceId/visualizer'
+    | '/deals/$dealId/estimate'
+    | '/deals/$dealId/negotiate'
+    | '/deals/$dealId/proposal'
+    | '/deals/$dealId/qualify'
+    | '/deals/$dealId/send-proposal'
+    | '/deals/$dealId/sign'
     | '/admin/groups'
     | '/admin/roles'
     | '/admin/users'
@@ -283,6 +361,7 @@ export interface FileRouteTypes {
     | '/_app/admin/roles'
     | '/_app/admin/users'
     | '/_app/audit/$traceId'
+    | '/_app/deals/$dealId'
     | '/_app/deals/new'
     | '/api/auth/$'
     | '/_app/admin/'
@@ -291,6 +370,12 @@ export interface FileRouteTypes {
     | '/_app/admin/groups/$groupId'
     | '/_app/admin/roles/$roleId'
     | '/_app/audit/$traceId/visualizer'
+    | '/_app/deals/$dealId/estimate'
+    | '/_app/deals/$dealId/negotiate'
+    | '/_app/deals/$dealId/proposal'
+    | '/_app/deals/$dealId/qualify'
+    | '/_app/deals/$dealId/send-proposal'
+    | '/_app/deals/$dealId/sign'
     | '/_app/admin/groups/'
     | '/_app/admin/roles/'
     | '/_app/admin/users/'
@@ -317,7 +402,7 @@ declare module '@tanstack/react-router' {
     '/_app': {
       id: '/_app'
       path: ''
-      fullPath: ''
+      fullPath: '/'
       preLoaderRoute: typeof AppRouteImport
       parentRoute: typeof rootRouteImport
     }
@@ -391,6 +476,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppDealsNewRouteImport
       parentRoute: typeof AppDealsRoute
     }
+    '/_app/deals/$dealId': {
+      id: '/_app/deals/$dealId'
+      path: '/$dealId'
+      fullPath: '/deals/$dealId'
+      preLoaderRoute: typeof AppDealsDealIdRouteImport
+      parentRoute: typeof AppDealsRoute
+    }
     '/_app/audit/$traceId': {
       id: '/_app/audit/$traceId'
       path: '/$traceId'
@@ -446,6 +538,48 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/groups/'
       preLoaderRoute: typeof AppAdminGroupsIndexRouteImport
       parentRoute: typeof AppAdminGroupsRoute
+    }
+    '/_app/deals/$dealId/sign': {
+      id: '/_app/deals/$dealId/sign'
+      path: '/sign'
+      fullPath: '/deals/$dealId/sign'
+      preLoaderRoute: typeof AppDealsDealIdSignRouteImport
+      parentRoute: typeof AppDealsDealIdRoute
+    }
+    '/_app/deals/$dealId/send-proposal': {
+      id: '/_app/deals/$dealId/send-proposal'
+      path: '/send-proposal'
+      fullPath: '/deals/$dealId/send-proposal'
+      preLoaderRoute: typeof AppDealsDealIdSendProposalRouteImport
+      parentRoute: typeof AppDealsDealIdRoute
+    }
+    '/_app/deals/$dealId/qualify': {
+      id: '/_app/deals/$dealId/qualify'
+      path: '/qualify'
+      fullPath: '/deals/$dealId/qualify'
+      preLoaderRoute: typeof AppDealsDealIdQualifyRouteImport
+      parentRoute: typeof AppDealsDealIdRoute
+    }
+    '/_app/deals/$dealId/proposal': {
+      id: '/_app/deals/$dealId/proposal'
+      path: '/proposal'
+      fullPath: '/deals/$dealId/proposal'
+      preLoaderRoute: typeof AppDealsDealIdProposalRouteImport
+      parentRoute: typeof AppDealsDealIdRoute
+    }
+    '/_app/deals/$dealId/negotiate': {
+      id: '/_app/deals/$dealId/negotiate'
+      path: '/negotiate'
+      fullPath: '/deals/$dealId/negotiate'
+      preLoaderRoute: typeof AppDealsDealIdNegotiateRouteImport
+      parentRoute: typeof AppDealsDealIdRoute
+    }
+    '/_app/deals/$dealId/estimate': {
+      id: '/_app/deals/$dealId/estimate'
+      path: '/estimate'
+      fullPath: '/deals/$dealId/estimate'
+      preLoaderRoute: typeof AppDealsDealIdEstimateRouteImport
+      parentRoute: typeof AppDealsDealIdRoute
     }
     '/_app/audit/$traceId/visualizer': {
       id: '/_app/audit/$traceId/visualizer'
@@ -566,12 +700,36 @@ const AppAuditRouteWithChildren = AppAuditRoute._addFileChildren(
   AppAuditRouteChildren,
 )
 
+interface AppDealsDealIdRouteChildren {
+  AppDealsDealIdEstimateRoute: typeof AppDealsDealIdEstimateRoute
+  AppDealsDealIdNegotiateRoute: typeof AppDealsDealIdNegotiateRoute
+  AppDealsDealIdProposalRoute: typeof AppDealsDealIdProposalRoute
+  AppDealsDealIdQualifyRoute: typeof AppDealsDealIdQualifyRoute
+  AppDealsDealIdSendProposalRoute: typeof AppDealsDealIdSendProposalRoute
+  AppDealsDealIdSignRoute: typeof AppDealsDealIdSignRoute
+}
+
+const AppDealsDealIdRouteChildren: AppDealsDealIdRouteChildren = {
+  AppDealsDealIdEstimateRoute: AppDealsDealIdEstimateRoute,
+  AppDealsDealIdNegotiateRoute: AppDealsDealIdNegotiateRoute,
+  AppDealsDealIdProposalRoute: AppDealsDealIdProposalRoute,
+  AppDealsDealIdQualifyRoute: AppDealsDealIdQualifyRoute,
+  AppDealsDealIdSendProposalRoute: AppDealsDealIdSendProposalRoute,
+  AppDealsDealIdSignRoute: AppDealsDealIdSignRoute,
+}
+
+const AppDealsDealIdRouteWithChildren = AppDealsDealIdRoute._addFileChildren(
+  AppDealsDealIdRouteChildren,
+)
+
 interface AppDealsRouteChildren {
+  AppDealsDealIdRoute: typeof AppDealsDealIdRouteWithChildren
   AppDealsNewRoute: typeof AppDealsNewRoute
   AppDealsIndexRoute: typeof AppDealsIndexRoute
 }
 
 const AppDealsRouteChildren: AppDealsRouteChildren = {
+  AppDealsDealIdRoute: AppDealsDealIdRouteWithChildren,
   AppDealsNewRoute: AppDealsNewRoute,
   AppDealsIndexRoute: AppDealsIndexRoute,
 }
@@ -605,12 +763,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-  }
-}
