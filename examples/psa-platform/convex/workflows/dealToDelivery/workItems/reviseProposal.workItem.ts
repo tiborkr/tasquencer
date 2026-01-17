@@ -13,7 +13,11 @@ import {
   startAndClaimWorkItem,
   cleanupWorkItemOnCancel,
 } from "./helpers";
-import { initializeDealWorkItemAuth, initializeWorkItemWithDealAuth } from "./helpersAuth";
+import {
+  initializeDealWorkItemAuth,
+  initializeWorkItemWithDealAuth,
+  updateWorkItemMetadataPayload,
+} from "./helpersAuth";
 import { authService } from "../../../authorization";
 import {
   insertProposal,
@@ -21,7 +25,6 @@ import {
   getLatestProposalForDeal,
 } from "../db/proposals";
 import { getRootWorkflowAndDealForWorkItem } from "../db/workItemContext";
-import { DealToDeliveryWorkItemHelpers } from "../helpers";
 
 // Policy: Requires 'dealToDelivery:proposals:create' scope (same as creating proposals)
 const proposalsCreatePolicy = authService.policies.requireScope("dealToDelivery:proposals:create");
@@ -93,19 +96,13 @@ const reviseProposalWorkItemActions = authService.builders.workItemActions
         createdAt: Date.now(),
       });
 
-      // Update work item metadata with new version
-      const metadata = await DealToDeliveryWorkItemHelpers.getWorkItemMetadata(
-        mutationCtx.db,
-        workItem.id
-      );
-      if (metadata && metadata.payload.type === "reviseProposal") {
-        await mutationCtx.db.patch(metadata._id, {
-          payload: {
-            ...metadata.payload,
-            previousVersion: version - 1,
-          },
-        });
-      }
+      // Update work item metadata with new version using domain-layer function
+      await updateWorkItemMetadataPayload(mutationCtx, workItem.id, {
+        type: "reviseProposal",
+        taskName: "Revise Proposal",
+        priority: "normal",
+        previousVersion: version - 1,
+      });
 
       // Complete the work item to advance the workflow
       await workItem.complete();

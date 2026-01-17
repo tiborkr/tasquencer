@@ -10,10 +10,13 @@ import { Builder } from "../../../tasquencer";
 import { z } from "zod";
 import { zid } from "convex-helpers/server/zod4";
 import { startAndClaimWorkItem, cleanupWorkItemOnCancel } from "./helpers";
+import {
+  initializeRootWorkItemAuth,
+  updateWorkItemAggregateTableId,
+} from "./helpersAuth";
 import { authService } from "../../../authorization";
 import { insertDeal } from "../db/deals";
 import { getWorkflowIdsForWorkItem } from "../db/workItemContext";
-import { DealToDeliveryWorkItemHelpers } from "../helpers";
 
 // Policy: Requires 'dealToDelivery:deals:create' scope
 const dealsCreatePolicy = authService.policies.requireScope("dealToDelivery:deals:create");
@@ -33,15 +36,12 @@ const createDealWorkItemActions = authService.builders.workItemActions
     async ({ mutationCtx, workItem }) => {
       const workItemId = await workItem.initialize();
 
-      // Initialize work item metadata (deal ID will be set in complete)
-      await mutationCtx.db.insert("dealToDeliveryWorkItems", {
-        workItemId,
-        workflowName: "dealToDelivery",
-        offer: {
-          type: "human" as const,
-          requiredScope: "dealToDelivery:deals:create",
-        } as any,
-        aggregateTableId: "" as any, // Will be updated with dealId in complete
+      // Initialize work item metadata using domain-layer function
+      // Note: This is a root work item that creates the aggregate (deal),
+      // so we use initializeRootWorkItemAuth with no dealId yet.
+      // The dealId will be set in complete via updateWorkItemAggregateTableId.
+      await initializeRootWorkItemAuth(mutationCtx, workItemId, {
+        scope: "dealToDelivery:deals:create",
         payload: {
           type: "createDeal",
           taskName: "Create Deal",
@@ -70,7 +70,7 @@ const createDealWorkItemActions = authService.builders.workItemActions
         workItem.id
       );
 
-      // Create the deal record
+      // Create the deal record using domain-layer function
       const dealId = await insertDeal(mutationCtx.db, {
         organizationId: payload.organizationId,
         companyId: payload.companyId,
@@ -84,16 +84,8 @@ const createDealWorkItemActions = authService.builders.workItemActions
         createdAt: Date.now(),
       });
 
-      // Update work item metadata with the deal ID
-      const metadata = await DealToDeliveryWorkItemHelpers.getWorkItemMetadata(
-        mutationCtx.db,
-        workItem.id
-      );
-      if (metadata) {
-        await mutationCtx.db.patch(metadata._id, {
-          aggregateTableId: dealId,
-        });
-      }
+      // Update work item metadata with the deal ID using domain-layer function
+      await updateWorkItemAggregateTableId(mutationCtx, workItem.id, dealId);
 
       // Complete the work item to advance the workflow
       await workItem.complete();
