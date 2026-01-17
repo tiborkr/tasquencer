@@ -18,6 +18,7 @@ import { Route as AppHomepageRouteImport } from './routes/_app/homepage'
 import { Route as AppExpensesRouteImport } from './routes/_app/expenses'
 import { Route as AppDealsRouteImport } from './routes/_app/deals'
 import { Route as AppAuditRouteImport } from './routes/_app/audit'
+import { Route as AppApprovalsRouteImport } from './routes/_app/approvals'
 import { Route as AppAdminRouteImport } from './routes/_app/admin'
 import { Route as AppTimesheetIndexRouteImport } from './routes/_app/timesheet/index'
 import { Route as AppProjectsIndexRouteImport } from './routes/_app/projects/index'
@@ -29,6 +30,7 @@ import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as AppDealsNewRouteImport } from './routes/_app/deals/new'
 import { Route as AppDealsDealIdRouteImport } from './routes/_app/deals/$dealId'
 import { Route as AppAuditTraceIdRouteImport } from './routes/_app/audit/$traceId'
+import { Route as AppApprovalsTimesheetsRouteImport } from './routes/_app/approvals/timesheets'
 import { Route as AppAdminUsersRouteImport } from './routes/_app/admin/users'
 import { Route as AppAdminRolesRouteImport } from './routes/_app/admin/roles'
 import { Route as AppAdminGroupsRouteImport } from './routes/_app/admin/groups'
@@ -91,6 +93,11 @@ const AppAuditRoute = AppAuditRouteImport.update({
   path: '/audit',
   getParentRoute: () => AppRoute,
 } as any)
+const AppApprovalsRoute = AppApprovalsRouteImport.update({
+  id: '/approvals',
+  path: '/approvals',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppAdminRoute = AppAdminRouteImport.update({
   id: '/admin',
   path: '/admin',
@@ -145,6 +152,11 @@ const AppAuditTraceIdRoute = AppAuditTraceIdRouteImport.update({
   id: '/$traceId',
   path: '/$traceId',
   getParentRoute: () => AppAuditRoute,
+} as any)
+const AppApprovalsTimesheetsRoute = AppApprovalsTimesheetsRouteImport.update({
+  id: '/timesheets',
+  path: '/timesheets',
+  getParentRoute: () => AppApprovalsRoute,
 } as any)
 const AppAdminUsersRoute = AppAdminUsersRouteImport.update({
   id: '/users',
@@ -239,6 +251,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/admin': typeof AppAdminRouteWithChildren
+  '/approvals': typeof AppApprovalsRouteWithChildren
   '/audit': typeof AppAuditRouteWithChildren
   '/deals': typeof AppDealsRouteWithChildren
   '/expenses': typeof AppExpensesRouteWithChildren
@@ -248,6 +261,7 @@ export interface FileRoutesByFullPath {
   '/admin/groups': typeof AppAdminGroupsRouteWithChildren
   '/admin/roles': typeof AppAdminRolesRouteWithChildren
   '/admin/users': typeof AppAdminUsersRouteWithChildren
+  '/approvals/timesheets': typeof AppApprovalsTimesheetsRoute
   '/audit/$traceId': typeof AppAuditTraceIdRouteWithChildren
   '/deals/$dealId': typeof AppDealsDealIdRouteWithChildren
   '/deals/new': typeof AppDealsNewRoute
@@ -276,7 +290,9 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/approvals': typeof AppApprovalsRouteWithChildren
   '/homepage': typeof AppHomepageRoute
+  '/approvals/timesheets': typeof AppApprovalsTimesheetsRoute
   '/deals/$dealId': typeof AppDealsDealIdRouteWithChildren
   '/deals/new': typeof AppDealsNewRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -307,6 +323,7 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
   '/_app/admin': typeof AppAdminRouteWithChildren
+  '/_app/approvals': typeof AppApprovalsRouteWithChildren
   '/_app/audit': typeof AppAuditRouteWithChildren
   '/_app/deals': typeof AppDealsRouteWithChildren
   '/_app/expenses': typeof AppExpensesRouteWithChildren
@@ -316,6 +333,7 @@ export interface FileRoutesById {
   '/_app/admin/groups': typeof AppAdminGroupsRouteWithChildren
   '/_app/admin/roles': typeof AppAdminRolesRouteWithChildren
   '/_app/admin/users': typeof AppAdminUsersRouteWithChildren
+  '/_app/approvals/timesheets': typeof AppApprovalsTimesheetsRoute
   '/_app/audit/$traceId': typeof AppAuditTraceIdRouteWithChildren
   '/_app/deals/$dealId': typeof AppDealsDealIdRouteWithChildren
   '/_app/deals/new': typeof AppDealsNewRoute
@@ -347,6 +365,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/admin'
+    | '/approvals'
     | '/audit'
     | '/deals'
     | '/expenses'
@@ -356,6 +375,7 @@ export interface FileRouteTypes {
     | '/admin/groups'
     | '/admin/roles'
     | '/admin/users'
+    | '/approvals/timesheets'
     | '/audit/$traceId'
     | '/deals/$dealId'
     | '/deals/new'
@@ -384,7 +404,9 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/login'
+    | '/approvals'
     | '/homepage'
+    | '/approvals/timesheets'
     | '/deals/$dealId'
     | '/deals/new'
     | '/api/auth/$'
@@ -414,6 +436,7 @@ export interface FileRouteTypes {
     | '/_app'
     | '/login'
     | '/_app/admin'
+    | '/_app/approvals'
     | '/_app/audit'
     | '/_app/deals'
     | '/_app/expenses'
@@ -423,6 +446,7 @@ export interface FileRouteTypes {
     | '/_app/admin/groups'
     | '/_app/admin/roles'
     | '/_app/admin/users'
+    | '/_app/approvals/timesheets'
     | '/_app/audit/$traceId'
     | '/_app/deals/$dealId'
     | '/_app/deals/new'
@@ -521,6 +545,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAuditRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/approvals': {
+      id: '/_app/approvals'
+      path: '/approvals'
+      fullPath: '/approvals'
+      preLoaderRoute: typeof AppApprovalsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/admin': {
       id: '/_app/admin'
       path: '/admin'
@@ -597,6 +628,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/audit/$traceId'
       preLoaderRoute: typeof AppAuditTraceIdRouteImport
       parentRoute: typeof AppAuditRoute
+    }
+    '/_app/approvals/timesheets': {
+      id: '/_app/approvals/timesheets'
+      path: '/timesheets'
+      fullPath: '/approvals/timesheets'
+      preLoaderRoute: typeof AppApprovalsTimesheetsRouteImport
+      parentRoute: typeof AppApprovalsRoute
     }
     '/_app/admin/users': {
       id: '/_app/admin/users'
@@ -780,6 +818,18 @@ const AppAdminRouteWithChildren = AppAdminRoute._addFileChildren(
   AppAdminRouteChildren,
 )
 
+interface AppApprovalsRouteChildren {
+  AppApprovalsTimesheetsRoute: typeof AppApprovalsTimesheetsRoute
+}
+
+const AppApprovalsRouteChildren: AppApprovalsRouteChildren = {
+  AppApprovalsTimesheetsRoute: AppApprovalsTimesheetsRoute,
+}
+
+const AppApprovalsRouteWithChildren = AppApprovalsRoute._addFileChildren(
+  AppApprovalsRouteChildren,
+)
+
 interface AppAuditTraceIdRouteChildren {
   AppAuditTraceIdVisualizerRoute: typeof AppAuditTraceIdVisualizerRoute
   AppAuditTraceIdIndexRoute: typeof AppAuditTraceIdIndexRoute
@@ -884,6 +934,7 @@ const AppTimesheetRouteWithChildren = AppTimesheetRoute._addFileChildren(
 
 interface AppRouteChildren {
   AppAdminRoute: typeof AppAdminRouteWithChildren
+  AppApprovalsRoute: typeof AppApprovalsRouteWithChildren
   AppAuditRoute: typeof AppAuditRouteWithChildren
   AppDealsRoute: typeof AppDealsRouteWithChildren
   AppExpensesRoute: typeof AppExpensesRouteWithChildren
@@ -894,6 +945,7 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppAdminRoute: AppAdminRouteWithChildren,
+  AppApprovalsRoute: AppApprovalsRouteWithChildren,
   AppAuditRoute: AppAuditRouteWithChildren,
   AppDealsRoute: AppDealsRouteWithChildren,
   AppExpensesRoute: AppExpensesRouteWithChildren,

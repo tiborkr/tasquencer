@@ -358,3 +358,230 @@ export const submitTimeEntry = mutation({
     await updateTimeEntryStatus(ctx.db, args.timeEntryId, 'Submitted')
   },
 })
+
+// ============================================================================
+// APPROVAL QUERIES & MUTATIONS
+// ============================================================================
+
+/**
+ * Gets submitted timesheets grouped by user and week for approval.
+ * Returns timesheets awaiting approval from manager.
+ *
+ * Authorization: Requires dealToDelivery:staff scope.
+ *
+ * @param args.status - Filter by status (defaults to 'Submitted')
+ * @returns Array of timesheets grouped by user and week
+ */
+export const getTimesheetsForApproval = query({
+  args: {
+    status: v.optional(
+      v.union(
+        v.literal('Submitted'),
+        v.literal('Approved'),
+        v.literal('Rejected')
+      )
+    ),
+  },
+  handler: async (ctx, args) => {
+    await requirePsaStaffMember(ctx)
+
+    const status = args.status ?? 'Submitted'
+
+    // Get all time entries with the specified status
+    const allEntries = await ctx.db
+      .query('timeEntries')
+      .filter((q) => q.eq(q.field('status'), status))
+      .order('desc')
+      .take(500)
+
+    // Group entries by user and week
+    const timesheetMap = new Map<
+      string,
+      {
+        userId: Id<'users'>
+        weekStart: number
+        entries: typeof allEntries
+      }
+    >()
+
+    for (const entry of allEntries) {
+      // Calculate week start (Monday) for the entry date
+      const entryDate = new Date(entry.date)
+      const dayOfWeek = entryDate.getDay()
+      const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
+      const weekStart = new Date(entryDate)
+      weekStart.setDate(entryDate.getDate() + diff)
+      weekStart.setHours(0, 0, 0, 0)
+
+      const key = `${entry.userId}_${weekStart.getTime()}`
+
+      if (!timesheetMap.has(key)) {
+        timesheetMap.set(key, {
+          userId: entry.userId,
+          weekStart: weekStart.getTime(),
+          entries: [],
+        })
+      }
+
+      timesheetMap.get(key)!.entries.push(entry)
+    }
+
+    // Enrich timesheets with user and project info
+    const timesheets = await Promise.all(
+      Array.from(timesheetMap.values()).map(async (ts) => {
+        const user = await getUser(ctx.db, ts.userId)
+
+        // Calculate week end
+        const weekEnd = ts.weekStart + 6 * 24 * 60 * 60 * 1000
+
+        // Get submittedAt (latest entry submission time)
+        const submittedAt = Math.max(...ts.entries.map((e) => e._creationTime))
+
+        // Calculate totals
+        const totalHours = ts.entries.reduce((sum, e) => sum + e.hours, 0)
+        const billableHours = ts.entries
+          .filter((e) => e.billable)
+          .reduce((sum, e) => sum + e.hours, 0)
+
+        // Group by project for summary
+        const projectHoursMap = new Map<string, number>()
+        for (const entry of ts.entries) {
+          const current = projectHoursMap.get(entry.projectId) ?? 0
+          projectHoursMap.set(entry.projectId, current + entry.hours)
+        }
+
+        // Load project names
+        const projectSummary = await Promise.all(
+          Array.from(projectHoursMap.entries()).map(
+            async ([projectId, hours]) => {
+              const project = await ctx.db.get(projectId as Id<'projects'>)
+              return {
+                projectId: projectId as Id<'projects'>,
+                projectName: project?.name ?? 'Unknown Project',
+                hours,
+              }
+            }
+          )
+        )
+
+        // Load full entry details with project names
+        const enrichedEntries = await Promise.all(
+          ts.entries.map(async (entry) => {
+            const project = await ctx.db.get(entry.projectId)
+            return {
+              ...entry,
+              project: project
+                ? { _id: project._id, name: project.name }
+                : null,
+            }
+          })
+        )
+
+        return {
+          id: `${ts.userId}_${ts.weekStart}`,
+          user: user ? { _id: user._id, name: user.name } : null,
+          weekStart: ts.weekStart,
+          weekEnd,
+          submittedAt,
+          totalHours,
+          billableHours,
+          entries: enrichedEntries,
+          projectSummary,
+        }
+      })
+    )
+
+    // Calculate summary counts
+    const summary = {
+      pendingCount: status === 'Submitted' ? timesheets.length : 0,
+      pendingHours:
+        status === 'Submitted'
+          ? timesheets.reduce((sum, ts) => sum + ts.totalHours, 0)
+          : 0,
+      count: timesheets.length,
+      totalHours: timesheets.reduce((sum, ts) => sum + ts.totalHours, 0),
+    }
+
+    return { timesheets, summary }
+  },
+})
+
+/**
+ * Approves multiple time entries.
+ * Changes status from Submitted to Approved.
+ *
+ * Authorization: Requires dealToDelivery:staff scope.
+ *
+ * @param args.timeEntryIds - Array of time entry IDs to approve
+ * @param args.notes - Optional approval notes
+ */
+export const approveTimeEntries = mutation({
+  args: {
+    timeEntryIds: v.array(v.id('timeEntries')),
+    notes: v.optional(v.string()),
+  },
+  handler: async (ctx, args): Promise<void> => {
+    const approverId = await requirePsaStaffMember(ctx)
+
+    for (const timeEntryId of args.timeEntryIds) {
+      const entry = await getTimeEntry(ctx.db, timeEntryId)
+      if (!entry) {
+        throw new Error(`Time entry not found: ${timeEntryId}`)
+      }
+
+      if (entry.status !== 'Submitted') {
+        throw new Error(
+          `Cannot approve time entry with status "${entry.status}". Only Submitted entries can be approved.`
+        )
+      }
+
+      await updateTimeEntryInDb(ctx.db, timeEntryId, {
+        status: 'Approved',
+        approvedBy: approverId,
+        approvedAt: Date.now(),
+        rejectionComments: undefined,
+      })
+    }
+  },
+})
+
+/**
+ * Rejects multiple time entries with a reason.
+ * Changes status from Submitted to Rejected.
+ *
+ * Authorization: Requires dealToDelivery:staff scope.
+ *
+ * @param args.timeEntryIds - Array of time entry IDs to reject
+ * @param args.comments - Required rejection reason
+ */
+export const rejectTimeEntries = mutation({
+  args: {
+    timeEntryIds: v.array(v.id('timeEntries')),
+    comments: v.string(),
+  },
+  handler: async (ctx, args): Promise<void> => {
+    await requirePsaStaffMember(ctx)
+
+    if (!args.comments || args.comments.trim().length === 0) {
+      throw new Error('Rejection comments are required')
+    }
+
+    for (const timeEntryId of args.timeEntryIds) {
+      const entry = await getTimeEntry(ctx.db, timeEntryId)
+      if (!entry) {
+        throw new Error(`Time entry not found: ${timeEntryId}`)
+      }
+
+      if (entry.status !== 'Submitted') {
+        throw new Error(
+          `Cannot reject time entry with status "${entry.status}". Only Submitted entries can be rejected.`
+        )
+      }
+
+      await updateTimeEntryInDb(ctx.db, timeEntryId, {
+        status: 'Rejected',
+        rejectionComments: args.comments.trim(),
+      })
+    }
+  },
+})
