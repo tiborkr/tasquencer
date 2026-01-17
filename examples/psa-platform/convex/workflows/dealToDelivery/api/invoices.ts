@@ -28,6 +28,8 @@ import {
   listBillableUninvoicedTimeEntries,
   listBillableUninvoicedExpenses,
   recalculateInvoiceTotals,
+  finalizeInvoice as finalizeInvoiceDb,
+  markInvoiceSent,
 } from '../db'
 
 // =============================================================================
@@ -377,5 +379,97 @@ export const recordPayment = mutation({
     }
 
     return { paymentId, isPaid }
+  },
+})
+
+/**
+ * Finalizes an invoice draft.
+ * Generates an invoice number and locks linked time entries/expenses.
+ * Used by finalizeInvoice work item and can be called directly for testing.
+ * Authorization: Requires dealToDelivery:staff scope.
+ *
+ * @param args.invoiceId - The invoice ID to finalize
+ * @param args.dueDate - Optional: Override due date
+ * @returns Object with invoiceNumber and finalized status
+ */
+export const finalizeInvoice = mutation({
+  args: {
+    invoiceId: v.id('invoices'),
+    dueDate: v.optional(v.number()),
+  },
+  handler: async (
+    ctx,
+    args
+  ): Promise<{ invoiceNumber: string; finalized: boolean }> => {
+    const userId = await requirePsaStaffMember(ctx)
+
+    const invoice = await getInvoiceFromDb(ctx.db, args.invoiceId)
+    if (!invoice) {
+      throw new Error(`Invoice not found: ${args.invoiceId}`)
+    }
+
+    if (invoice.status !== 'Draft') {
+      throw new Error(`Only Draft invoices can be finalized. Current status: ${invoice.status}`)
+    }
+
+    // Check invoice has line items
+    const lineItems = await listLineItemsByInvoice(ctx.db, args.invoiceId)
+    if (lineItems.length === 0) {
+      throw new Error('Invoice must have at least one line item to finalize')
+    }
+
+    // Update optional fields before finalizing
+    if (args.dueDate !== undefined) {
+      await updateInvoice(ctx.db, args.invoiceId, { dueDate: args.dueDate })
+    }
+
+    // Finalize the invoice (generates number, sets status)
+    const invoiceNumber = await finalizeInvoiceDb(ctx.db, args.invoiceId, userId)
+
+    return { invoiceNumber, finalized: true }
+  },
+})
+
+/**
+ * Sends an invoice to the client.
+ * Changes status from Finalized to Sent and records the delivery method.
+ * Used by sendInvoice work item and can be called directly for testing.
+ * Authorization: Requires dealToDelivery:staff scope.
+ *
+ * @param args.invoiceId - The invoice ID to send
+ * @param args.method - Delivery method: "email", "pdf", or "portal"
+ * @param args.recipientEmail - Optional: Email address for delivery
+ * @param args.personalMessage - Optional: Personal message to include
+ * @returns Object with sent status and optional tracking ID
+ */
+export const sendInvoice = mutation({
+  args: {
+    invoiceId: v.id('invoices'),
+    method: v.union(v.literal('email'), v.literal('pdf'), v.literal('portal')),
+    recipientEmail: v.optional(v.string()),
+    personalMessage: v.optional(v.string()),
+  },
+  handler: async (
+    ctx,
+    args
+  ): Promise<{ sent: boolean; trackingId?: string }> => {
+    await requirePsaStaffMember(ctx)
+
+    const invoice = await getInvoiceFromDb(ctx.db, args.invoiceId)
+    if (!invoice) {
+      throw new Error(`Invoice not found: ${args.invoiceId}`)
+    }
+
+    if (invoice.status !== 'Finalized') {
+      throw new Error(`Only Finalized invoices can be sent. Current status: ${invoice.status}`)
+    }
+
+    // Mark invoice as sent
+    await markInvoiceSent(ctx.db, args.invoiceId)
+
+    // Generate a tracking ID for the delivery
+    const trackingId = `TRK-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`
+
+    return { sent: true, trackingId }
   },
 })

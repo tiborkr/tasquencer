@@ -27,6 +27,9 @@ import {
   getDeal as getDealFromDb,
   getDealByWorkflowId as getDealByWorkflowIdFromDb,
   listDealsByOrganization,
+  listDealsByStage,
+  listDealsByOwner,
+  updateDeal as updateDealFromDb,
 } from '../db/deals'
 import { getUser } from '../db/users'
 import { getCompany } from '../db/companies'
@@ -60,15 +63,35 @@ const {
   helpers: { getWorkflowTaskStates },
 } = dealToDeliveryVersionManager.apiForVersion('v1')
 
+/** Deal stage validator for filtering */
+const dealStageValidator = v.union(
+  v.literal('Lead'),
+  v.literal('Qualified'),
+  v.literal('Proposal'),
+  v.literal('Negotiation'),
+  v.literal('Won'),
+  v.literal('Lost'),
+  v.literal('Disqualified')
+)
+
 /**
- * Lists deals for the current user's organization.
+ * Lists deals for the current user's organization with optional filtering.
  * Authorization: Requires dealToDelivery:staff scope.
  *
- * @returns Array of deals (limited to 50)
+ * @param args.stage - Optional: Filter by deal stage
+ * @param args.ownerId - Optional: Filter by deal owner
+ * @param args.companyId - Optional: Filter by company
+ * @param args.limit - Optional: Limit results (default 50, max 200)
+ * @returns Array of deals
  */
 export const listDeals = query({
-  args: {},
-  handler: async (ctx) => {
+  args: {
+    stage: v.optional(dealStageValidator),
+    ownerId: v.optional(v.id('users')),
+    companyId: v.optional(v.id('companies')),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
     await requirePsaStaffMember(ctx)
 
     // Get current user to determine their organization (via domain layer)
@@ -78,8 +101,31 @@ export const listDeals = query({
       return []
     }
 
-    // Use domain function for data access
-    return await listDealsByOrganization(ctx.db, user.organizationId)
+    // Determine limit (capped at 200 for performance)
+    const limit = Math.min(args.limit ?? 50, 200)
+
+    // Apply filters based on args
+    let deals
+
+    if (args.stage) {
+      // Filter by stage (uses index)
+      deals = await listDealsByStage(ctx.db, user.organizationId, args.stage, limit)
+    } else if (args.ownerId) {
+      // Filter by owner (uses index)
+      deals = await listDealsByOwner(ctx.db, args.ownerId, limit)
+      // Secondary filter for organization (owner could have deals in multiple orgs)
+      deals = deals.filter((d) => d.organizationId === user.organizationId)
+    } else {
+      // No filter - get all deals for organization
+      deals = await listDealsByOrganization(ctx.db, user.organizationId, limit)
+    }
+
+    // Apply company filter if specified (post-query since no index)
+    if (args.companyId) {
+      deals = deals.filter((d) => d.companyId === args.companyId)
+    }
+
+    return deals
   },
 })
 
@@ -314,5 +360,53 @@ export const getDealWorkflowTaskStates = query({
       workflowName: 'dealToDelivery',
       workflowId: args.workflowId,
     })
+  },
+})
+
+/**
+ * Updates a deal's non-workflow fields.
+ * This is for updating deal metadata like name, value, notes.
+ * IMPORTANT: Stage changes should go through workflow work items, not this mutation.
+ *
+ * Authorization: Requires dealToDelivery:staff scope.
+ *
+ * @param args.dealId - The deal ID to update
+ * @param args.name - Optional: New deal name
+ * @param args.value - Optional: New deal value in cents
+ * @param args.notes - Optional: New deal notes
+ * @param args.contactId - Optional: New contact ID
+ * @param args.ownerId - Optional: New owner ID
+ * @returns Success status
+ */
+export const updateDeal = mutation({
+  args: {
+    dealId: v.id('deals'),
+    name: v.optional(v.string()),
+    value: v.optional(v.number()),
+    notes: v.optional(v.string()),
+    contactId: v.optional(v.id('contacts')),
+    ownerId: v.optional(v.id('users')),
+  },
+  handler: async (ctx, args): Promise<{ success: boolean }> => {
+    await requirePsaStaffMember(ctx)
+
+    const deal = await getDealFromDb(ctx.db, args.dealId)
+    if (!deal) {
+      throw new Error(`Deal not found: ${args.dealId}`)
+    }
+
+    // Build updates object
+    const updates: Record<string, unknown> = {}
+    if (args.name !== undefined) updates.name = args.name
+    if (args.value !== undefined) updates.value = args.value
+    if (args.notes !== undefined) updates.notes = args.notes
+    if (args.contactId !== undefined) updates.contactId = args.contactId
+    if (args.ownerId !== undefined) updates.ownerId = args.ownerId
+
+    if (Object.keys(updates).length > 0) {
+      await updateDealFromDb(ctx.db, args.dealId, updates)
+    }
+
+    return { success: true }
   },
 })
