@@ -27,9 +27,27 @@ export const executionPhaseWorkflow = Builder.workflow('executionPhase')
   .endCondition('end')
   .task('createAndAssignTasks', createAndAssignTasksTask)
   .dynamicCompositeTask('executeProjectWork', Builder.dynamicCompositeTask([sequentialExecutionWorkflow, parallelExecutionWorkflow, conditionalExecutionWorkflow]))
-  .compositeTask('trackTime', Builder.compositeTask(timeTrackingWorkflow).withJoinType('xor').withSplitType('xor'))
+  .compositeTask('trackTime', Builder.compositeTask(timeTrackingWorkflow)
+    .withJoinType('xor')
+    .withSplitType('xor')
+    .withActivities({
+      onEnabled: async ({ workflow }) => {
+        // Initialize the time tracking child workflow when this composite task is enabled
+        await workflow.initialize()
+      },
+    })
+  )
   .dummyTask('finalizeTimeTracking', finalizeTimeTrackingTask)
-  .compositeTask('trackExpenses', Builder.compositeTask(expenseTrackingWorkflow).withJoinType('xor').withSplitType('xor'))
+  .compositeTask('trackExpenses', Builder.compositeTask(expenseTrackingWorkflow)
+    .withJoinType('xor')
+    .withSplitType('xor')
+    .withActivities({
+      onEnabled: async ({ workflow }) => {
+        // Initialize the expense tracking child workflow when this composite task is enabled
+        await workflow.initialize()
+      },
+    })
+  )
   .dummyTask('finalizeExpenseTracking', finalizeExpenseTrackingTask)
   .dummyTask('reviewExecution', reviewExecutionTask)
   .task('monitorBudgetBurn', monitorBudgetBurnTask.withJoinType('xor').withSplitType('xor'))

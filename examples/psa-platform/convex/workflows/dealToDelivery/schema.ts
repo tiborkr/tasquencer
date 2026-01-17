@@ -679,26 +679,31 @@ const dealToDeliveryWorkItems = defineWorkItemMetadataTable("deals").withPayload
       type: v.literal("logSoftwareExpense"),
       taskName: v.string(),
       priority: workItemPriority,
+      expenseId: v.optional(v.id("expenses")),
     }),
     v.object({
       type: v.literal("logTravelExpense"),
       taskName: v.string(),
       priority: workItemPriority,
+      expenseId: v.optional(v.id("expenses")),
     }),
     v.object({
       type: v.literal("logMaterialsExpense"),
       taskName: v.string(),
       priority: workItemPriority,
+      expenseId: v.optional(v.id("expenses")),
     }),
     v.object({
       type: v.literal("logSubcontractorExpense"),
       taskName: v.string(),
       priority: workItemPriority,
+      expenseId: v.optional(v.id("expenses")),
     }),
     v.object({
       type: v.literal("logOtherExpense"),
       taskName: v.string(),
       priority: workItemPriority,
+      expenseId: v.optional(v.id("expenses")),
     }),
     v.object({
       type: v.literal("attachReceipt"),
