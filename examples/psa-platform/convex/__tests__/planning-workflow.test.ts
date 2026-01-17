@@ -38,6 +38,7 @@ const PLANNING_SCOPES = [
   'dealToDelivery:deals:disqualify',
   'dealToDelivery:proposals:create',
   'dealToDelivery:proposals:send',
+  'dealToDelivery:deals:negotiate',
   'dealToDelivery:deals:edit:own',
   'dealToDelivery:proposals:sign',
   'dealToDelivery:projects:create',
@@ -330,12 +331,8 @@ async function completeSalesPhaseWithWonDeal(
   return { dealId, salesWorkflowId }
 }
 
-// TODO: Investigate WORK_ITEM_CLAIM_FAILED error during negotiateTerms.start
-// The claim is failing when trying to start work items in the middle of the sales flow.
-// This needs deeper investigation into how work item metadata is looked up in nested workflows.
-// For now, skip these tests and focus on the simpler routing test.
 describe('Planning Phase Workflow Entry', () => {
-  it.skip('planning phase is enabled after deal is won', async () => {
+  it('planning phase is enabled after deal is won', async () => {
     const rootWorkflowId = await initializeRootWorkflow(testContext)
     const { companyId, contactId } = await createTestEntities(
       testContext,
@@ -361,7 +358,7 @@ describe('Planning Phase Workflow Entry', () => {
     await assertTaskState(testContext, rootWorkflowId, 'planning', 'enabled')
   })
 
-  it.skip('planning phase workflow creates createProject task', async () => {
+  it('planning phase workflow creates createProject task', async () => {
     const rootWorkflowId = await initializeRootWorkflow(testContext)
     const { companyId, contactId } = await createTestEntities(
       testContext,
@@ -393,7 +390,7 @@ describe('Planning Phase Workflow Entry', () => {
 })
 
 describe('CreateProject Work Item Lifecycle', () => {
-  it.skip('creates project from won deal with budget', async () => {
+  it('creates project from won deal with budget', async () => {
     const rootWorkflowId = await initializeRootWorkflow(testContext)
     const { companyId, contactId } = await createTestEntities(
       testContext,
@@ -434,7 +431,7 @@ describe('CreateProject Work Item Lifecycle', () => {
     await assertTaskState(testContext, planningWorkflowId, 'createProject', 'completed')
   })
 
-  it.skip('enables setBudget task after createProject completes', async () => {
+  it('enables setBudget task after createProject completes', async () => {
     const rootWorkflowId = await initializeRootWorkflow(testContext)
     const { companyId, contactId } = await createTestEntities(
       testContext,
@@ -476,7 +473,7 @@ describe('CreateProject Work Item Lifecycle', () => {
 })
 
 describe('SetBudget Work Item Lifecycle', () => {
-  it.skip('updates budget type and services', async () => {
+  it('updates budget type and services', async () => {
     const rootWorkflowId = await initializeRootWorkflow(testContext)
     const { companyId, contactId } = await createTestEntities(
       testContext,
@@ -552,7 +549,7 @@ describe('SetBudget Work Item Lifecycle', () => {
     await assertTaskState(testContext, planningWorkflowId, 'setBudget', 'completed')
   })
 
-  it.skip('enables allocateResources (resource planning) after setBudget', async () => {
+  it('enables allocateResources (resource planning) after setBudget', async () => {
     const rootWorkflowId = await initializeRootWorkflow(testContext)
     const { companyId, contactId } = await createTestEntities(
       testContext,
