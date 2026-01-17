@@ -41,6 +41,8 @@ import type * as workflows_dealToDelivery_definition from "../workflows/dealToDe
 import type * as workflows_dealToDelivery_exceptions from "../workflows/dealToDelivery/exceptions.js";
 import type * as workflows_dealToDelivery_helpers from "../workflows/dealToDelivery/helpers.js";
 import type * as workflows_dealToDelivery_scopes from "../workflows/dealToDelivery/scopes.js";
+import type * as workflows_dealToDelivery_workItems_helpers from "../workflows/dealToDelivery/workItems/helpers.js";
+import type * as workflows_dealToDelivery_workItems_helpersAuth from "../workflows/dealToDelivery/workItems/helpersAuth.js";
 import type * as workflows_metadata from "../workflows/metadata.js";
 
 import type {
@@ -83,6 +85,8 @@ declare const fullApi: ApiFromModules<{
   "workflows/dealToDelivery/exceptions": typeof workflows_dealToDelivery_exceptions;
   "workflows/dealToDelivery/helpers": typeof workflows_dealToDelivery_helpers;
   "workflows/dealToDelivery/scopes": typeof workflows_dealToDelivery_scopes;
+  "workflows/dealToDelivery/workItems/helpers": typeof workflows_dealToDelivery_workItems_helpers;
+  "workflows/dealToDelivery/workItems/helpersAuth": typeof workflows_dealToDelivery_workItems_helpersAuth;
   "workflows/metadata": typeof workflows_metadata;
 }>;
 
