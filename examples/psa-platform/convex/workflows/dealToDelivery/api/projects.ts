@@ -31,6 +31,8 @@ import {
   getNextTaskSortOrder,
   calculateProjectHours,
   calculateProjectExpenses,
+  listUninvoicedMilestones,
+  listMilestonesByProject,
 } from '../db'
 import { getUser } from '../db/users'
 import { authComponent } from '../../../auth'
@@ -387,6 +389,38 @@ export const getTask = query({
     await requirePsaStaffMember(ctx)
 
     return await getTaskFromDb(ctx.db, args.taskId)
+  },
+})
+
+/**
+ * Lists milestones for a project.
+ * Authorization: Requires dealToDelivery:staff scope.
+ *
+ * @param args.projectId - The project ID
+ * @returns Array of milestones
+ */
+export const listMilestones = query({
+  args: { projectId: v.id('projects') },
+  handler: async (ctx, args) => {
+    await requirePsaStaffMember(ctx)
+
+    return await listMilestonesByProject(ctx.db, args.projectId)
+  },
+})
+
+/**
+ * Lists uninvoiced milestones for a project (completed but not yet invoiced).
+ * Authorization: Requires dealToDelivery:staff scope.
+ *
+ * @param args.projectId - The project ID
+ * @returns Array of uninvoiced milestones
+ */
+export const listProjectUninvoicedMilestones = query({
+  args: { projectId: v.id('projects') },
+  handler: async (ctx, args) => {
+    await requirePsaStaffMember(ctx)
+
+    return await listUninvoicedMilestones(ctx.db, args.projectId)
   },
 })
 

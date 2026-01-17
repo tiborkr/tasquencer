@@ -27,6 +27,7 @@ import { Route as AppDealsIndexRouteImport } from './routes/_app/deals/index'
 import { Route as AppAuditIndexRouteImport } from './routes/_app/audit/index'
 import { Route as AppAdminIndexRouteImport } from './routes/_app/admin/index'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as AppProjectsProjectIdRouteImport } from './routes/_app/projects/$projectId'
 import { Route as AppDealsNewRouteImport } from './routes/_app/deals/new'
 import { Route as AppDealsDealIdRouteImport } from './routes/_app/deals/$dealId'
 import { Route as AppAuditTraceIdRouteImport } from './routes/_app/audit/$traceId'
@@ -47,6 +48,7 @@ import { Route as AppDealsDealIdEstimateRouteImport } from './routes/_app/deals/
 import { Route as AppAuditTraceIdVisualizerRouteImport } from './routes/_app/audit/$traceId.visualizer'
 import { Route as AppAdminRolesRoleIdRouteImport } from './routes/_app/admin/roles.$roleId'
 import { Route as AppAdminGroupsGroupIdRouteImport } from './routes/_app/admin/groups.$groupId'
+import { Route as AppProjectsProjectIdInvoicesNewRouteImport } from './routes/_app/projects/$projectId/invoices/new'
 import { Route as AppAdminUsersUserIdAssignRouteImport } from './routes/_app/admin/users.$userId.assign'
 
 const LoginRoute = LoginRouteImport.update({
@@ -137,6 +139,11 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AppProjectsProjectIdRoute = AppProjectsProjectIdRouteImport.update({
+  id: '/$projectId',
+  path: '/$projectId',
+  getParentRoute: () => AppProjectsRoute,
 } as any)
 const AppDealsNewRoute = AppDealsNewRouteImport.update({
   id: '/new',
@@ -240,6 +247,12 @@ const AppAdminGroupsGroupIdRoute = AppAdminGroupsGroupIdRouteImport.update({
   path: '/$groupId',
   getParentRoute: () => AppAdminGroupsRoute,
 } as any)
+const AppProjectsProjectIdInvoicesNewRoute =
+  AppProjectsProjectIdInvoicesNewRouteImport.update({
+    id: '/invoices/new',
+    path: '/invoices/new',
+    getParentRoute: () => AppProjectsProjectIdRoute,
+  } as any)
 const AppAdminUsersUserIdAssignRoute =
   AppAdminUsersUserIdAssignRouteImport.update({
     id: '/$userId/assign',
@@ -265,6 +278,7 @@ export interface FileRoutesByFullPath {
   '/audit/$traceId': typeof AppAuditTraceIdRouteWithChildren
   '/deals/$dealId': typeof AppDealsDealIdRouteWithChildren
   '/deals/new': typeof AppDealsNewRoute
+  '/projects/$projectId': typeof AppProjectsProjectIdRouteWithChildren
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/admin/': typeof AppAdminIndexRoute
   '/audit/': typeof AppAuditIndexRoute
@@ -286,6 +300,7 @@ export interface FileRoutesByFullPath {
   '/admin/users/': typeof AppAdminUsersIndexRoute
   '/audit/$traceId/': typeof AppAuditTraceIdIndexRoute
   '/admin/users/$userId/assign': typeof AppAdminUsersUserIdAssignRoute
+  '/projects/$projectId/invoices/new': typeof AppProjectsProjectIdInvoicesNewRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -295,6 +310,7 @@ export interface FileRoutesByTo {
   '/approvals/timesheets': typeof AppApprovalsTimesheetsRoute
   '/deals/$dealId': typeof AppDealsDealIdRouteWithChildren
   '/deals/new': typeof AppDealsNewRoute
+  '/projects/$projectId': typeof AppProjectsProjectIdRouteWithChildren
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/admin': typeof AppAdminIndexRoute
   '/audit': typeof AppAuditIndexRoute
@@ -316,6 +332,7 @@ export interface FileRoutesByTo {
   '/admin/users': typeof AppAdminUsersIndexRoute
   '/audit/$traceId': typeof AppAuditTraceIdIndexRoute
   '/admin/users/$userId/assign': typeof AppAdminUsersUserIdAssignRoute
+  '/projects/$projectId/invoices/new': typeof AppProjectsProjectIdInvoicesNewRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -337,6 +354,7 @@ export interface FileRoutesById {
   '/_app/audit/$traceId': typeof AppAuditTraceIdRouteWithChildren
   '/_app/deals/$dealId': typeof AppDealsDealIdRouteWithChildren
   '/_app/deals/new': typeof AppDealsNewRoute
+  '/_app/projects/$projectId': typeof AppProjectsProjectIdRouteWithChildren
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/_app/admin/': typeof AppAdminIndexRoute
   '/_app/audit/': typeof AppAuditIndexRoute
@@ -358,6 +376,7 @@ export interface FileRoutesById {
   '/_app/admin/users/': typeof AppAdminUsersIndexRoute
   '/_app/audit/$traceId/': typeof AppAuditTraceIdIndexRoute
   '/_app/admin/users/$userId/assign': typeof AppAdminUsersUserIdAssignRoute
+  '/_app/projects/$projectId/invoices/new': typeof AppProjectsProjectIdInvoicesNewRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -379,6 +398,7 @@ export interface FileRouteTypes {
     | '/audit/$traceId'
     | '/deals/$dealId'
     | '/deals/new'
+    | '/projects/$projectId'
     | '/api/auth/$'
     | '/admin/'
     | '/audit/'
@@ -400,6 +420,7 @@ export interface FileRouteTypes {
     | '/admin/users/'
     | '/audit/$traceId/'
     | '/admin/users/$userId/assign'
+    | '/projects/$projectId/invoices/new'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -409,6 +430,7 @@ export interface FileRouteTypes {
     | '/approvals/timesheets'
     | '/deals/$dealId'
     | '/deals/new'
+    | '/projects/$projectId'
     | '/api/auth/$'
     | '/admin'
     | '/audit'
@@ -430,6 +452,7 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/audit/$traceId'
     | '/admin/users/$userId/assign'
+    | '/projects/$projectId/invoices/new'
   id:
     | '__root__'
     | '/'
@@ -450,6 +473,7 @@ export interface FileRouteTypes {
     | '/_app/audit/$traceId'
     | '/_app/deals/$dealId'
     | '/_app/deals/new'
+    | '/_app/projects/$projectId'
     | '/api/auth/$'
     | '/_app/admin/'
     | '/_app/audit/'
@@ -471,6 +495,7 @@ export interface FileRouteTypes {
     | '/_app/admin/users/'
     | '/_app/audit/$traceId/'
     | '/_app/admin/users/$userId/assign'
+    | '/_app/projects/$projectId/invoices/new'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -492,7 +517,7 @@ declare module '@tanstack/react-router' {
     '/_app': {
       id: '/_app'
       path: ''
-      fullPath: ''
+      fullPath: '/'
       preLoaderRoute: typeof AppRouteImport
       parentRoute: typeof rootRouteImport
     }
@@ -607,6 +632,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/api/auth/$'
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_app/projects/$projectId': {
+      id: '/_app/projects/$projectId'
+      path: '/$projectId'
+      fullPath: '/projects/$projectId'
+      preLoaderRoute: typeof AppProjectsProjectIdRouteImport
+      parentRoute: typeof AppProjectsRoute
     }
     '/_app/deals/new': {
       id: '/_app/deals/new'
@@ -747,6 +779,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/groups/$groupId'
       preLoaderRoute: typeof AppAdminGroupsGroupIdRouteImport
       parentRoute: typeof AppAdminGroupsRoute
+    }
+    '/_app/projects/$projectId/invoices/new': {
+      id: '/_app/projects/$projectId/invoices/new'
+      path: '/invoices/new'
+      fullPath: '/projects/$projectId/invoices/new'
+      preLoaderRoute: typeof AppProjectsProjectIdInvoicesNewRouteImport
+      parentRoute: typeof AppProjectsProjectIdRoute
     }
     '/_app/admin/users/$userId/assign': {
       id: '/_app/admin/users/$userId/assign'
@@ -908,11 +947,24 @@ const AppExpensesRouteWithChildren = AppExpensesRoute._addFileChildren(
   AppExpensesRouteChildren,
 )
 
+interface AppProjectsProjectIdRouteChildren {
+  AppProjectsProjectIdInvoicesNewRoute: typeof AppProjectsProjectIdInvoicesNewRoute
+}
+
+const AppProjectsProjectIdRouteChildren: AppProjectsProjectIdRouteChildren = {
+  AppProjectsProjectIdInvoicesNewRoute: AppProjectsProjectIdInvoicesNewRoute,
+}
+
+const AppProjectsProjectIdRouteWithChildren =
+  AppProjectsProjectIdRoute._addFileChildren(AppProjectsProjectIdRouteChildren)
+
 interface AppProjectsRouteChildren {
+  AppProjectsProjectIdRoute: typeof AppProjectsProjectIdRouteWithChildren
   AppProjectsIndexRoute: typeof AppProjectsIndexRoute
 }
 
 const AppProjectsRouteChildren: AppProjectsRouteChildren = {
+  AppProjectsProjectIdRoute: AppProjectsProjectIdRouteWithChildren,
   AppProjectsIndexRoute: AppProjectsIndexRoute,
 }
 
@@ -965,12 +1017,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-  }
-}
