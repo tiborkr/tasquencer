@@ -558,3 +558,125 @@ export const updateTask = mutation({
     }
   },
 })
+
+/**
+ * Updates a project's general properties.
+ * Authorization: Requires dealToDelivery:staff scope.
+ *
+ * Reference: .review/recipes/psa-platform/specs/26-api-endpoints.md (lines 177-181)
+ *
+ * @param args.projectId - The project ID
+ * @param args.name - Optional new project name
+ * @param args.description - Optional new description
+ * @param args.startDate - Optional new start date
+ * @param args.endDate - Optional new end date
+ * @param args.managerId - Optional new manager
+ * @returns Success status
+ */
+export const updateProject = mutation({
+  args: {
+    projectId: v.id('projects'),
+    name: v.optional(v.string()),
+    description: v.optional(v.string()),
+    startDate: v.optional(v.number()),
+    endDate: v.optional(v.number()),
+    managerId: v.optional(v.id('users')),
+  },
+  handler: async (ctx, args) => {
+    await requirePsaStaffMember(ctx)
+
+    const { projectId, ...updates } = args
+
+    // Verify project exists
+    const project = await getProjectFromDb(ctx.db, projectId)
+    if (!project) {
+      throw new Error('Project not found')
+    }
+
+    // Filter out undefined values
+    const filteredUpdates: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(updates)) {
+      if (value !== undefined) {
+        filteredUpdates[key] = value
+      }
+    }
+
+    // Only update if there are changes
+    if (Object.keys(filteredUpdates).length > 0) {
+      const { updateProject: updateProjectInDb } = await import('../db/projects')
+      await updateProjectInDb(ctx.db, projectId, filteredUpdates)
+    }
+
+    return { success: true }
+  },
+})
+
+/**
+ * Closes a project with final status and metrics.
+ * Changes project status to Completed or Archived based on completion status.
+ * Authorization: Requires dealToDelivery:staff scope.
+ *
+ * Reference: .review/recipes/psa-platform/specs/26-api-endpoints.md (lines 184-190)
+ *
+ * @param args.projectId - The project to close
+ * @param args.closeDate - The closure date timestamp
+ * @param args.completionStatus - Whether completed or cancelled
+ * @param args.closureNotes - Optional notes about closure
+ * @returns Closed status and final metrics
+ */
+export const closeProject = mutation({
+  args: {
+    projectId: v.id('projects'),
+    closeDate: v.number(),
+    completionStatus: v.union(v.literal('completed'), v.literal('cancelled')),
+    closureNotes: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await requirePsaStaffMember(ctx)
+
+    // Verify project exists
+    const project = await getProjectFromDb(ctx.db, args.projectId)
+    if (!project) {
+      throw new Error('Project not found')
+    }
+
+    if (project.status === 'Completed' || project.status === 'Archived') {
+      throw new Error('Project is already closed')
+    }
+
+    // Calculate final metrics
+    const [budget, hours, expenses] = await Promise.all([
+      getBudgetByProjectId(ctx.db, args.projectId),
+      calculateProjectHours(ctx.db, args.projectId),
+      calculateProjectExpenses(ctx.db, args.projectId),
+    ])
+
+    const budgetTotal = budget?.totalAmount ?? 0
+    const totalCost = hours.approved + expenses.approved
+    const revenue = hours.billable + expenses.billable
+
+    const metrics = {
+      budgetTotal,
+      totalCost,
+      revenue,
+      profit: revenue - totalCost,
+      margin: revenue > 0 ? Math.round(((revenue - totalCost) / revenue) * 100) : 0,
+      hoursLogged: hours.total,
+      hoursApproved: hours.approved,
+      expensesTotal: expenses.total,
+      expensesApproved: expenses.approved,
+    }
+
+    // Update project status
+    const newStatus = args.completionStatus === 'completed' ? 'Completed' : 'Archived'
+    const { updateProject: updateProjectInDb } = await import('../db/projects')
+    await updateProjectInDb(ctx.db, args.projectId, {
+      status: newStatus,
+      endDate: args.closeDate,
+      closureNotes: args.closureNotes,
+      closedAt: Date.now(),
+    })
+
+    return { closed: true, metrics }
+  },
+})

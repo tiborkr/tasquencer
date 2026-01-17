@@ -241,11 +241,14 @@ const projects = defineTable({
   dealId: v.optional(v.id("deals")), // FK to source deal
   workflowId: v.optional(v.id("tasquencerWorkflows")), // Link to workflow instance
   name: v.string(),
+  description: v.optional(v.string()),
   status: projectStatus,
   startDate: v.number(),
   endDate: v.optional(v.number()),
   managerId: v.id("users"), // Project manager
   budgetId: v.optional(v.id("budgets")), // FK to budget (set after budget creation)
+  closureNotes: v.optional(v.string()), // Notes when closing project
+  closedAt: v.optional(v.number()), // When project was closed
   createdAt: v.number(),
 })
   .index("by_organization", ["organizationId"])
@@ -352,6 +355,15 @@ const expenses = defineTable({
   approvedBy: v.optional(v.id("users")),
   approvedAt: v.optional(v.number()),
   rejectionComments: v.optional(v.string()),
+  rejectionIssues: v.optional(
+    v.array(
+      v.object({
+        type: v.string(),
+        details: v.string(),
+      })
+    )
+  ),
+  rejectedAt: v.optional(v.number()),
   invoiceId: v.optional(v.id("invoices")), // FK when invoiced
   vendorInfo: v.optional(
     v.object({

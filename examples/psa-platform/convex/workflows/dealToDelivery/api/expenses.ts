@@ -310,3 +310,105 @@ export const submitExpense = mutation({
     await updateExpenseStatus(ctx.db, args.expenseId, 'Submitted')
   },
 })
+
+/**
+ * Approves an expense.
+ * Changes status from Submitted to Approved.
+ * Can optionally adjust billable flag and markup rate.
+ * Authorization: Requires dealToDelivery:staff scope (manager role).
+ *
+ * Reference: .review/recipes/psa-platform/specs/26-api-endpoints.md (lines 438-443)
+ *
+ * @param args.expenseId - The expense to approve
+ * @param args.finalBillable - Optional adjustment to billable flag
+ * @param args.finalMarkup - Optional adjustment to markup rate
+ * @returns Success status
+ */
+export const approveExpense = mutation({
+  args: {
+    expenseId: v.id('expenses'),
+    finalBillable: v.optional(v.boolean()),
+    finalMarkup: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    await requirePsaStaffMember(ctx)
+
+    // Verify expense exists and is in Submitted status
+    const expense = await getExpenseFromDb(ctx.db, args.expenseId)
+    if (!expense) {
+      throw new Error('Expense not found')
+    }
+
+    if (expense.status !== 'Submitted') {
+      throw new Error('Can only approve expenses in Submitted status')
+    }
+
+    // Build updates
+    const updates: Record<string, unknown> = {
+      status: 'Approved',
+      approvedAt: Date.now(),
+    }
+
+    // Apply optional adjustments
+    if (args.finalBillable !== undefined) {
+      updates.billable = args.finalBillable
+    }
+    if (args.finalMarkup !== undefined) {
+      updates.markupRate = args.finalMarkup
+    }
+
+    await updateExpenseFromDb(ctx.db, args.expenseId, updates)
+
+    return { success: true }
+  },
+})
+
+/**
+ * Rejects an expense.
+ * Changes status from Submitted to Rejected with reason.
+ * Authorization: Requires dealToDelivery:staff scope (manager role).
+ *
+ * Reference: .review/recipes/psa-platform/specs/26-api-endpoints.md (lines 446-451)
+ *
+ * @param args.expenseId - The expense to reject
+ * @param args.rejectionReason - Reason for rejection (required)
+ * @param args.issues - Optional array of specific issues
+ * @returns Success status
+ */
+export const rejectExpense = mutation({
+  args: {
+    expenseId: v.id('expenses'),
+    rejectionReason: v.string(),
+    issues: v.optional(
+      v.array(
+        v.object({
+          type: v.string(),
+          details: v.string(),
+        }),
+      ),
+    ),
+  },
+  handler: async (ctx, args) => {
+    await requirePsaStaffMember(ctx)
+
+    // Verify expense exists and is in Submitted status
+    const expense = await getExpenseFromDb(ctx.db, args.expenseId)
+    if (!expense) {
+      throw new Error('Expense not found')
+    }
+
+    if (expense.status !== 'Submitted') {
+      throw new Error('Can only reject expenses in Submitted status')
+    }
+
+    // Update status to Rejected with reason
+    await updateExpenseFromDb(ctx.db, args.expenseId, {
+      status: 'Rejected',
+      rejectionComments: args.rejectionReason,
+      rejectionIssues: args.issues,
+      rejectedAt: Date.now(),
+    })
+
+    return { success: true }
+  },
+})
