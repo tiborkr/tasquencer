@@ -5,6 +5,7 @@ import type { DatabaseReader } from "../../../_generated/server";
 import type { Doc, Id } from "../../../_generated/dataModel";
 import { EntityNotFoundError } from "@repo/tasquencer";
 import { getDealByWorkflowId } from "./deals";
+import { getProjectByWorkflowId } from "./projects";
 import { helpers } from "../../../tasquencer";
 
 /**
@@ -46,4 +47,27 @@ export async function getWorkflowIdsForWorkItem(
     helpers.getRootWorkflowIdForWorkItem(db, workItemId),
   ]);
   return { workflowId, rootWorkflowId };
+}
+
+/**
+ * Get the root workflow ID and project for a work item.
+ * This is used in resource planning, execution, and billing phases
+ * where the primary aggregate is the project.
+ */
+export async function getRootWorkflowAndProjectForWorkItem(
+  db: DatabaseReader,
+  workItemId: Id<"tasquencerWorkItems">
+): Promise<{
+  rootWorkflowId: Id<"tasquencerWorkflows">;
+  project: Doc<"projects">;
+}> {
+  const rootWorkflowId = await helpers.getRootWorkflowIdForWorkItem(
+    db,
+    workItemId
+  );
+  const project = await getProjectByWorkflowId(db, rootWorkflowId);
+  if (!project) {
+    throw new EntityNotFoundError("Project", { workItemId, rootWorkflowId });
+  }
+  return { rootWorkflowId, project };
 }
