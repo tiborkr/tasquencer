@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { Search, Shield } from 'lucide-react'
+import { Briefcase, Search, Shield } from 'lucide-react'
 
 import { NavMain } from '@/components/nav-main'
 import { NavUser } from '@/components/nav-user'
@@ -17,8 +17,17 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       <SidebarContent>
         <NavMain
           items={[
-            // Add workflow navigation items here after scaffolding
-
+            {
+              title: 'Sales',
+              icon: Briefcase,
+              isActive: () => true,
+              items: [
+                {
+                  title: 'Deals',
+                  renderLink: () => <Link to="/deals">Deals</Link>,
+                },
+              ],
+            },
             {
               title: 'Audit',
               icon: Search,

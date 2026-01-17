@@ -22,6 +22,43 @@ const {
 } = dealToDeliveryVersionManager.apiForVersion('v1')
 
 /**
+ * Lists all deals (for demo/testing purposes).
+ * In production, this would be scoped to the user's organization.
+ */
+export const listDeals = query({
+  args: {},
+  handler: async (ctx) => {
+    // TODO: Add authorization and org scoping (PRIORITY 2)
+    return await ctx.db.query('deals').order('desc').take(50)
+  },
+})
+
+/**
+ * Gets a deal by ID.
+ */
+export const getDeal = query({
+  args: { dealId: v.id('deals') },
+  handler: async (ctx, args) => {
+    // TODO: Add authorization (PRIORITY 2)
+    return await ctx.db.get(args.dealId)
+  },
+})
+
+/**
+ * Gets a deal by workflow ID.
+ */
+export const getDealByWorkflowId = query({
+  args: { workflowId: v.id('tasquencerWorkflows') },
+  handler: async (ctx, args) => {
+    // TODO: Add authorization (PRIORITY 2)
+    return await ctx.db
+      .query('deals')
+      .withIndex('by_workflow_id', (q) => q.eq('workflowId', args.workflowId))
+      .unique()
+  },
+})
+
+/**
  * Initializes a new Deal to Delivery workflow.
  * This is the entry point for creating a new deal in the sales pipeline.
  *
@@ -32,9 +69,6 @@ const {
  * @param args.clientName - Name of the client/company
  * @param args.estimatedValue - Estimated deal value in cents
  * @returns The workflow ID for the new deal workflow
- *
- * TODO: Once schema is implemented (PRIORITY 1), return the deal ID instead
- * of workflow ID, matching the ER example pattern.
  */
 export const initializeDealToDelivery = mutation({
   args: {
@@ -44,7 +78,7 @@ export const initializeDealToDelivery = mutation({
   },
 
   handler: async (ctx, args): Promise<Id<'tasquencerWorkflows'>> => {
-    // TODO: Add authorization check once authSetup is implemented (PRIORITY 2)
+    // TODO: Add authorization check (PRIORITY 2)
     // await requirePsaStaffMember(ctx)
 
     // Use internal API to avoid circular type dependency
@@ -58,12 +92,6 @@ export const initializeDealToDelivery = mutation({
         },
       },
     )
-
-    // TODO: Once schema is implemented (PRIORITY 1), query for the created deal
-    // and return its ID instead of the workflow ID.
-    // const deal = await getDealByWorkflowId(ctx.db, workflowId)
-    // assertDealExists(deal, workflowId)
-    // return deal._id
 
     return workflowId
   },

@@ -13,11 +13,14 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppHomepageRouteImport } from './routes/_app/homepage'
+import { Route as AppDealsRouteImport } from './routes/_app/deals'
 import { Route as AppAuditRouteImport } from './routes/_app/audit'
 import { Route as AppAdminRouteImport } from './routes/_app/admin'
+import { Route as AppDealsIndexRouteImport } from './routes/_app/deals/index'
 import { Route as AppAuditIndexRouteImport } from './routes/_app/audit/index'
 import { Route as AppAdminIndexRouteImport } from './routes/_app/admin/index'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as AppDealsNewRouteImport } from './routes/_app/deals/new'
 import { Route as AppAuditTraceIdRouteImport } from './routes/_app/audit/$traceId'
 import { Route as AppAdminUsersRouteImport } from './routes/_app/admin/users'
 import { Route as AppAdminRolesRouteImport } from './routes/_app/admin/roles'
@@ -50,6 +53,11 @@ const AppHomepageRoute = AppHomepageRouteImport.update({
   path: '/homepage',
   getParentRoute: () => AppRoute,
 } as any)
+const AppDealsRoute = AppDealsRouteImport.update({
+  id: '/deals',
+  path: '/deals',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppAuditRoute = AppAuditRouteImport.update({
   id: '/audit',
   path: '/audit',
@@ -59,6 +67,11 @@ const AppAdminRoute = AppAdminRouteImport.update({
   id: '/admin',
   path: '/admin',
   getParentRoute: () => AppRoute,
+} as any)
+const AppDealsIndexRoute = AppDealsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppDealsRoute,
 } as any)
 const AppAuditIndexRoute = AppAuditIndexRouteImport.update({
   id: '/',
@@ -74,6 +87,11 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AppDealsNewRoute = AppDealsNewRouteImport.update({
+  id: '/new',
+  path: '/new',
+  getParentRoute: () => AppDealsRoute,
 } as any)
 const AppAuditTraceIdRoute = AppAuditTraceIdRouteImport.update({
   id: '/$traceId',
@@ -143,14 +161,17 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/admin': typeof AppAdminRouteWithChildren
   '/audit': typeof AppAuditRouteWithChildren
+  '/deals': typeof AppDealsRouteWithChildren
   '/homepage': typeof AppHomepageRoute
   '/admin/groups': typeof AppAdminGroupsRouteWithChildren
   '/admin/roles': typeof AppAdminRolesRouteWithChildren
   '/admin/users': typeof AppAdminUsersRouteWithChildren
   '/audit/$traceId': typeof AppAuditTraceIdRouteWithChildren
+  '/deals/new': typeof AppDealsNewRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/admin/': typeof AppAdminIndexRoute
   '/audit/': typeof AppAuditIndexRoute
+  '/deals/': typeof AppDealsIndexRoute
   '/admin/groups/$groupId': typeof AppAdminGroupsGroupIdRoute
   '/admin/roles/$roleId': typeof AppAdminRolesRoleIdRoute
   '/audit/$traceId/visualizer': typeof AppAuditTraceIdVisualizerRoute
@@ -164,9 +185,11 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/homepage': typeof AppHomepageRoute
+  '/deals/new': typeof AppDealsNewRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/admin': typeof AppAdminIndexRoute
   '/audit': typeof AppAuditIndexRoute
+  '/deals': typeof AppDealsIndexRoute
   '/admin/groups/$groupId': typeof AppAdminGroupsGroupIdRoute
   '/admin/roles/$roleId': typeof AppAdminRolesRoleIdRoute
   '/audit/$traceId/visualizer': typeof AppAuditTraceIdVisualizerRoute
@@ -183,14 +206,17 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/_app/admin': typeof AppAdminRouteWithChildren
   '/_app/audit': typeof AppAuditRouteWithChildren
+  '/_app/deals': typeof AppDealsRouteWithChildren
   '/_app/homepage': typeof AppHomepageRoute
   '/_app/admin/groups': typeof AppAdminGroupsRouteWithChildren
   '/_app/admin/roles': typeof AppAdminRolesRouteWithChildren
   '/_app/admin/users': typeof AppAdminUsersRouteWithChildren
   '/_app/audit/$traceId': typeof AppAuditTraceIdRouteWithChildren
+  '/_app/deals/new': typeof AppDealsNewRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/_app/admin/': typeof AppAdminIndexRoute
   '/_app/audit/': typeof AppAuditIndexRoute
+  '/_app/deals/': typeof AppDealsIndexRoute
   '/_app/admin/groups/$groupId': typeof AppAdminGroupsGroupIdRoute
   '/_app/admin/roles/$roleId': typeof AppAdminRolesRoleIdRoute
   '/_app/audit/$traceId/visualizer': typeof AppAuditTraceIdVisualizerRoute
@@ -207,14 +233,17 @@ export interface FileRouteTypes {
     | '/login'
     | '/admin'
     | '/audit'
+    | '/deals'
     | '/homepage'
     | '/admin/groups'
     | '/admin/roles'
     | '/admin/users'
     | '/audit/$traceId'
+    | '/deals/new'
     | '/api/auth/$'
     | '/admin/'
     | '/audit/'
+    | '/deals/'
     | '/admin/groups/$groupId'
     | '/admin/roles/$roleId'
     | '/audit/$traceId/visualizer'
@@ -228,9 +257,11 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/homepage'
+    | '/deals/new'
     | '/api/auth/$'
     | '/admin'
     | '/audit'
+    | '/deals'
     | '/admin/groups/$groupId'
     | '/admin/roles/$roleId'
     | '/audit/$traceId/visualizer'
@@ -246,14 +277,17 @@ export interface FileRouteTypes {
     | '/login'
     | '/_app/admin'
     | '/_app/audit'
+    | '/_app/deals'
     | '/_app/homepage'
     | '/_app/admin/groups'
     | '/_app/admin/roles'
     | '/_app/admin/users'
     | '/_app/audit/$traceId'
+    | '/_app/deals/new'
     | '/api/auth/$'
     | '/_app/admin/'
     | '/_app/audit/'
+    | '/_app/deals/'
     | '/_app/admin/groups/$groupId'
     | '/_app/admin/roles/$roleId'
     | '/_app/audit/$traceId/visualizer'
@@ -301,6 +335,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppHomepageRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/deals': {
+      id: '/_app/deals'
+      path: '/deals'
+      fullPath: '/deals'
+      preLoaderRoute: typeof AppDealsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/audit': {
       id: '/_app/audit'
       path: '/audit'
@@ -314,6 +355,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin'
       preLoaderRoute: typeof AppAdminRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/_app/deals/': {
+      id: '/_app/deals/'
+      path: '/'
+      fullPath: '/deals/'
+      preLoaderRoute: typeof AppDealsIndexRouteImport
+      parentRoute: typeof AppDealsRoute
     }
     '/_app/audit/': {
       id: '/_app/audit/'
@@ -335,6 +383,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/api/auth/$'
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_app/deals/new': {
+      id: '/_app/deals/new'
+      path: '/new'
+      fullPath: '/deals/new'
+      preLoaderRoute: typeof AppDealsNewRouteImport
+      parentRoute: typeof AppDealsRoute
     }
     '/_app/audit/$traceId': {
       id: '/_app/audit/$traceId'
@@ -511,15 +566,31 @@ const AppAuditRouteWithChildren = AppAuditRoute._addFileChildren(
   AppAuditRouteChildren,
 )
 
+interface AppDealsRouteChildren {
+  AppDealsNewRoute: typeof AppDealsNewRoute
+  AppDealsIndexRoute: typeof AppDealsIndexRoute
+}
+
+const AppDealsRouteChildren: AppDealsRouteChildren = {
+  AppDealsNewRoute: AppDealsNewRoute,
+  AppDealsIndexRoute: AppDealsIndexRoute,
+}
+
+const AppDealsRouteWithChildren = AppDealsRoute._addFileChildren(
+  AppDealsRouteChildren,
+)
+
 interface AppRouteChildren {
   AppAdminRoute: typeof AppAdminRouteWithChildren
   AppAuditRoute: typeof AppAuditRouteWithChildren
+  AppDealsRoute: typeof AppDealsRouteWithChildren
   AppHomepageRoute: typeof AppHomepageRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppAdminRoute: AppAdminRouteWithChildren,
   AppAuditRoute: AppAuditRouteWithChildren,
+  AppDealsRoute: AppDealsRouteWithChildren,
   AppHomepageRoute: AppHomepageRoute,
 }
 
