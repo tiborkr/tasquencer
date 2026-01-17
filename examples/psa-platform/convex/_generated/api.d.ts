@@ -13,6 +13,7 @@ import type * as admin_authorization from "../admin/authorization.js";
 import type * as auth from "../auth.js";
 import type * as authorization from "../authorization.js";
 import type * as http from "../http.js";
+import type * as scaffold from "../scaffold.js";
 import type * as tasquencer from "../tasquencer.js";
 import type * as testing_tasquencer from "../testing/tasquencer.js";
 import type * as workflows_dealToDelivery_api_companies from "../workflows/dealToDelivery/api/companies.js";
@@ -73,6 +74,7 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   authorization: typeof authorization;
   http: typeof http;
+  scaffold: typeof scaffold;
   tasquencer: typeof tasquencer;
   "testing/tasquencer": typeof testing_tasquencer;
   "workflows/dealToDelivery/api/companies": typeof workflows_dealToDelivery_api_companies;
