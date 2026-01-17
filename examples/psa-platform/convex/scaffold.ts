@@ -11,6 +11,7 @@ import { internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 import { authService } from "./authorization";
 import { components } from "./_generated/api";
+import { listAllUsers, getUserByEmailAnyOrg } from "./scaffold/helpers";
 
 /**
  * Bootstrap superadmin role for the first user.
@@ -28,7 +29,7 @@ export const scaffoldSuperadmin = internalMutation({
   args: {},
   handler: async (ctx) => {
     // 1. Check if there's exactly one user (initial bootstrap)
-    const users = await ctx.db.query("users").collect();
+    const users = await listAllUsers(ctx.db);
     if (users.length !== 1) {
       throw new Error(
         `Expected exactly 1 user for initial bootstrap, found ${users.length}. ` +
@@ -116,10 +117,7 @@ export const scaffoldSuperadminForUser = internalMutation({
   },
   handler: async (ctx, args) => {
     // 1. Find user by email
-    const user = await ctx.db
-      .query("users")
-      .filter((q) => q.eq(q.field("email"), args.email))
-      .first();
+    const user = await getUserByEmailAnyOrg(ctx.db, args.email);
 
     if (!user) {
       throw new Error(`User with email ${args.email} not found`);
