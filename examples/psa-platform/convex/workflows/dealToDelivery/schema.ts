@@ -505,6 +505,7 @@ const dealToDeliveryWorkItems = defineWorkItemMetadataTable("deals").withPayload
       type: v.literal("createProposal"),
       taskName: v.string(),
       priority: workItemPriority,
+      previousStage: v.optional(dealStage),
     }),
     v.object({
       type: v.literal("sendProposal"),
@@ -515,6 +516,7 @@ const dealToDeliveryWorkItems = defineWorkItemMetadataTable("deals").withPayload
       type: v.literal("negotiateTerms"),
       taskName: v.string(),
       priority: workItemPriority,
+      previousStage: v.optional(dealStage),
     }),
     v.object({
       type: v.literal("reviseProposal"),
@@ -526,11 +528,13 @@ const dealToDeliveryWorkItems = defineWorkItemMetadataTable("deals").withPayload
       type: v.literal("getProposalSigned"),
       taskName: v.string(),
       priority: workItemPriority,
+      previousStage: v.optional(dealStage),
     }),
     v.object({
       type: v.literal("archiveDeal"),
       taskName: v.string(),
       priority: workItemPriority,
+      previousStage: v.optional(dealStage),
     }),
 
     // =========================================================================
