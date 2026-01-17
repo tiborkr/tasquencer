@@ -14,7 +14,6 @@ import {
   getTimeEntry,
   updateTimeEntry,
   listTimeEntriesByUser,
-  listTimeEntriesByProject,
   listTimeEntriesByUserAndDate,
   listTimeEntriesByStatus,
   listSubmittedTimeEntriesByProject,
@@ -215,7 +214,7 @@ describe('Time Entry Query Functions', () => {
 
     it('should return null for non-existent entry', async () => {
       const t = setup()
-      const { orgId } = await createBaseTestData(t)
+      const { orgId: _orgId } = await createBaseTestData(t)
 
       const entry = await t.run(async (ctx) => {
         // Use a fake ID

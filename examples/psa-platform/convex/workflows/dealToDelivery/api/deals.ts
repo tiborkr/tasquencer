@@ -28,6 +28,7 @@ import {
   getDealByWorkflowId as getDealByWorkflowIdFromDb,
   listDealsByOrganization,
 } from '../db/deals'
+import { getUser } from '../db/users'
 import { authComponent } from '../../../auth'
 
 const {
@@ -45,9 +46,9 @@ export const listDeals = query({
   handler: async (ctx) => {
     await requirePsaStaffMember(ctx)
 
-    // Get current user to determine their organization
+    // Get current user to determine their organization (via domain layer)
     const authUser = await authComponent.getAuthUser(ctx)
-    const user = await ctx.db.get(authUser.userId as Id<'users'>)
+    const user = await getUser(ctx.db, authUser.userId as Id<'users'>)
     if (!user) {
       return []
     }
