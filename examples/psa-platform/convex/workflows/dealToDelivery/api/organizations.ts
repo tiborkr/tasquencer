@@ -133,3 +133,17 @@ export const getUser = query({
     return user
   },
 })
+
+/**
+ * Gets the current authenticated user.
+ * Authorization: Requires dealToDelivery:staff scope.
+ *
+ * @returns The current user document or null if not found
+ */
+export const getCurrentUser = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await requirePsaStaffMember(ctx)
+    return await getUserFromDb(ctx.db, userId)
+  },
+})
