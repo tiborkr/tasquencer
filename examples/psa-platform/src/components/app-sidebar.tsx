@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { Briefcase, FolderKanban, Search, Shield, Clock, CheckCircle } from 'lucide-react'
+import { Briefcase, FolderKanban, Search, Shield, Clock, CheckCircle, ListTodo } from 'lucide-react'
 
 import { NavMain } from '@/components/nav-main'
 import { NavUser } from '@/components/nav-user'
@@ -17,6 +17,17 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       <SidebarContent>
         <NavMain
           items={[
+            {
+              title: 'Work',
+              icon: ListTodo,
+              isActive: () => true,
+              items: [
+                {
+                  title: 'My Tasks',
+                  renderLink: () => <Link to="/tasks">My Tasks</Link>,
+                },
+              ],
+            },
             {
               title: 'Sales',
               icon: Briefcase,
