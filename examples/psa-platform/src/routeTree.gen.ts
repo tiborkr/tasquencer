@@ -12,10 +12,12 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AppProjectsRouteImport } from './routes/_app/projects'
 import { Route as AppHomepageRouteImport } from './routes/_app/homepage'
 import { Route as AppDealsRouteImport } from './routes/_app/deals'
 import { Route as AppAuditRouteImport } from './routes/_app/audit'
 import { Route as AppAdminRouteImport } from './routes/_app/admin'
+import { Route as AppProjectsIndexRouteImport } from './routes/_app/projects/index'
 import { Route as AppDealsIndexRouteImport } from './routes/_app/deals/index'
 import { Route as AppAuditIndexRouteImport } from './routes/_app/audit/index'
 import { Route as AppAdminIndexRouteImport } from './routes/_app/admin/index'
@@ -55,6 +57,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppProjectsRoute = AppProjectsRouteImport.update({
+  id: '/projects',
+  path: '/projects',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppHomepageRoute = AppHomepageRouteImport.update({
   id: '/homepage',
   path: '/homepage',
@@ -74,6 +81,11 @@ const AppAdminRoute = AppAdminRouteImport.update({
   id: '/admin',
   path: '/admin',
   getParentRoute: () => AppRoute,
+} as any)
+const AppProjectsIndexRoute = AppProjectsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppProjectsRoute,
 } as any)
 const AppDealsIndexRoute = AppDealsIndexRouteImport.update({
   id: '/',
@@ -206,6 +218,7 @@ export interface FileRoutesByFullPath {
   '/audit': typeof AppAuditRouteWithChildren
   '/deals': typeof AppDealsRouteWithChildren
   '/homepage': typeof AppHomepageRoute
+  '/projects': typeof AppProjectsRouteWithChildren
   '/admin/groups': typeof AppAdminGroupsRouteWithChildren
   '/admin/roles': typeof AppAdminRolesRouteWithChildren
   '/admin/users': typeof AppAdminUsersRouteWithChildren
@@ -216,6 +229,7 @@ export interface FileRoutesByFullPath {
   '/admin/': typeof AppAdminIndexRoute
   '/audit/': typeof AppAuditIndexRoute
   '/deals/': typeof AppDealsIndexRoute
+  '/projects/': typeof AppProjectsIndexRoute
   '/admin/groups/$groupId': typeof AppAdminGroupsGroupIdRoute
   '/admin/roles/$roleId': typeof AppAdminRolesRoleIdRoute
   '/audit/$traceId/visualizer': typeof AppAuditTraceIdVisualizerRoute
@@ -241,6 +255,7 @@ export interface FileRoutesByTo {
   '/admin': typeof AppAdminIndexRoute
   '/audit': typeof AppAuditIndexRoute
   '/deals': typeof AppDealsIndexRoute
+  '/projects': typeof AppProjectsIndexRoute
   '/admin/groups/$groupId': typeof AppAdminGroupsGroupIdRoute
   '/admin/roles/$roleId': typeof AppAdminRolesRoleIdRoute
   '/audit/$traceId/visualizer': typeof AppAuditTraceIdVisualizerRoute
@@ -265,6 +280,7 @@ export interface FileRoutesById {
   '/_app/audit': typeof AppAuditRouteWithChildren
   '/_app/deals': typeof AppDealsRouteWithChildren
   '/_app/homepage': typeof AppHomepageRoute
+  '/_app/projects': typeof AppProjectsRouteWithChildren
   '/_app/admin/groups': typeof AppAdminGroupsRouteWithChildren
   '/_app/admin/roles': typeof AppAdminRolesRouteWithChildren
   '/_app/admin/users': typeof AppAdminUsersRouteWithChildren
@@ -275,6 +291,7 @@ export interface FileRoutesById {
   '/_app/admin/': typeof AppAdminIndexRoute
   '/_app/audit/': typeof AppAuditIndexRoute
   '/_app/deals/': typeof AppDealsIndexRoute
+  '/_app/projects/': typeof AppProjectsIndexRoute
   '/_app/admin/groups/$groupId': typeof AppAdminGroupsGroupIdRoute
   '/_app/admin/roles/$roleId': typeof AppAdminRolesRoleIdRoute
   '/_app/audit/$traceId/visualizer': typeof AppAuditTraceIdVisualizerRoute
@@ -299,6 +316,7 @@ export interface FileRouteTypes {
     | '/audit'
     | '/deals'
     | '/homepage'
+    | '/projects'
     | '/admin/groups'
     | '/admin/roles'
     | '/admin/users'
@@ -309,6 +327,7 @@ export interface FileRouteTypes {
     | '/admin/'
     | '/audit/'
     | '/deals/'
+    | '/projects/'
     | '/admin/groups/$groupId'
     | '/admin/roles/$roleId'
     | '/audit/$traceId/visualizer'
@@ -334,6 +353,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/audit'
     | '/deals'
+    | '/projects'
     | '/admin/groups/$groupId'
     | '/admin/roles/$roleId'
     | '/audit/$traceId/visualizer'
@@ -357,6 +377,7 @@ export interface FileRouteTypes {
     | '/_app/audit'
     | '/_app/deals'
     | '/_app/homepage'
+    | '/_app/projects'
     | '/_app/admin/groups'
     | '/_app/admin/roles'
     | '/_app/admin/users'
@@ -367,6 +388,7 @@ export interface FileRouteTypes {
     | '/_app/admin/'
     | '/_app/audit/'
     | '/_app/deals/'
+    | '/_app/projects/'
     | '/_app/admin/groups/$groupId'
     | '/_app/admin/roles/$roleId'
     | '/_app/audit/$traceId/visualizer'
@@ -413,6 +435,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_app/projects': {
+      id: '/_app/projects'
+      path: '/projects'
+      fullPath: '/projects'
+      preLoaderRoute: typeof AppProjectsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/homepage': {
       id: '/_app/homepage'
       path: '/homepage'
@@ -440,6 +469,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin'
       preLoaderRoute: typeof AppAdminRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/_app/projects/': {
+      id: '/_app/projects/'
+      path: '/'
+      fullPath: '/projects/'
+      preLoaderRoute: typeof AppProjectsIndexRouteImport
+      parentRoute: typeof AppProjectsRoute
     }
     '/_app/deals/': {
       id: '/_app/deals/'
@@ -738,11 +774,24 @@ const AppDealsRouteWithChildren = AppDealsRoute._addFileChildren(
   AppDealsRouteChildren,
 )
 
+interface AppProjectsRouteChildren {
+  AppProjectsIndexRoute: typeof AppProjectsIndexRoute
+}
+
+const AppProjectsRouteChildren: AppProjectsRouteChildren = {
+  AppProjectsIndexRoute: AppProjectsIndexRoute,
+}
+
+const AppProjectsRouteWithChildren = AppProjectsRoute._addFileChildren(
+  AppProjectsRouteChildren,
+)
+
 interface AppRouteChildren {
   AppAdminRoute: typeof AppAdminRouteWithChildren
   AppAuditRoute: typeof AppAuditRouteWithChildren
   AppDealsRoute: typeof AppDealsRouteWithChildren
   AppHomepageRoute: typeof AppHomepageRoute
+  AppProjectsRoute: typeof AppProjectsRouteWithChildren
 }
 
 const AppRouteChildren: AppRouteChildren = {
@@ -750,6 +799,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppAuditRoute: AppAuditRouteWithChildren,
   AppDealsRoute: AppDealsRouteWithChildren,
   AppHomepageRoute: AppHomepageRoute,
+  AppProjectsRoute: AppProjectsRouteWithChildren,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)

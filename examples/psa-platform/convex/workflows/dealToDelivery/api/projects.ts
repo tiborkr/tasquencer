@@ -152,6 +152,163 @@ export const getProject = query({
 })
 
 /**
+ * Lists projects with full metrics for the projects list page.
+ * Calculates health status, budget burn, timeline progress, etc.
+ * Authorization: Requires dealToDelivery:staff scope.
+ *
+ * @param args.status - Optional filter by project status
+ * @returns Projects with metrics and counts by status
+ *
+ * Reference: .review/recipes/psa-platform/specs/24-ui-projects-list.md
+ */
+export const listProjectsWithMetrics = query({
+  args: {
+    status: v.optional(
+      v.union(
+        v.literal('Planning'),
+        v.literal('Active'),
+        v.literal('OnHold'),
+        v.literal('Completed'),
+        v.literal('Archived')
+      )
+    ),
+  },
+  handler: async (ctx, args) => {
+    await requirePsaStaffMember(ctx)
+
+    // Get current user to determine their organization
+    const authUser = await authComponent.getAuthUser(ctx)
+    const user = await getUser(ctx.db, authUser.userId as Id<'users'>)
+    if (!user) {
+      return { projects: [], counts: { all: 0, active: 0, planning: 0, onHold: 0, completed: 0 } }
+    }
+
+    // Fetch all projects for the organization
+    const allProjects = await listProjectsByOrganization(ctx.db, user.organizationId, 100)
+
+    // Calculate counts
+    const counts = {
+      all: allProjects.length,
+      active: allProjects.filter(p => p.status === 'Active').length,
+      planning: allProjects.filter(p => p.status === 'Planning').length,
+      onHold: allProjects.filter(p => p.status === 'OnHold').length,
+      completed: allProjects.filter(p => p.status === 'Completed').length,
+    }
+
+    // Filter by status if provided
+    const filteredProjects = args.status
+      ? allProjects.filter(p => p.status === args.status)
+      : allProjects
+
+    // Enrich each project with metrics
+    const projectsWithMetrics = await Promise.all(
+      filteredProjects.map(async (project) => {
+        // Load company, manager, budget, and metrics in parallel
+        const [company, manager, budget, hours, expenses] = await Promise.all([
+          project.companyId ? ctx.db.get(project.companyId) : null,
+          project.managerId ? ctx.db.get(project.managerId) : null,
+          getBudgetByProjectId(ctx.db, project._id),
+          calculateProjectHours(ctx.db, project._id),
+          calculateProjectExpenses(ctx.db, project._id),
+        ])
+
+        // Get services for estimated hours if budget exists
+        const services = budget ? await listServicesByBudget(ctx.db, budget._id) : []
+        const estimatedHours = services.reduce((sum, s) => sum + s.estimatedHours, 0)
+
+        // Calculate budget metrics
+        const budgetTotal = budget?.totalAmount ?? 0
+        const budgetBurned = hours.approved + expenses.approved
+        const budgetBurnPercent = budgetTotal > 0 ? Math.round((budgetBurned / budgetTotal) * 100) : 0
+
+        // Calculate timeline metrics
+        const now = Date.now()
+        const startDate = project.startDate
+        const endDate = project.endDate
+        let daysElapsed = 0
+        let totalDays = 0
+        let progressPercent = 0
+        let timelineStatus: 'on_track' | 'delayed' | 'ahead' | 'not_started' = 'not_started'
+
+        if (startDate && endDate) {
+          totalDays = Math.max(1, Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)))
+          if (now >= startDate) {
+            daysElapsed = Math.ceil((Math.min(now, endDate) - startDate) / (1000 * 60 * 60 * 24))
+            progressPercent = Math.min(100, Math.round((daysElapsed / totalDays) * 100))
+
+            // Determine timeline status based on progress vs burn rate
+            if (now > endDate) {
+              timelineStatus = project.status === 'Completed' ? 'on_track' : 'delayed'
+            } else if (budgetBurnPercent > progressPercent + 15) {
+              timelineStatus = 'delayed'
+            } else if (budgetBurnPercent < progressPercent - 15) {
+              timelineStatus = 'ahead'
+            } else {
+              timelineStatus = 'on_track'
+            }
+          }
+        }
+
+        // Calculate health status per spec
+        const isDelayed = timelineStatus === 'delayed'
+        let healthStatus: 'healthy' | 'at_risk' | 'critical' | 'planning' = 'planning'
+        if (project.status === 'Planning') {
+          healthStatus = 'planning'
+        } else if (budgetBurnPercent > 90 || isDelayed) {
+          healthStatus = 'critical'
+        } else if (budgetBurnPercent >= 75) {
+          healthStatus = 'at_risk'
+        } else {
+          healthStatus = 'healthy'
+        }
+
+        // Calculate revenue (approved billable hours * average rate)
+        // For simplicity, use a default rate. In full implementation,
+        // this would sum (hours * service.rate) per service
+        const avgRate = services.length > 0
+          ? services.reduce((sum, s) => sum + s.rate, 0) / services.length
+          : 15000 // $150/hr in cents
+        const revenue = Math.round(hours.billable * avgRate / 100) // in cents
+
+        // Calculate margin (revenue - costs) / revenue
+        const costs = budgetBurned
+        const margin = revenue > 0 ? Math.round(((revenue - costs) / revenue) * 100) : 0
+
+        return {
+          _id: project._id,
+          name: project.name,
+          status: project.status,
+          company: company ? { _id: company._id, name: company.name } : null,
+          manager: manager ? { _id: manager._id, name: manager.name } : null,
+          startDate: project.startDate,
+          endDate: project.endDate,
+          budget: {
+            total: budgetTotal,
+            burned: budgetBurned,
+            burnPercent: budgetBurnPercent,
+          },
+          timeline: {
+            daysElapsed,
+            totalDays,
+            progressPercent,
+            status: timelineStatus,
+          },
+          metrics: {
+            hoursLogged: hours.total,
+            hoursEstimated: estimatedHours,
+            revenue,
+            margin,
+          },
+          healthStatus,
+        }
+      })
+    )
+
+    return { projects: projectsWithMetrics, counts }
+  },
+})
+
+/**
  * Gets project budget with services.
  * Authorization: Requires dealToDelivery:staff scope.
  *
