@@ -18,6 +18,7 @@ import type * as workflows_dealToDelivery_api_deals from "../workflows/dealToDel
 import type * as workflows_dealToDelivery_api_permissions from "../workflows/dealToDelivery/api/permissions.js";
 import type * as workflows_dealToDelivery_api_workItems from "../workflows/dealToDelivery/api/workItems.js";
 import type * as workflows_dealToDelivery_api_workflow from "../workflows/dealToDelivery/api/workflow.js";
+import type * as workflows_dealToDelivery_application_psaApplication from "../workflows/dealToDelivery/application/psaApplication.js";
 import type * as workflows_dealToDelivery_authSetup from "../workflows/dealToDelivery/authSetup.js";
 import type * as workflows_dealToDelivery_authorization from "../workflows/dealToDelivery/authorization.js";
 import type * as workflows_dealToDelivery_db from "../workflows/dealToDelivery/db.js";
@@ -66,6 +67,7 @@ declare const fullApi: ApiFromModules<{
   "workflows/dealToDelivery/api/permissions": typeof workflows_dealToDelivery_api_permissions;
   "workflows/dealToDelivery/api/workItems": typeof workflows_dealToDelivery_api_workItems;
   "workflows/dealToDelivery/api/workflow": typeof workflows_dealToDelivery_api_workflow;
+  "workflows/dealToDelivery/application/psaApplication": typeof workflows_dealToDelivery_application_psaApplication;
   "workflows/dealToDelivery/authSetup": typeof workflows_dealToDelivery_authSetup;
   "workflows/dealToDelivery/authorization": typeof workflows_dealToDelivery_authorization;
   "workflows/dealToDelivery/db": typeof workflows_dealToDelivery_db;
