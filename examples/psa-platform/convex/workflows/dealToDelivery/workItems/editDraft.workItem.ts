@@ -17,6 +17,7 @@ import { authService } from "../../../authorization";
 import { authComponent } from "../../../auth";
 import {
   getInvoice,
+  getInvoiceLineItem,
   updateInvoice,
   listLineItemsByInvoice,
   insertInvoiceLineItem,
@@ -141,7 +142,8 @@ const editDraftWorkItemActions = authService.builders.workItemActions
               if (change.quantity !== undefined) updates.quantity = change.quantity;
               if (change.rate !== undefined) updates.rate = change.rate;
               if (change.quantity !== undefined || change.rate !== undefined) {
-                const lineItem = await mutationCtx.db.get(change.id);
+                // Use domain layer function (TENET-DOMAIN-BOUNDARY)
+                const lineItem = await getInvoiceLineItem(mutationCtx.db, change.id);
                 if (lineItem) {
                   const newQuantity = change.quantity ?? lineItem.quantity;
                   const newRate = change.rate ?? lineItem.rate;

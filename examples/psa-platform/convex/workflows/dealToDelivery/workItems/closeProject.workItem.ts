@@ -15,7 +15,7 @@ import { startAndClaimWorkItem, cleanupWorkItemOnCancel } from "./helpers";
 import { initializeDealWorkItemAuth, updateWorkItemMetadataPayload } from "./helpersAuth";
 import { authService } from "../../../authorization";
 import { authComponent } from "../../../auth";
-import { getProject, updateProjectStatus } from "../db/projects";
+import { getProject, updateProjectStatus, updateProject } from "../db/projects";
 import { getRootWorkflowAndDealForWorkItem } from "../db/workItemContext";
 import { assertProjectExists, assertAuthenticatedUser } from "../exceptions";
 
@@ -103,8 +103,8 @@ const closeProjectWorkItemActions = authService.builders.workItemActions
       };
       await updateProjectStatus(mutationCtx.db, payload.projectId, statusMap[payload.completionStatus]);
 
-      // Update the project end date
-      await mutationCtx.db.patch(payload.projectId, {
+      // Update the project end date via domain layer (TENET-DOMAIN-BOUNDARY)
+      await updateProject(mutationCtx.db, payload.projectId, {
         endDate: payload.closeDate,
       });
 
