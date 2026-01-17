@@ -1,0 +1,368 @@
+/**
+ * Projects API
+ *
+ * Domain-specific queries and mutations for project management.
+ * These provide read access and helper mutations for work item handlers.
+ *
+ * TENET-AUTHZ: All queries and mutations are protected by scope-based authorization.
+ * TENET-DOMAIN-BOUNDARY: All data access goes through domain functions (db.ts).
+ *
+ * Reference: .review/recipes/psa-platform/specs/04-workflow-planning-phase.md
+ * Reference: .review/recipes/psa-platform/specs/26-api-endpoints.md
+ */
+import { v } from 'convex/values'
+import { mutation, query } from '../../../_generated/server'
+import type { Id } from '../../../_generated/dataModel'
+import { requirePsaStaffMember } from '../domain/services/authorizationService'
+import {
+  getProject as getProjectFromDb,
+  listProjectsByOrganization,
+  listProjectsByStatus,
+  listProjectsByManager,
+  listProjectsByCompany,
+  getBudgetByProjectId,
+  listServicesByBudget,
+  listTasksByProject,
+  listTasksByStatus,
+  listTasksByAssignee,
+  getTask as getTaskFromDb,
+  insertTask,
+  updateTask as updateTaskInDb,
+  getNextTaskSortOrder,
+  calculateProjectHours,
+  calculateProjectExpenses,
+} from '../db'
+import { getUser } from '../db/users'
+import { authComponent } from '../../../auth'
+
+// =============================================================================
+// QUERIES
+// =============================================================================
+
+/**
+ * Lists projects for the current user's organization with optional filters.
+ * Authorization: Requires dealToDelivery:staff scope.
+ *
+ * @param args.status - Optional filter by project status
+ * @param args.managerId - Optional filter by project manager
+ * @param args.companyId - Optional filter by company
+ * @returns Array of projects (limited to 50)
+ */
+export const listProjects = query({
+  args: {
+    status: v.optional(
+      v.union(
+        v.literal('Planning'),
+        v.literal('Active'),
+        v.literal('OnHold'),
+        v.literal('Completed'),
+        v.literal('Archived')
+      )
+    ),
+    managerId: v.optional(v.id('users')),
+    companyId: v.optional(v.id('companies')),
+  },
+  handler: async (ctx, args) => {
+    await requirePsaStaffMember(ctx)
+
+    // Get current user to determine their organization
+    const authUser = await authComponent.getAuthUser(ctx)
+    const user = await getUser(ctx.db, authUser.userId as Id<'users'>)
+    if (!user) {
+      return []
+    }
+
+    // Apply filters based on provided arguments
+    if (args.managerId) {
+      return await listProjectsByManager(ctx.db, args.managerId)
+    }
+
+    if (args.companyId) {
+      return await listProjectsByCompany(ctx.db, args.companyId)
+    }
+
+    if (args.status) {
+      return await listProjectsByStatus(ctx.db, user.organizationId, args.status)
+    }
+
+    // No filters - return all projects for the organization
+    return await listProjectsByOrganization(ctx.db, user.organizationId)
+  },
+})
+
+/**
+ * Gets a project by ID with budget, team, and metrics.
+ * Authorization: Requires dealToDelivery:staff scope.
+ *
+ * @param args.projectId - The project ID
+ * @returns The project with budget details and calculated metrics, or null
+ */
+export const getProject = query({
+  args: { projectId: v.id('projects') },
+  handler: async (ctx, args) => {
+    await requirePsaStaffMember(ctx)
+
+    // Fetch project
+    const project = await getProjectFromDb(ctx.db, args.projectId)
+    if (!project) {
+      return null
+    }
+
+    // Load budget and calculate metrics in parallel
+    const [budget, hours, expenses] = await Promise.all([
+      getBudgetByProjectId(ctx.db, args.projectId),
+      calculateProjectHours(ctx.db, args.projectId),
+      calculateProjectExpenses(ctx.db, args.projectId),
+    ])
+
+    // Load services if budget exists
+    const services = budget ? await listServicesByBudget(ctx.db, budget._id) : []
+
+    // Calculate budget metrics
+    const budgetTotal = budget?.totalAmount ?? 0
+    const hoursUsed = hours.approved
+    const expensesUsed = expenses.approved
+
+    // Calculate estimated hours from services
+    const estimatedHours = services.reduce((sum, s) => sum + s.estimatedHours, 0)
+
+    return {
+      ...project,
+      budget: budget
+        ? {
+            ...budget,
+            services,
+          }
+        : null,
+      metrics: {
+        budgetTotal,
+        hoursTotal: hours.total,
+        hoursApproved: hours.approved,
+        hoursBillable: hours.billable,
+        estimatedHours,
+        hoursRemaining: Math.max(0, estimatedHours - hoursUsed),
+        expensesTotal: expenses.total,
+        expensesApproved: expenses.approved,
+        expensesBillable: expenses.billable,
+        budgetUsed: hoursUsed + expensesUsed,
+        budgetRemaining: Math.max(0, budgetTotal - (hoursUsed + expensesUsed)),
+      },
+    }
+  },
+})
+
+/**
+ * Gets project budget with services.
+ * Authorization: Requires dealToDelivery:staff scope.
+ *
+ * @param args.projectId - The project ID
+ * @returns The budget with services, or null if no budget exists
+ */
+export const getProjectBudget = query({
+  args: { projectId: v.id('projects') },
+  handler: async (ctx, args) => {
+    await requirePsaStaffMember(ctx)
+
+    const budget = await getBudgetByProjectId(ctx.db, args.projectId)
+    if (!budget) {
+      return null
+    }
+
+    const services = await listServicesByBudget(ctx.db, budget._id)
+
+    return {
+      ...budget,
+      services,
+    }
+  },
+})
+
+/**
+ * Lists tasks for a project with optional filters.
+ * Authorization: Requires dealToDelivery:staff scope.
+ *
+ * @param args.projectId - The project ID
+ * @param args.status - Optional filter by task status
+ * @param args.assigneeId - Optional filter by assignee
+ * @returns Array of tasks (limited to 100)
+ */
+export const listTasks = query({
+  args: {
+    projectId: v.id('projects'),
+    status: v.optional(
+      v.union(
+        v.literal('Todo'),
+        v.literal('InProgress'),
+        v.literal('Review'),
+        v.literal('Done'),
+        v.literal('OnHold')
+      )
+    ),
+    assigneeId: v.optional(v.id('users')),
+  },
+  handler: async (ctx, args) => {
+    await requirePsaStaffMember(ctx)
+
+    // Apply filters based on provided arguments
+    if (args.status) {
+      return await listTasksByStatus(ctx.db, args.projectId, args.status)
+    }
+
+    if (args.assigneeId) {
+      return await listTasksByAssignee(ctx.db, args.projectId, args.assigneeId)
+    }
+
+    // No filters - return all tasks for the project
+    return await listTasksByProject(ctx.db, args.projectId)
+  },
+})
+
+/**
+ * Gets a task by ID.
+ * Authorization: Requires dealToDelivery:staff scope.
+ *
+ * @param args.taskId - The task ID
+ * @returns The task document or null
+ */
+export const getTask = query({
+  args: { taskId: v.id('tasks') },
+  handler: async (ctx, args) => {
+    await requirePsaStaffMember(ctx)
+
+    return await getTaskFromDb(ctx.db, args.taskId)
+  },
+})
+
+// =============================================================================
+// MUTATIONS (Helper mutations for work item handlers)
+// =============================================================================
+
+/**
+ * Creates a project task.
+ * This is a helper mutation that may be used by work item handlers.
+ * Authorization: Requires dealToDelivery:staff scope.
+ *
+ * @param args.projectId - The project ID
+ * @param args.name - Task name
+ * @param args.description - Task description
+ * @param args.priority - Task priority (Low, Medium, High, Urgent)
+ * @param args.assigneeIds - Array of assigned user IDs
+ * @param args.parentTaskId - Optional parent task ID for subtasks
+ * @param args.dueDate - Optional due date timestamp
+ * @param args.estimatedHours - Optional estimated hours
+ * @param args.dependencies - Optional array of dependent task IDs
+ * @returns The created task ID
+ */
+export const createTask = mutation({
+  args: {
+    projectId: v.id('projects'),
+    name: v.string(),
+    description: v.string(),
+    priority: v.union(
+      v.literal('Low'),
+      v.literal('Medium'),
+      v.literal('High'),
+      v.literal('Urgent')
+    ),
+    assigneeIds: v.array(v.id('users')),
+    parentTaskId: v.optional(v.id('tasks')),
+    dueDate: v.optional(v.number()),
+    estimatedHours: v.optional(v.number()),
+    dependencies: v.optional(v.array(v.id('tasks'))),
+  },
+  handler: async (ctx, args) => {
+    await requirePsaStaffMember(ctx)
+
+    // Get project to verify it exists and get organization ID
+    const project = await getProjectFromDb(ctx.db, args.projectId)
+    if (!project) {
+      throw new Error('Project not found')
+    }
+
+    // Get next sort order
+    const sortOrder = await getNextTaskSortOrder(ctx.db, args.projectId)
+
+    // Create the task
+    const taskId = await insertTask(ctx.db, {
+      projectId: args.projectId,
+      organizationId: project.organizationId,
+      parentTaskId: args.parentTaskId,
+      name: args.name,
+      description: args.description,
+      status: 'Todo',
+      priority: args.priority,
+      assigneeIds: args.assigneeIds,
+      dueDate: args.dueDate,
+      estimatedHours: args.estimatedHours,
+      dependencies: args.dependencies ?? [],
+      sortOrder,
+      createdAt: Date.now(),
+    })
+
+    return taskId
+  },
+})
+
+/**
+ * Updates task properties.
+ * This is a helper mutation that may be used by work item handlers.
+ * Authorization: Requires dealToDelivery:staff scope.
+ *
+ * @param args.taskId - The task ID
+ * @param args.name - Optional new task name
+ * @param args.description - Optional new task description
+ * @param args.status - Optional new task status
+ * @param args.priority - Optional new task priority
+ * @param args.assigneeIds - Optional new array of assigned user IDs
+ * @param args.dueDate - Optional new due date timestamp
+ * @param args.estimatedHours - Optional new estimated hours
+ * @param args.dependencies - Optional new array of dependent task IDs
+ * @param args.sortOrder - Optional new sort order
+ */
+export const updateTask = mutation({
+  args: {
+    taskId: v.id('tasks'),
+    name: v.optional(v.string()),
+    description: v.optional(v.string()),
+    status: v.optional(
+      v.union(
+        v.literal('Todo'),
+        v.literal('InProgress'),
+        v.literal('Review'),
+        v.literal('Done'),
+        v.literal('OnHold')
+      )
+    ),
+    priority: v.optional(
+      v.union(
+        v.literal('Low'),
+        v.literal('Medium'),
+        v.literal('High'),
+        v.literal('Urgent')
+      )
+    ),
+    assigneeIds: v.optional(v.array(v.id('users'))),
+    dueDate: v.optional(v.number()),
+    estimatedHours: v.optional(v.number()),
+    dependencies: v.optional(v.array(v.id('tasks'))),
+    sortOrder: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    await requirePsaStaffMember(ctx)
+
+    const { taskId, ...updates } = args
+
+    // Filter out undefined values
+    const filteredUpdates: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(updates)) {
+      if (value !== undefined) {
+        filteredUpdates[key] = value
+      }
+    }
+
+    // Only update if there are changes
+    if (Object.keys(filteredUpdates).length > 0) {
+      await updateTaskInDb(ctx.db, taskId, filteredUpdates)
+    }
+  },
+})

@@ -4,39 +4,98 @@
  * Queries for discovering and viewing work items in the Deal to Delivery workflow.
  * These enable the work queue UI and task management features.
  *
+ * TENET-AUTHZ: All queries are protected by scope-based authorization.
+ * TENET-DOMAIN-BOUNDARY: Uses work item helpers for metadata access.
+ *
  * Reference: .review/recipes/psa-platform/specs/26-api-endpoints.md
  * Pattern: examples/er/convex/workflows/er/api/workItems.ts
  */
 import { v } from 'convex/values'
 import { query } from '../../../_generated/server'
+import type { Id } from '../../../_generated/dataModel'
+import { requirePsaStaffMember } from '../domain/services/authorizationService'
+import { DealToDeliveryWorkItemHelpers } from '../helpers'
+import { authComponent } from '../../../auth'
+import { isHumanOffer, isHumanClaim } from '@repo/tasquencer'
 
-// TODO: Import these once implemented (PRIORITY 1 & 2)
-// import { requirePsaStaffMember } from '../domain/services/authorizationService'
-// import { mapWorkItemToResponse } from '../domain/services/workItemMappingService'
-// import { DealToDeliveryWorkItemHelpers } from '../helpers'
-// import { isHumanOffer } from '@repo/tasquencer'
+/**
+ * Maps work item metadata to a standardized response format.
+ */
+function mapWorkItemToResponse(
+  metadata: NonNullable<
+    Awaited<
+      ReturnType<typeof DealToDeliveryWorkItemHelpers.getWorkItemMetadata>
+    >
+  >,
+  workItem: { state: string; name: string } | null,
+  options: { includeGroupName?: boolean; includeWorkItemState?: boolean } = {},
+) {
+  const payload = metadata.payload as { type?: string; taskName?: string }
+  const taskName = payload.taskName ?? workItem?.name ?? 'Task'
+  const taskType = payload.type ?? 'unknown'
+
+  const baseResponse = {
+    _id: metadata._id,
+    _creationTime: metadata._creationTime,
+    workItemId: metadata.workItemId,
+    aggregateTableId: metadata.aggregateTableId,
+    taskName,
+    taskType,
+    status: deriveWorkItemStatus(workItem, metadata),
+    requiredScope: isHumanOffer(metadata.offer)
+      ? metadata.offer.requiredScope
+      : undefined,
+    requiredGroupId: isHumanOffer(metadata.offer)
+      ? metadata.offer.requiredGroupId
+      : undefined,
+    claimedBy: isHumanClaim(metadata.claim) ? metadata.claim.userId : undefined,
+    payload: metadata.payload,
+  }
+
+  return {
+    ...baseResponse,
+    ...(options.includeWorkItemState && { workItemState: workItem?.state }),
+  }
+}
+
+/**
+ * Derives work item status from state and claim.
+ */
+function deriveWorkItemStatus(
+  workItem: { state: string } | null,
+  metadata: { claim?: unknown },
+): 'pending' | 'claimed' | 'completed' {
+  if (workItem?.state === 'completed') return 'completed'
+  if (metadata.claim) return 'claimed'
+  return 'pending'
+}
 
 /**
  * Gets all available work items for the current user.
  * Filters by user's roles and scopes.
  *
  * @returns Array of work items that the user can claim
- *
- * TODO: Full implementation requires:
- * - Schema for work item metadata table (PRIORITY 1.2)
- * - Authorization helpers (PRIORITY 2.3)
- * - Work item metadata helpers (PRIORITY 1.4)
  */
 export const getMyAvailableTasks = query({
   args: {},
-  handler: async (_ctx) => {
-    // TODO: Implement once work item metadata table exists (PRIORITY 1.2)
-    // const userId = await requirePsaStaffMember(ctx)
-    // const items = await DealToDeliveryWorkItemHelpers.getAvailableWorkItemsForUser(ctx, userId)
-    // return items.map((item) => mapWorkItemToResponse(item.metadata, item.workItem))
+  handler: async (ctx) => {
+    const authUser = await authComponent.safeGetAuthUser(ctx)
+    if (!authUser || !authUser.userId) {
+      return []
+    }
 
-    // Stub: Return empty array until schema is implemented
-    return []
+    await requirePsaStaffMember(ctx)
+
+    const userId = authUser.userId as Id<'users'>
+    const items =
+      await DealToDeliveryWorkItemHelpers.getAvailableWorkItemsForUser(
+        ctx,
+        userId,
+      )
+
+    return items.map((item) =>
+      mapWorkItemToResponse(item.metadata, item.workItem),
+    )
   },
 })
 
@@ -47,14 +106,41 @@ export const getMyAvailableTasks = query({
  */
 export const getMyClaimedTasks = query({
   args: {},
-  handler: async (_ctx) => {
-    // TODO: Implement once work item metadata table exists (PRIORITY 1.2)
-    // const userId = await requirePsaStaffMember(ctx)
-    // const items = await DealToDeliveryWorkItemHelpers.getClaimedWorkItemsByUser(ctx.db, userId)
-    // return items.map((item) => mapWorkItemToResponse(item.metadata, item.workItem))
+  handler: async (ctx) => {
+    const authUser = await authComponent.safeGetAuthUser(ctx)
+    if (!authUser || !authUser.userId) {
+      return []
+    }
 
-    // Stub: Return empty array until schema is implemented
-    return []
+    await requirePsaStaffMember(ctx)
+
+    const userId = authUser.userId as Id<'users'>
+
+    // Query work items where the claim has this userId
+    const allMetadata = await ctx.db
+      .query('dealToDeliveryWorkItems')
+      .collect()
+
+    // Filter for claimed by this user and load work items
+    const claimedItems = allMetadata.filter(
+      (m) => isHumanClaim(m.claim) && m.claim.userId === userId,
+    )
+
+    const workItems = await Promise.all(
+      claimedItems.map((m) => ctx.db.get(m.workItemId)),
+    )
+
+    // Filter for active (not completed/failed/canceled)
+    const activeItems = claimedItems
+      .map((metadata, idx) => ({ metadata, workItem: workItems[idx] }))
+      .filter(
+        ({ workItem }) =>
+          workItem?.state === 'initialized' || workItem?.state === 'started',
+      )
+
+    return activeItems.map(({ metadata, workItem }) =>
+      mapWorkItemToResponse(metadata, workItem, { includeWorkItemState: true }),
+    )
   },
 })
 
@@ -66,14 +152,32 @@ export const getMyClaimedTasks = query({
  */
 export const getAllAvailableTasks = query({
   args: {},
-  handler: async (_ctx) => {
-    // TODO: Implement once work item metadata table exists (PRIORITY 1.2)
-    // await requirePsaStaffMember(ctx)
-    // const allMetadata = await ctx.db.query('dealToDeliveryWorkItems').collect()
-    // ... filtering and mapping logic
+  handler: async (ctx) => {
+    await requirePsaStaffMember(ctx)
 
-    // Stub: Return empty array until schema is implemented
-    return []
+    const allMetadata = await ctx.db
+      .query('dealToDeliveryWorkItems')
+      .collect()
+
+    // Load all work items in parallel
+    const workItems = await Promise.all(
+      allMetadata.map((metadata) => ctx.db.get(metadata.workItemId)),
+    )
+
+    // Filter active work items with human offers
+    const activeItems = allMetadata
+      .map((metadata, idx) => ({ metadata, workItem: workItems[idx] }))
+      .filter(
+        ({ workItem }) =>
+          workItem?.state === 'initialized' || workItem?.state === 'started',
+      )
+      .filter(({ metadata }) => isHumanOffer(metadata.offer))
+
+    return activeItems.map(({ metadata, workItem }) =>
+      mapWorkItemToResponse(metadata, workItem, {
+        includeWorkItemState: true,
+      }),
+    )
   },
 })
 
@@ -85,17 +189,71 @@ export const getAllAvailableTasks = query({
  */
 export const getTasksByDeal = query({
   args: { dealId: v.id('deals') },
-  handler: async (_ctx, _args) => {
-    // TODO: Implement once schema exists (PRIORITY 1.1)
-    // await requirePsaStaffMember(ctx)
-    // const allMetadata = await ctx.db
-    //   .query('dealToDeliveryWorkItems')
-    //   .withIndex('by_aggregateTableId', (q) => q.eq('aggregateTableId', args.dealId))
-    //   .collect()
-    // ...
+  handler: async (ctx, args) => {
+    await requirePsaStaffMember(ctx)
 
-    // Stub: Return empty array until schema is implemented
-    return []
+    const allMetadata = await ctx.db
+      .query('dealToDeliveryWorkItems')
+      .withIndex('by_aggregateTableId', (q) =>
+        q.eq('aggregateTableId', args.dealId),
+      )
+      .collect()
+
+    // Load work items
+    const workItems = await Promise.all(
+      allMetadata.map((m) => ctx.db.get(m.workItemId)),
+    )
+
+    // Filter human-offered items
+    const humanItems = allMetadata
+      .map((metadata, idx) => ({ metadata, workItem: workItems[idx] }))
+      .filter(({ metadata }) => isHumanOffer(metadata.offer))
+
+    return humanItems.map(({ metadata, workItem }) =>
+      mapWorkItemToResponse(metadata, workItem, { includeWorkItemState: true }),
+    )
+  },
+})
+
+/**
+ * Gets all work items for a specific project.
+ * Since work items are keyed by deal, this first looks up the project's deal.
+ *
+ * @param args.projectId - The project to get work items for
+ * @returns Array of work items associated with the project (via its source deal)
+ */
+export const getTasksByProject = query({
+  args: { projectId: v.id('projects') },
+  handler: async (ctx, args) => {
+    await requirePsaStaffMember(ctx)
+
+    // Projects are linked to deals; work items are keyed by deal
+    const project = await ctx.db.get(args.projectId)
+    if (!project || !project.dealId) {
+      return []
+    }
+
+    const dealId = project.dealId
+    const allMetadata = await ctx.db
+      .query('dealToDeliveryWorkItems')
+      .withIndex('by_aggregateTableId', (q) =>
+        q.eq('aggregateTableId', dealId),
+      )
+      .collect()
+
+    // Load work items
+    const workItems = await Promise.all(
+      allMetadata.map((m) => ctx.db.get(m.workItemId)),
+    )
+
+    // Filter human-offered items
+    const humanItems = allMetadata
+      .map((metadata, idx) => ({ metadata, workItem: workItems[idx] }))
+      .filter(({ metadata }) => isHumanOffer(metadata.offer))
+
+    return humanItems.map(({ metadata, workItem }) =>
+      mapWorkItemToResponse(metadata, workItem, { includeWorkItemState: true }),
+    )
   },
 })
 
@@ -108,25 +266,18 @@ export const getTasksByDeal = query({
 export const getWorkItemMetadataByWorkItemId = query({
   args: { workItemId: v.id('tasquencerWorkItems') },
   handler: async (ctx, args) => {
-    // TODO: Implement once work item metadata table exists (PRIORITY 1.2)
-    // await requirePsaStaffMember(ctx)
-    // const metadata = await ctx.db
-    //   .query('dealToDeliveryWorkItems')
-    //   .withIndex('by_workItemId', (q) => q.eq('workItemId', args.workItemId))
-    //   .first()
-    // if (!metadata) return null
-    // ...
+    await requirePsaStaffMember(ctx)
 
-    // For now, just return the core work item data
+    const metadata = await DealToDeliveryWorkItemHelpers.getWorkItemMetadata(
+      ctx.db,
+      args.workItemId,
+    )
+    if (!metadata) return null
+
     const workItem = await ctx.db.get(args.workItemId)
-    if (!workItem) return null
 
-    return {
-      workItemId: args.workItemId,
-      workflowId: workItem.parent.workflowId,
-      name: workItem.name,
-      state: workItem.state,
-      // Additional metadata will be added once schema is implemented
-    }
+    return mapWorkItemToResponse(metadata, workItem, {
+      includeWorkItemState: true,
+    })
   },
 })
