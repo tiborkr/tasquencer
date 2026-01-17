@@ -10,7 +10,7 @@ import { Builder } from "../../../tasquencer";
 import { z } from "zod";
 import { zid } from "convex-helpers/server/zod4";
 import { startAndClaimWorkItem, cleanupWorkItemOnCancel } from "./helpers";
-import { initializeDealWorkItemAuth } from "./helpersAuth";
+import { initializeDealWorkItemAuth, initializeWorkItemWithProjectAuth } from "./helpersAuth";
 import { authService } from "../../../authorization";
 import { getProject } from "../db/projects";
 import { getUser } from "../db/users";
@@ -167,5 +167,10 @@ export const reviewBookingsWorkItem = Builder.workItem("reviewBookings")
 
 /**
  * The reviewBookings task.
+ * The onEnabled hook automatically initializes the work item with project context.
  */
-export const reviewBookingsTask = Builder.task(reviewBookingsWorkItem);
+export const reviewBookingsTask = Builder.task(reviewBookingsWorkItem).withActivities({
+  onEnabled: async ({ workItem, mutationCtx, parent }) => {
+    await initializeWorkItemWithProjectAuth(mutationCtx, parent.workflow, workItem);
+  },
+});

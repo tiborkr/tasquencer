@@ -10,7 +10,7 @@ import { Builder } from "../../../tasquencer";
 import { z } from "zod";
 import { zid } from "convex-helpers/server/zod4";
 import { startAndClaimWorkItem, cleanupWorkItemOnCancel } from "./helpers";
-import { initializeDealWorkItemAuth } from "./helpersAuth";
+import { initializeDealWorkItemAuth, initializeWorkItemWithProjectAuth } from "./helpersAuth";
 import { authService } from "../../../authorization";
 import { getProject } from "../db/projects";
 import { getUser } from "../db/users";
@@ -113,7 +113,12 @@ export const recordPlannedTimeOffWorkItem = Builder.workItem(
 
 /**
  * The recordPlannedTimeOff task.
+ * The onEnabled hook automatically initializes the work item with project context.
  */
 export const recordPlannedTimeOffTask = Builder.task(
   recordPlannedTimeOffWorkItem
-);
+).withActivities({
+  onEnabled: async ({ workItem, mutationCtx, parent }) => {
+    await initializeWorkItemWithProjectAuth(mutationCtx, parent.workflow, workItem);
+  },
+});

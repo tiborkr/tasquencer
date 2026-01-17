@@ -11,7 +11,7 @@ import { Builder } from "../../../tasquencer";
 import { z } from "zod";
 import { zid } from "convex-helpers/server/zod4";
 import { cleanupWorkItemOnCancel } from "./helpers";
-import { initializeDealWorkItemAuth } from "./helpersAuth";
+import { initializeDealWorkItemAuth, initializeWorkItemWithProjectAuth } from "./helpersAuth";
 import { authService } from "../../../authorization";
 import { getProject } from "../db/projects";
 import { getBooking } from "../db/bookings";
@@ -107,7 +107,12 @@ export const checkConfirmationNeededWorkItem = Builder.workItem(
 
 /**
  * The checkConfirmationNeeded task.
+ * The onEnabled hook automatically initializes the work item with project context.
  */
 export const checkConfirmationNeededTask = Builder.task(
   checkConfirmationNeededWorkItem
-);
+).withActivities({
+  onEnabled: async ({ workItem, mutationCtx, parent }) => {
+    await initializeWorkItemWithProjectAuth(mutationCtx, parent.workflow, workItem);
+  },
+});

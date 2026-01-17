@@ -10,7 +10,7 @@ import { Builder } from "../../../tasquencer";
 import { z } from "zod";
 import { zid } from "convex-helpers/server/zod4";
 import { startAndClaimWorkItem, cleanupWorkItemOnCancel } from "./helpers";
-import { initializeDealWorkItemAuth } from "./helpersAuth";
+import { initializeDealWorkItemAuth, initializeWorkItemWithProjectAuth } from "./helpersAuth";
 import { authService } from "../../../authorization";
 import { getProject, updateProjectStatus } from "../db/projects";
 import { getBooking, updateBookingType } from "../db/bookings";
@@ -136,5 +136,10 @@ export const confirmBookingsWorkItem = Builder.workItem("confirmBookings")
 
 /**
  * The confirmBookings task.
+ * The onEnabled hook automatically initializes the work item with project context.
  */
-export const confirmBookingsTask = Builder.task(confirmBookingsWorkItem);
+export const confirmBookingsTask = Builder.task(confirmBookingsWorkItem).withActivities({
+  onEnabled: async ({ workItem, mutationCtx, parent }) => {
+    await initializeWorkItemWithProjectAuth(mutationCtx, parent.workflow, workItem);
+  },
+});
