@@ -9,14 +9,54 @@ import { assertDealExists } from '../exceptions'
 
 const handleDealLostTask = Builder.dummyTask()
 
+/**
+ * Composite tasks require onEnabled activities to initialize their child workflows.
+ * Without this, the child workflow will never be created when the task is enabled.
+ */
+const salesCompositeTask = Builder.compositeTask(salesPhaseWorkflow)
+  .withSplitType('xor')
+  .withActivities({
+    onEnabled: async ({ workflow }) => {
+      await workflow.initialize()
+    },
+  })
+
+const planningCompositeTask = Builder.compositeTask(planningPhaseWorkflow)
+  .withActivities({
+    onEnabled: async ({ workflow }) => {
+      await workflow.initialize()
+    },
+  })
+
+const executionCompositeTask = Builder.compositeTask(executionPhaseWorkflow)
+  .withActivities({
+    onEnabled: async ({ workflow }) => {
+      await workflow.initialize()
+    },
+  })
+
+const billingCompositeTask = Builder.compositeTask(billingPhaseWorkflow)
+  .withActivities({
+    onEnabled: async ({ workflow }) => {
+      await workflow.initialize()
+    },
+  })
+
+const closeCompositeTask = Builder.compositeTask(closePhaseWorkflow)
+  .withActivities({
+    onEnabled: async ({ workflow }) => {
+      await workflow.initialize()
+    },
+  })
+
 export const dealToDeliveryWorkflow = Builder.workflow('dealToDelivery')
   .startCondition('start')
   .endCondition('end')
-  .compositeTask('sales', Builder.compositeTask(salesPhaseWorkflow).withSplitType('xor'))
-  .compositeTask('planning', Builder.compositeTask(planningPhaseWorkflow))
-  .compositeTask('execution', Builder.compositeTask(executionPhaseWorkflow))
-  .compositeTask('billing', Builder.compositeTask(billingPhaseWorkflow))
-  .compositeTask('close', Builder.compositeTask(closePhaseWorkflow))
+  .compositeTask('sales', salesCompositeTask)
+  .compositeTask('planning', planningCompositeTask)
+  .compositeTask('execution', executionCompositeTask)
+  .compositeTask('billing', billingCompositeTask)
+  .compositeTask('close', closeCompositeTask)
   .dummyTask('handleDealLost', handleDealLostTask)
   .connectCondition('start', (to) => to.task('sales'))
   .connectTask('sales', (to) =>

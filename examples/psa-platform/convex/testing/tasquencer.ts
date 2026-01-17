@@ -2,17 +2,29 @@
  * Internal Workflow Testing Utilities
  *
  * This file provides internal testing APIs for workflow testing in the PSA platform.
- * It mirrors the pattern used in packages/tasquencer/convex/testing/tasquencer.ts
+ * It re-exports the internal workflow mutations from the dealToDelivery API and
+ * provides additional query utilities for test assertions.
  *
  * Usage:
- * - Register version managers before tests using internalVersionManagerRegistry
- * - Use the internal mutations/queries to drive workflow execution in tests
- * - Unregister version managers after tests
+ * - Use the internal mutations to drive workflow execution in tests
+ * - Use the queries to assert workflow state
  */
 
 import { v } from 'convex/values'
 import { internalQuery } from '../_generated/server'
 import { helpers } from '../tasquencer'
+
+// =============================================================================
+// Re-export Internal Workflow Mutations for Testing
+// =============================================================================
+
+export {
+  internalInitializeRootWorkflow as initializeRootWorkflow,
+  internalStartWorkItem as startWorkItem,
+  internalCompleteWorkItem as completeWorkItem,
+  internalFailWorkItem as failWorkItem,
+  internalCancelWorkItem as cancelWorkItem,
+} from '../workflows/dealToDelivery/api/workflow'
 
 // =============================================================================
 // Workflow Queries

@@ -407,3 +407,95 @@ it('setupAuthenticatedUser creates user with org', async () => {
   expect(userId).toBeDefined()
   expect(organizationId).toBeDefined()
 })
+
+// =============================================================================
+// Typed Payload Extractor Tests
+// =============================================================================
+import { describe } from 'vitest'
+import {
+  extractTypedPayload,
+  tryExtractTypedPayload,
+} from '../workflows/dealToDelivery/workItems/helpers'
+import { DataIntegrityError } from '@repo/tasquencer'
+
+describe('Typed Payload Extractors', () => {
+  it('extractTypedPayload extracts and narrows payload type correctly', () => {
+    const metadata = {
+      _id: 'test-id' as Id<'dealToDeliveryWorkItems'>,
+      _creationTime: Date.now(),
+      workItemId: 'wi-1' as Id<'tasquencerWorkItems'>,
+      workflowName: 'dealToDelivery',
+      offer: { type: 'human' as const, requiredScope: 'test:scope' },
+      aggregateTableId: 'deal-1' as Id<'deals'>,
+      payload: {
+        type: 'qualifyLead' as const,
+        taskName: 'Qualify Lead',
+        priority: 'normal' as const,
+      },
+    }
+
+    const payload = extractTypedPayload(metadata, 'qualifyLead')
+    expect(payload.type).toBe('qualifyLead')
+    expect(payload.taskName).toBe('Qualify Lead')
+    expect(payload.priority).toBe('normal')
+  })
+
+  it('extractTypedPayload throws DataIntegrityError on type mismatch', () => {
+    const metadata = {
+      _id: 'test-id' as Id<'dealToDeliveryWorkItems'>,
+      _creationTime: Date.now(),
+      workItemId: 'wi-1' as Id<'tasquencerWorkItems'>,
+      workflowName: 'dealToDelivery',
+      offer: { type: 'human' as const, requiredScope: 'test:scope' },
+      aggregateTableId: 'deal-1' as Id<'deals'>,
+      payload: {
+        type: 'qualifyLead' as const,
+        taskName: 'Qualify Lead',
+        priority: 'normal' as const,
+      },
+    }
+
+    expect(() => extractTypedPayload(metadata, 'createEstimate')).toThrow(
+      DataIntegrityError
+    )
+  })
+
+  it('tryExtractTypedPayload returns payload on match', () => {
+    const metadata = {
+      _id: 'test-id' as Id<'dealToDeliveryWorkItems'>,
+      _creationTime: Date.now(),
+      workItemId: 'wi-1' as Id<'tasquencerWorkItems'>,
+      workflowName: 'dealToDelivery',
+      offer: { type: 'human' as const, requiredScope: 'test:scope' },
+      aggregateTableId: 'deal-1' as Id<'deals'>,
+      payload: {
+        type: 'createProposal' as const,
+        taskName: 'Create Proposal',
+        priority: 'high' as const,
+      },
+    }
+
+    const payload = tryExtractTypedPayload(metadata, 'createProposal')
+    expect(payload).not.toBeNull()
+    expect(payload?.type).toBe('createProposal')
+  })
+
+  it('tryExtractTypedPayload returns null on mismatch', () => {
+    const metadata = {
+      _id: 'test-id' as Id<'dealToDeliveryWorkItems'>,
+      _creationTime: Date.now(),
+      workItemId: 'wi-1' as Id<'tasquencerWorkItems'>,
+      workflowName: 'dealToDelivery',
+      offer: { type: 'human' as const, requiredScope: 'test:scope' },
+      aggregateTableId: 'deal-1' as Id<'deals'>,
+      payload: {
+        type: 'createProposal' as const,
+        taskName: 'Create Proposal',
+        priority: 'high' as const,
+      },
+    }
+
+    const payload = tryExtractTypedPayload(metadata, 'sendProposal')
+    expect(payload).toBeNull()
+  })
+})
