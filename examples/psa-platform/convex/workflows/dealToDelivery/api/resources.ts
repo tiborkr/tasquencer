@@ -117,6 +117,26 @@ export const getTeamAvailability = query({
           ? (bookedHours / totalAvailableHours) * 100
           : 0
 
+        // Enrich bookings with project names
+        const enrichedBookings = await Promise.all(
+          bookings.map(async (booking) => {
+            let projectName: string | undefined
+            if (booking.projectId) {
+              const project = await getProject(ctx.db, booking.projectId)
+              projectName = project?.name
+            }
+            return {
+              _id: booking._id,
+              projectId: booking.projectId,
+              projectName,
+              type: booking.type,
+              startDate: booking.startDate,
+              endDate: booking.endDate,
+              hoursPerDay: booking.hoursPerDay,
+            }
+          })
+        )
+
         return {
           user: {
             _id: user._id,
@@ -135,14 +155,7 @@ export const getTeamAvailability = query({
             utilization: Math.round(utilization * 10) / 10, // Round to 1 decimal
             isOverallocated: utilization > 100,
           },
-          bookings: bookings.map((booking) => ({
-            _id: booking._id,
-            projectId: booking.projectId,
-            type: booking.type,
-            startDate: booking.startDate,
-            endDate: booking.endDate,
-            hoursPerDay: booking.hoursPerDay,
-          })),
+          bookings: enrichedBookings,
         }
       })
     )

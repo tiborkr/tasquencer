@@ -14,6 +14,7 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppTimesheetRouteImport } from './routes/_app/timesheet'
 import { Route as AppTasksRouteImport } from './routes/_app/tasks'
+import { Route as AppResourcesRouteImport } from './routes/_app/resources'
 import { Route as AppProjectsRouteImport } from './routes/_app/projects'
 import { Route as AppHomepageRouteImport } from './routes/_app/homepage'
 import { Route as AppExpensesRouteImport } from './routes/_app/expenses'
@@ -23,6 +24,7 @@ import { Route as AppApprovalsRouteImport } from './routes/_app/approvals'
 import { Route as AppAdminRouteImport } from './routes/_app/admin'
 import { Route as AppTimesheetIndexRouteImport } from './routes/_app/timesheet/index'
 import { Route as AppTasksIndexRouteImport } from './routes/_app/tasks/index'
+import { Route as AppResourcesIndexRouteImport } from './routes/_app/resources/index'
 import { Route as AppProjectsIndexRouteImport } from './routes/_app/projects/index'
 import { Route as AppExpensesIndexRouteImport } from './routes/_app/expenses/index'
 import { Route as AppDealsIndexRouteImport } from './routes/_app/deals/index'
@@ -77,6 +79,11 @@ const AppTasksRoute = AppTasksRouteImport.update({
   path: '/tasks',
   getParentRoute: () => AppRoute,
 } as any)
+const AppResourcesRoute = AppResourcesRouteImport.update({
+  id: '/resources',
+  path: '/resources',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppProjectsRoute = AppProjectsRouteImport.update({
   id: '/projects',
   path: '/projects',
@@ -121,6 +128,11 @@ const AppTasksIndexRoute = AppTasksIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AppTasksRoute,
+} as any)
+const AppResourcesIndexRoute = AppResourcesIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppResourcesRoute,
 } as any)
 const AppProjectsIndexRoute = AppProjectsIndexRouteImport.update({
   id: '/',
@@ -282,6 +294,7 @@ export interface FileRoutesByFullPath {
   '/expenses': typeof AppExpensesRouteWithChildren
   '/homepage': typeof AppHomepageRoute
   '/projects': typeof AppProjectsRouteWithChildren
+  '/resources': typeof AppResourcesRouteWithChildren
   '/tasks': typeof AppTasksRouteWithChildren
   '/timesheet': typeof AppTimesheetRouteWithChildren
   '/admin/groups': typeof AppAdminGroupsRouteWithChildren
@@ -298,6 +311,7 @@ export interface FileRoutesByFullPath {
   '/deals/': typeof AppDealsIndexRoute
   '/expenses/': typeof AppExpensesIndexRoute
   '/projects/': typeof AppProjectsIndexRoute
+  '/resources/': typeof AppResourcesIndexRoute
   '/tasks/': typeof AppTasksIndexRoute
   '/timesheet/': typeof AppTimesheetIndexRoute
   '/admin/groups/$groupId': typeof AppAdminGroupsGroupIdRoute
@@ -331,6 +345,7 @@ export interface FileRoutesByTo {
   '/deals': typeof AppDealsIndexRoute
   '/expenses': typeof AppExpensesIndexRoute
   '/projects': typeof AppProjectsIndexRoute
+  '/resources': typeof AppResourcesIndexRoute
   '/tasks': typeof AppTasksIndexRoute
   '/timesheet': typeof AppTimesheetIndexRoute
   '/admin/groups/$groupId': typeof AppAdminGroupsGroupIdRoute
@@ -361,6 +376,7 @@ export interface FileRoutesById {
   '/_app/expenses': typeof AppExpensesRouteWithChildren
   '/_app/homepage': typeof AppHomepageRoute
   '/_app/projects': typeof AppProjectsRouteWithChildren
+  '/_app/resources': typeof AppResourcesRouteWithChildren
   '/_app/tasks': typeof AppTasksRouteWithChildren
   '/_app/timesheet': typeof AppTimesheetRouteWithChildren
   '/_app/admin/groups': typeof AppAdminGroupsRouteWithChildren
@@ -377,6 +393,7 @@ export interface FileRoutesById {
   '/_app/deals/': typeof AppDealsIndexRoute
   '/_app/expenses/': typeof AppExpensesIndexRoute
   '/_app/projects/': typeof AppProjectsIndexRoute
+  '/_app/resources/': typeof AppResourcesIndexRoute
   '/_app/tasks/': typeof AppTasksIndexRoute
   '/_app/timesheet/': typeof AppTimesheetIndexRoute
   '/_app/admin/groups/$groupId': typeof AppAdminGroupsGroupIdRoute
@@ -407,6 +424,7 @@ export interface FileRouteTypes {
     | '/expenses'
     | '/homepage'
     | '/projects'
+    | '/resources'
     | '/tasks'
     | '/timesheet'
     | '/admin/groups'
@@ -423,6 +441,7 @@ export interface FileRouteTypes {
     | '/deals/'
     | '/expenses/'
     | '/projects/'
+    | '/resources/'
     | '/tasks/'
     | '/timesheet/'
     | '/admin/groups/$groupId'
@@ -456,6 +475,7 @@ export interface FileRouteTypes {
     | '/deals'
     | '/expenses'
     | '/projects'
+    | '/resources'
     | '/tasks'
     | '/timesheet'
     | '/admin/groups/$groupId'
@@ -485,6 +505,7 @@ export interface FileRouteTypes {
     | '/_app/expenses'
     | '/_app/homepage'
     | '/_app/projects'
+    | '/_app/resources'
     | '/_app/tasks'
     | '/_app/timesheet'
     | '/_app/admin/groups'
@@ -501,6 +522,7 @@ export interface FileRouteTypes {
     | '/_app/deals/'
     | '/_app/expenses/'
     | '/_app/projects/'
+    | '/_app/resources/'
     | '/_app/tasks/'
     | '/_app/timesheet/'
     | '/_app/admin/groups/$groupId'
@@ -562,6 +584,13 @@ declare module '@tanstack/react-router' {
       path: '/tasks'
       fullPath: '/tasks'
       preLoaderRoute: typeof AppTasksRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/resources': {
+      id: '/_app/resources'
+      path: '/resources'
+      fullPath: '/resources'
+      preLoaderRoute: typeof AppResourcesRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/projects': {
@@ -626,6 +655,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/tasks/'
       preLoaderRoute: typeof AppTasksIndexRouteImport
       parentRoute: typeof AppTasksRoute
+    }
+    '/_app/resources/': {
+      id: '/_app/resources/'
+      path: '/'
+      fullPath: '/resources/'
+      preLoaderRoute: typeof AppResourcesIndexRouteImport
+      parentRoute: typeof AppResourcesRoute
     }
     '/_app/projects/': {
       id: '/_app/projects/'
@@ -1008,6 +1044,18 @@ const AppProjectsRouteWithChildren = AppProjectsRoute._addFileChildren(
   AppProjectsRouteChildren,
 )
 
+interface AppResourcesRouteChildren {
+  AppResourcesIndexRoute: typeof AppResourcesIndexRoute
+}
+
+const AppResourcesRouteChildren: AppResourcesRouteChildren = {
+  AppResourcesIndexRoute: AppResourcesIndexRoute,
+}
+
+const AppResourcesRouteWithChildren = AppResourcesRoute._addFileChildren(
+  AppResourcesRouteChildren,
+)
+
 interface AppTasksRouteChildren {
   AppTasksIndexRoute: typeof AppTasksIndexRoute
 }
@@ -1040,6 +1088,7 @@ interface AppRouteChildren {
   AppExpensesRoute: typeof AppExpensesRouteWithChildren
   AppHomepageRoute: typeof AppHomepageRoute
   AppProjectsRoute: typeof AppProjectsRouteWithChildren
+  AppResourcesRoute: typeof AppResourcesRouteWithChildren
   AppTasksRoute: typeof AppTasksRouteWithChildren
   AppTimesheetRoute: typeof AppTimesheetRouteWithChildren
 }
@@ -1052,6 +1101,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppExpensesRoute: AppExpensesRouteWithChildren,
   AppHomepageRoute: AppHomepageRoute,
   AppProjectsRoute: AppProjectsRouteWithChildren,
+  AppResourcesRoute: AppResourcesRouteWithChildren,
   AppTasksRoute: AppTasksRouteWithChildren,
   AppTimesheetRoute: AppTimesheetRouteWithChildren,
 }
