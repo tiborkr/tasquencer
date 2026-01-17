@@ -12,7 +12,10 @@
 
 import { v } from 'convex/values'
 import { internalQuery } from '../_generated/server'
-import { helpers } from '../tasquencer'
+import {
+  getDealByWorkflowId as getDealByWorkflowIdDomain,
+  getProjectByWorkflowId as getProjectByWorkflowIdDomain,
+} from '../workflows/dealToDelivery/db'
 
 // =============================================================================
 // Re-export Internal Workflow Mutations for Testing
@@ -210,13 +213,8 @@ export const getDealByWorkflowId = internalQuery({
     workflowId: v.id('tasquencerWorkflows'),
   },
   handler: async (ctx, args) => {
-    // Get the root workflow ID
-    const rootWorkflowId = await helpers.getRootWorkflowId(ctx.db, args.workflowId)
-
-    return await ctx.db
-      .query('deals')
-      .withIndex('by_workflow_id', (q) => q.eq('workflowId', rootWorkflowId))
-      .unique()
+    // Delegate to domain function per TENET-DOMAIN-BOUNDARY
+    return await getDealByWorkflowIdDomain(ctx.db, args.workflowId)
   },
 })
 
@@ -225,12 +223,7 @@ export const getProjectByWorkflowId = internalQuery({
     workflowId: v.id('tasquencerWorkflows'),
   },
   handler: async (ctx, args) => {
-    // Get the root workflow ID
-    const rootWorkflowId = await helpers.getRootWorkflowId(ctx.db, args.workflowId)
-
-    return await ctx.db
-      .query('projects')
-      .withIndex('by_workflow_id', (q) => q.eq('workflowId', rootWorkflowId))
-      .unique()
+    // Delegate to domain function per TENET-DOMAIN-BOUNDARY
+    return await getProjectByWorkflowIdDomain(ctx.db, args.workflowId)
   },
 })
