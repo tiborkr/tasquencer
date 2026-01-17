@@ -604,6 +604,11 @@ const dealToDeliveryWorkItems = defineWorkItemMetadataTable("deals").withPayload
       type: v.literal("monitorBudgetBurn"),
       taskName: v.string(),
       priority: workItemPriority,
+      // Budget burn calculation result (set on complete)
+      budgetOk: v.optional(v.boolean()), // true if burnRate <= 90%
+      burnRate: v.optional(v.number()), // 0-1 percentage
+      totalCost: v.optional(v.number()), // In cents
+      budgetRemaining: v.optional(v.number()), // In cents
     }),
     v.object({
       type: v.literal("pauseWork"),

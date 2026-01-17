@@ -12,6 +12,7 @@ import { conditionalExecutionWorkflow } from './conditionalExecution.workflow'
 import { getProjectByWorkflowId } from '../db/projects'
 import { listChangeOrdersByProject } from '../db/changeOrders'
 import { assertProjectExists } from '../exceptions'
+import { DealToDeliveryWorkItemHelpers } from '../helpers'
 const finalizeTimeTrackingTask = Builder.dummyTask()
 
 const finalizeExpenseTrackingTask = Builder.dummyTask()
@@ -55,14 +56,30 @@ export const executionPhaseWorkflow = Builder.workflow('executionPhase')
     to
       .task('completeExecution')
       .task('pauseWork')
-      .route(async ({ mutationCtx, route, parent }) => {
-      // Check budget burn - if exceeded, pause work
-      const project = await getProjectByWorkflowId(mutationCtx.db, parent.workflow.id)
-      assertProjectExists(project, { workflowId: parent.workflow.id })
+      .route(async ({ mutationCtx, route, workItem }) => {
+      // Get the budget burn result from work item metadata
+      // The monitorBudgetBurn work item calculates burn and stores budgetOk in metadata
+      const workItemIds = await workItem.getAllWorkItemIds()
 
-      // TODO: Calculate actual burn from time entries + expenses using getBudgetByProjectId
-      // For now, always complete (no pause). Budget monitoring should calculate actual spend.
-      // Reference: .review/recipes/psa-platform/specs/06-workflow-execution-phase.md
+      for (const workItemId of workItemIds) {
+        const metadata = await DealToDeliveryWorkItemHelpers.getWorkItemMetadata(
+          mutationCtx.db,
+          workItemId
+        )
+
+        if (metadata?.payload.type === 'monitorBudgetBurn' && metadata.payload.budgetOk !== undefined) {
+          if (metadata.payload.budgetOk) {
+            // Budget OK (burn <= 90%) - continue to completion
+            return route.toTask('completeExecution')
+          } else {
+            // Budget overrun (burn > 90%) - pause work and request change order
+            return route.toTask('pauseWork')
+          }
+        }
+      }
+
+      // Fallback: if no budget data found, default to completeExecution
+      // This should not happen in normal operation
       return route.toTask('completeExecution')
     })
   )

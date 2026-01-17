@@ -13,7 +13,7 @@ import { Builder } from "../../../tasquencer";
 import { z } from "zod";
 import { zid } from "convex-helpers/server/zod4";
 import { startAndClaimWorkItem, cleanupWorkItemOnCancel } from "./helpers";
-import { initializeDealWorkItemAuth } from "./helpersAuth";
+import { initializeDealWorkItemAuth, updateWorkItemMetadataPayload } from "./helpersAuth";
 import { authService } from "../../../authorization";
 import { getProject } from "../db/projects";
 import { getBudget } from "../db/budgets";
@@ -127,6 +127,18 @@ const monitorBudgetBurnWorkItemActions = authService.builders.workItemActions
           `(${totalCost} of ${budgetTotal} cents, ` +
           `${budgetRemaining} remaining, budgetOk: ${budgetOk})`
       );
+
+      // Store the budget burn result in work item metadata for routing
+      // The workflow router will read this to determine the next task (continue vs pause)
+      await updateWorkItemMetadataPayload(mutationCtx, workItem.id, {
+        type: "monitorBudgetBurn",
+        taskName: "Monitor Budget Burn",
+        priority: "normal",
+        budgetOk,
+        burnRate,
+        totalCost,
+        budgetRemaining,
+      });
 
       await workItem.complete();
     }
