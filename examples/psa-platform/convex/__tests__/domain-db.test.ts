@@ -2233,6 +2233,7 @@ import {
   getLatestProposalForDeal,
   getNextProposalVersion,
   markProposalSent,
+  markProposalViewed,
   markProposalSigned,
   markProposalRejected,
 } from '../workflows/dealToDelivery/db/proposals'
@@ -2443,6 +2444,51 @@ describe('Proposals DB Functions', () => {
 
       expect(proposal?.status).toBe('Sent')
       expect(proposal?.sentAt).toBeDefined()
+    })
+  })
+
+  describe('markProposalViewed', () => {
+    it('should update proposal status to Viewed', async () => {
+      const t = setup()
+      const { orgId, userId, companyId, contactId } = await createBaseTestData(t)
+      const { id: dealId } = await createTestDeal(t, orgId, companyId, userId, contactId)
+      const { id: proposalId } = await createTestProposal(t, orgId, dealId, { status: 'Sent' })
+
+      await t.run(async (ctx) => {
+        await markProposalViewed(ctx.db, proposalId)
+      })
+
+      const proposal = await t.run(async (ctx) => {
+        return await getProposal(ctx.db, proposalId)
+      })
+
+      expect(proposal?.status).toBe('Viewed')
+      expect(proposal?.viewedAt).toBeDefined()
+    })
+
+    it('should be idempotent - does not update if already viewed', async () => {
+      const t = setup()
+      const { orgId, userId, companyId, contactId } = await createBaseTestData(t)
+      const { id: dealId } = await createTestDeal(t, orgId, companyId, userId, contactId)
+      // Create proposal with viewedAt already set
+      const existingViewedAt = Date.now() - 100000 // Set in the past
+      const { id: proposalId } = await createTestProposal(t, orgId, dealId, {
+        status: 'Viewed',
+        viewedAt: existingViewedAt,
+      })
+
+      // Call markProposalViewed on already-viewed proposal
+      await t.run(async (ctx) => {
+        await markProposalViewed(ctx.db, proposalId)
+      })
+
+      const proposal = await t.run(async (ctx) => {
+        return await getProposal(ctx.db, proposalId)
+      })
+
+      // viewedAt should remain unchanged (idempotent behavior)
+      expect(proposal?.viewedAt).toBe(existingViewedAt)
+      expect(proposal?.status).toBe('Viewed')
     })
   })
 
