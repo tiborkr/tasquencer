@@ -341,4 +341,284 @@ describe('Work Item API', () => {
       ).rejects.toThrow('Work item is not claimed')
     })
   })
+
+  /**
+   * TENET-ROUTING-DETERMINISM Tests
+   *
+   * These tests verify that getWorkItemByDealAndType and getWorkItemByProjectAndType
+   * select the most recently created work item when multiple of the same type exist.
+   * This is critical for looped workflows to avoid routing to stale work items.
+   */
+  describe('TENET-ROUTING-DETERMINISM: getWorkItemByDealAndType', () => {
+    it('selects the most recent work item when multiple of same type exist', async () => {
+      // Create base test entities
+      const { dealId } = await createTestEntities(
+        t,
+        authResult.organizationId,
+        authResult.userId
+      )
+
+      // Create workflow
+      const workflowId = await t.run(async (ctx) => {
+        return await ctx.db.insert('tasquencerWorkflows', {
+          name: 'dealToDelivery',
+          path: ['dealToDelivery'],
+          versionName: 'v1',
+          executionMode: 'normal',
+          realizedPath: ['dealToDelivery'],
+          state: 'started',
+        })
+      })
+
+      // Create task for work items
+      await t.run(async (ctx) => {
+        return await ctx.db.insert('tasquencerTasks', {
+          name: 'reviseProposal',
+          path: ['dealToDelivery', 'reviseProposal'],
+          versionName: 'v1',
+          executionMode: 'normal',
+          workflowId,
+          realizedPath: ['dealToDelivery', 'reviseProposal'],
+          state: 'enabled',
+          generation: 1,
+        })
+      })
+
+      // Create three work items of the same type with different creation times
+      // This simulates a looped workflow where reviseProposal runs multiple times
+      const workItemIds: Id<'tasquencerWorkItems'>[] = []
+
+      for (let i = 0; i < 3; i++) {
+        // Advance time to ensure different _creationTime
+        vi.advanceTimersByTime(1000)
+
+        const workItemId = await t.run(async (ctx) => {
+          return await ctx.db.insert('tasquencerWorkItems', {
+            name: 'reviseProposal',
+            path: ['dealToDelivery', 'reviseProposal', 'reviseProposal'],
+            versionName: 'v1',
+            realizedPath: ['dealToDelivery', 'reviseProposal', 'reviseProposal'],
+            state: 'initialized',
+            parent: {
+              workflowId,
+              taskName: 'reviseProposal',
+              taskGeneration: i + 1, // Different generations
+            },
+          })
+        })
+        workItemIds.push(workItemId)
+
+        await t.run(async (ctx) => {
+          return await ctx.db.insert('dealToDeliveryWorkItems', {
+            workItemId,
+            workflowName: 'dealToDelivery',
+            offer: {
+              type: 'human' as const,
+              requiredScope: 'dealToDelivery:deals:update',
+            },
+            aggregateTableId: dealId,
+            payload: {
+              type: 'reviseProposal' as const,
+              taskName: `Revise Proposal (iteration ${i + 1})`,
+              priority: 'normal' as const,
+            },
+          })
+        })
+      }
+
+      // The third work item should be the most recent (latest _creationTime)
+      const mostRecentWorkItemId = workItemIds[2]
+
+      // Query for the work item by deal and type
+      const result = await t.query(
+        api.workflows.dealToDelivery.api.workItems.getWorkItemByDealAndType,
+        { dealId, taskType: 'reviseProposal' }
+      )
+
+      // Should return the most recently created work item
+      expect(result).not.toBeNull()
+      expect(result!.workItemId).toBe(mostRecentWorkItemId)
+    })
+
+    it('returns null when no matching work items exist', async () => {
+      // Create base test entities (has qualifyLead, not reviseProposal)
+      const { dealId } = await createTestEntities(
+        t,
+        authResult.organizationId,
+        authResult.userId
+      )
+
+      const result = await t.query(
+        api.workflows.dealToDelivery.api.workItems.getWorkItemByDealAndType,
+        { dealId, taskType: 'reviseProposal' }
+      )
+
+      expect(result).toBeNull()
+    })
+  })
+
+  describe('TENET-ROUTING-DETERMINISM: getWorkItemByProjectAndType', () => {
+    it('selects the most recent work item when multiple of same type exist', async () => {
+      // Create base test entities including a project
+      const { dealId, companyId } = await createTestEntities(
+        t,
+        authResult.organizationId,
+        authResult.userId
+      )
+
+      // Create project linked to the deal
+      const projectId = await t.run(async (ctx) => {
+        return await ctx.db.insert('projects', {
+          organizationId: authResult.organizationId,
+          companyId,
+          dealId,
+          name: 'Test Project',
+          status: 'Active',
+          startDate: Date.now(),
+          createdAt: Date.now(),
+          managerId: authResult.userId,
+        })
+      })
+
+      // Create workflow
+      const workflowId = await t.run(async (ctx) => {
+        return await ctx.db.insert('tasquencerWorkflows', {
+          name: 'dealToDelivery',
+          path: ['dealToDelivery'],
+          versionName: 'v1',
+          executionMode: 'normal',
+          realizedPath: ['dealToDelivery'],
+          state: 'started',
+        })
+      })
+
+      // Create task for work items
+      await t.run(async (ctx) => {
+        return await ctx.db.insert('tasquencerTasks', {
+          name: 'setBudget',
+          path: ['dealToDelivery', 'setBudget'],
+          versionName: 'v1',
+          executionMode: 'normal',
+          workflowId,
+          realizedPath: ['dealToDelivery', 'setBudget'],
+          state: 'enabled',
+          generation: 1,
+        })
+      })
+
+      // Create three work items of the same type with different creation times
+      // This simulates a looped workflow where setBudget might run multiple times
+      const workItemIds: Id<'tasquencerWorkItems'>[] = []
+
+      for (let i = 0; i < 3; i++) {
+        // Advance time to ensure different _creationTime
+        vi.advanceTimersByTime(1000)
+
+        const workItemId = await t.run(async (ctx) => {
+          return await ctx.db.insert('tasquencerWorkItems', {
+            name: 'setBudget',
+            path: ['dealToDelivery', 'setBudget', 'setBudget'],
+            versionName: 'v1',
+            realizedPath: ['dealToDelivery', 'setBudget', 'setBudget'],
+            state: 'initialized',
+            parent: {
+              workflowId,
+              taskName: 'setBudget',
+              taskGeneration: i + 1,
+            },
+          })
+        })
+        workItemIds.push(workItemId)
+
+        await t.run(async (ctx) => {
+          return await ctx.db.insert('dealToDeliveryWorkItems', {
+            workItemId,
+            workflowName: 'dealToDelivery',
+            offer: {
+              type: 'human' as const,
+              requiredScope: 'dealToDelivery:projects:budget',
+            },
+            aggregateTableId: dealId, // Work items are keyed by deal
+            payload: {
+              type: 'setBudget' as const,
+              taskName: `Set Budget (iteration ${i + 1})`,
+              priority: 'normal' as const,
+            },
+          })
+        })
+      }
+
+      // The third work item should be the most recent (latest _creationTime)
+      const mostRecentWorkItemId = workItemIds[2]
+
+      // Query for the work item by project and type
+      const result = await t.query(
+        api.workflows.dealToDelivery.api.workItems.getWorkItemByProjectAndType,
+        { projectId, taskType: 'setBudget' }
+      )
+
+      // Should return the most recently created work item
+      expect(result).not.toBeNull()
+      expect(result!.workItemId).toBe(mostRecentWorkItemId)
+    })
+
+    it('returns null for project without deal', async () => {
+      // Create company for orphan project
+      const { companyId } = await createTestEntities(
+        t,
+        authResult.organizationId,
+        authResult.userId
+      )
+
+      // Create project without a dealId
+      const projectId = await t.run(async (ctx) => {
+        return await ctx.db.insert('projects', {
+          organizationId: authResult.organizationId,
+          companyId,
+          name: 'Orphan Project',
+          status: 'Active',
+          startDate: Date.now(),
+          createdAt: Date.now(),
+          managerId: authResult.userId,
+        })
+      })
+
+      const result = await t.query(
+        api.workflows.dealToDelivery.api.workItems.getWorkItemByProjectAndType,
+        { projectId, taskType: 'setBudget' }
+      )
+
+      expect(result).toBeNull()
+    })
+
+    it('returns null when no matching work items exist', async () => {
+      // Create entities with a different work item type
+      const { dealId, companyId } = await createTestEntities(
+        t,
+        authResult.organizationId,
+        authResult.userId
+      )
+
+      // Create project linked to the deal
+      const projectId = await t.run(async (ctx) => {
+        return await ctx.db.insert('projects', {
+          organizationId: authResult.organizationId,
+          companyId,
+          dealId,
+          name: 'Test Project',
+          status: 'Active',
+          startDate: Date.now(),
+          createdAt: Date.now(),
+          managerId: authResult.userId,
+        })
+      })
+
+      const result = await t.query(
+        api.workflows.dealToDelivery.api.workItems.getWorkItemByProjectAndType,
+        { projectId, taskType: 'closeProject' }
+      )
+
+      expect(result).toBeNull()
+    })
+  })
 })

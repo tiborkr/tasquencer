@@ -373,6 +373,10 @@ export const canClaimWorkItem = query({
  * TENET-UI-DOMAIN: Supports domain-first UI navigation while keeping
  * workflow-driven execution via workItemId.
  *
+ * TENET-ROUTING-DETERMINISM: When multiple work items of the same type exist
+ * (e.g., in looped workflows), this selects the most recently created one
+ * to avoid routing to stale work items.
+ *
  * @param args.dealId - The deal ID (domain aggregate)
  * @param args.taskType - The work item type (e.g., "qualifyLead", "setBudget")
  * @returns Work item metadata if found and active, null otherwise
@@ -388,11 +392,17 @@ export const getWorkItemByDealAndType = query({
     // Get all active human work items for this deal
     const activeItems = await listActiveHumanWorkItemsByDeal(ctx.db, args.dealId)
 
-    // Find the one matching the requested task type
-    const matchingItem = activeItems.find(({ metadata }) => {
-      const payload = metadata.payload as { type?: string }
-      return payload.type === args.taskType
-    })
+    // TENET-ROUTING-DETERMINISM: Filter matching items and sort by _creationTime
+    // to select the most recently created one (for looped workflows with multiple
+    // work items of the same type)
+    const matchingItems = activeItems
+      .filter(({ metadata }) => {
+        const payload = metadata.payload as { type?: string }
+        return payload.type === args.taskType
+      })
+      .sort((a, b) => b.metadata._creationTime - a.metadata._creationTime)
+
+    const matchingItem = matchingItems[0]
 
     if (!matchingItem) return null
 
@@ -407,6 +417,10 @@ export const getWorkItemByDealAndType = query({
  * Projects are linked to deals; this looks up the deal first then finds the task.
  *
  * TENET-UI-DOMAIN: Supports domain-first UI navigation for project-scoped tasks.
+ *
+ * TENET-ROUTING-DETERMINISM: When multiple work items of the same type exist
+ * (e.g., in looped workflows), this selects the most recently created one
+ * to avoid routing to stale work items.
  *
  * @param args.projectId - The project ID (domain aggregate)
  * @param args.taskType - The work item type (e.g., "setBudget", "closeProject")
@@ -429,11 +443,17 @@ export const getWorkItemByProjectAndType = query({
     // Get all active human work items for this project's deal
     const activeItems = await listActiveHumanWorkItemsByDeal(ctx.db, project.dealId)
 
-    // Find the one matching the requested task type
-    const matchingItem = activeItems.find(({ metadata }) => {
-      const payload = metadata.payload as { type?: string }
-      return payload.type === args.taskType
-    })
+    // TENET-ROUTING-DETERMINISM: Filter matching items and sort by _creationTime
+    // to select the most recently created one (for looped workflows with multiple
+    // work items of the same type)
+    const matchingItems = activeItems
+      .filter(({ metadata }) => {
+        const payload = metadata.payload as { type?: string }
+        return payload.type === args.taskType
+      })
+      .sort((a, b) => b.metadata._creationTime - a.metadata._creationTime)
+
+    const matchingItem = matchingItems[0]
 
     if (!matchingItem) return null
 
