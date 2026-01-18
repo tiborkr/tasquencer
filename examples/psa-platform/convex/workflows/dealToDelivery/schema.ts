@@ -403,6 +403,10 @@ const invoices = defineTable({
   paidAt: v.optional(v.number()),
   finalizedAt: v.optional(v.number()),
   finalizedBy: v.optional(v.id("users")),
+  // Void fields - per spec 11 line 444: "Void not delete" for finalized invoices
+  voidedAt: v.optional(v.number()),
+  voidedBy: v.optional(v.id("users")),
+  voidReason: v.optional(v.string()),
   createdAt: v.number(),
 })
   .index("by_project", ["projectId"])

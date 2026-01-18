@@ -1236,4 +1236,263 @@ describe('Invoices API', () => {
       expect(result.paymentId).toBeDefined()
     })
   })
+
+  // =============================================================================
+  // voidInvoice Tests
+  // Reference: spec 11-workflow-invoice-generation.md line 444: "Void not delete"
+  // =============================================================================
+
+  describe('voidInvoice', () => {
+    it('should void a Finalized invoice', async () => {
+      const t = setup()
+      const { organizationId: orgId, userId } = await setupUserWithRole(
+        t,
+        'staff-user',
+        STAFF_SCOPES
+      )
+      const { companyId, projectId } = await setupInvoicePrerequisites(t, orgId, userId)
+
+      const invoiceId = await createInvoiceDirectly(t, orgId, projectId, companyId, {
+        status: 'Finalized',
+      })
+
+      const result = await t.mutation(api.workflows.dealToDelivery.api.invoices.voidInvoice, {
+        invoiceId,
+        reason: 'Client requested cancellation',
+      })
+
+      expect(result.voided).toBe(true)
+      expect(result.voidedAt).toBeDefined()
+      expect(result.canVoid).toBe(true)
+
+      // Verify invoice status is now Void
+      const invoice = await t.run(async (ctx) => ctx.db.get(invoiceId))
+      expect(invoice?.status).toBe('Void')
+      expect(invoice?.voidReason).toBe('Client requested cancellation')
+    })
+
+    it('should void a Sent invoice', async () => {
+      const t = setup()
+      const { organizationId: orgId, userId } = await setupUserWithRole(
+        t,
+        'staff-user',
+        STAFF_SCOPES
+      )
+      const { companyId, projectId } = await setupInvoicePrerequisites(t, orgId, userId)
+
+      const invoiceId = await createInvoiceDirectly(t, orgId, projectId, companyId, {
+        status: 'Sent',
+      })
+
+      const result = await t.mutation(api.workflows.dealToDelivery.api.invoices.voidInvoice, {
+        invoiceId,
+      })
+
+      expect(result.voided).toBe(true)
+
+      // Verify invoice status is now Void
+      const invoice = await t.run(async (ctx) => ctx.db.get(invoiceId))
+      expect(invoice?.status).toBe('Void')
+    })
+
+    it('should void a Viewed invoice', async () => {
+      const t = setup()
+      const { organizationId: orgId, userId } = await setupUserWithRole(
+        t,
+        'staff-user',
+        STAFF_SCOPES
+      )
+      const { companyId, projectId } = await setupInvoicePrerequisites(t, orgId, userId)
+
+      const invoiceId = await createInvoiceDirectly(t, orgId, projectId, companyId, {
+        status: 'Viewed',
+      })
+
+      const result = await t.mutation(api.workflows.dealToDelivery.api.invoices.voidInvoice, {
+        invoiceId,
+      })
+
+      expect(result.voided).toBe(true)
+
+      // Verify invoice status is now Void
+      const invoice = await t.run(async (ctx) => ctx.db.get(invoiceId))
+      expect(invoice?.status).toBe('Void')
+    })
+
+    it('should reject voiding a Draft invoice (should delete instead)', async () => {
+      const t = setup()
+      const { organizationId: orgId, userId } = await setupUserWithRole(
+        t,
+        'staff-user',
+        STAFF_SCOPES
+      )
+      const { companyId, projectId } = await setupInvoicePrerequisites(t, orgId, userId)
+
+      const invoiceId = await createInvoiceDirectly(t, orgId, projectId, companyId, {
+        status: 'Draft',
+      })
+
+      await expect(
+        t.mutation(api.workflows.dealToDelivery.api.invoices.voidInvoice, {
+          invoiceId,
+        })
+      ).rejects.toThrow('Draft invoices should be deleted, not voided')
+    })
+
+    it('should reject voiding a Paid invoice (requires reversal first)', async () => {
+      const t = setup()
+      const { organizationId: orgId, userId } = await setupUserWithRole(
+        t,
+        'staff-user',
+        STAFF_SCOPES
+      )
+      const { companyId, projectId } = await setupInvoicePrerequisites(t, orgId, userId)
+
+      const invoiceId = await createInvoiceDirectly(t, orgId, projectId, companyId, {
+        status: 'Paid',
+      })
+
+      await expect(
+        t.mutation(api.workflows.dealToDelivery.api.invoices.voidInvoice, {
+          invoiceId,
+        })
+      ).rejects.toThrow('Cannot void a paid invoice')
+    })
+
+    it('should return success for already voided invoice (idempotent)', async () => {
+      const t = setup()
+      const { organizationId: orgId, userId } = await setupUserWithRole(
+        t,
+        'staff-user',
+        STAFF_SCOPES
+      )
+      const { companyId, projectId } = await setupInvoicePrerequisites(t, orgId, userId)
+
+      const invoiceId = await createInvoiceDirectly(t, orgId, projectId, companyId, {
+        status: 'Void',
+      })
+
+      const result = await t.mutation(api.workflows.dealToDelivery.api.invoices.voidInvoice, {
+        invoiceId,
+      })
+
+      expect(result.voided).toBe(true)
+      expect(result.canVoid).toBe(false) // Already was voided
+    })
+
+    it('should record voidedBy and voidedAt fields', async () => {
+      const t = setup()
+      const { organizationId: orgId, userId } = await setupUserWithRole(
+        t,
+        'staff-user',
+        STAFF_SCOPES
+      )
+      const { companyId, projectId } = await setupInvoicePrerequisites(t, orgId, userId)
+
+      const invoiceId = await createInvoiceDirectly(t, orgId, projectId, companyId, {
+        status: 'Sent',
+      })
+
+      const beforeVoid = Date.now()
+      await t.mutation(api.workflows.dealToDelivery.api.invoices.voidInvoice, {
+        invoiceId,
+        reason: 'Test void reason',
+      })
+
+      const invoice = await t.run(async (ctx) => ctx.db.get(invoiceId))
+      expect(invoice?.voidedBy).toBe(userId)
+      expect(invoice?.voidedAt).toBeGreaterThanOrEqual(beforeVoid)
+      expect(invoice?.voidReason).toBe('Test void reason')
+    })
+  })
+
+  // =============================================================================
+  // checkCanVoidInvoice Tests
+  // =============================================================================
+
+  describe('checkCanVoidInvoice', () => {
+    it('should return canVoid: true for Finalized invoice', async () => {
+      const t = setup()
+      const { organizationId: orgId, userId } = await setupUserWithRole(
+        t,
+        'staff-user',
+        STAFF_SCOPES
+      )
+      const { companyId, projectId } = await setupInvoicePrerequisites(t, orgId, userId)
+
+      const invoiceId = await createInvoiceDirectly(t, orgId, projectId, companyId, {
+        status: 'Finalized',
+      })
+
+      const result = await t.query(api.workflows.dealToDelivery.api.invoices.checkCanVoidInvoice, {
+        invoiceId,
+      })
+
+      expect(result.canVoid).toBe(true)
+      expect(result.reason).toBeUndefined()
+    })
+
+    it('should return canVoid: false for Draft invoice with reason', async () => {
+      const t = setup()
+      const { organizationId: orgId, userId } = await setupUserWithRole(
+        t,
+        'staff-user',
+        STAFF_SCOPES
+      )
+      const { companyId, projectId } = await setupInvoicePrerequisites(t, orgId, userId)
+
+      const invoiceId = await createInvoiceDirectly(t, orgId, projectId, companyId, {
+        status: 'Draft',
+      })
+
+      const result = await t.query(api.workflows.dealToDelivery.api.invoices.checkCanVoidInvoice, {
+        invoiceId,
+      })
+
+      expect(result.canVoid).toBe(false)
+      expect(result.reason).toContain('delete')
+    })
+
+    it('should return canVoid: false for Paid invoice with reason', async () => {
+      const t = setup()
+      const { organizationId: orgId, userId } = await setupUserWithRole(
+        t,
+        'staff-user',
+        STAFF_SCOPES
+      )
+      const { companyId, projectId } = await setupInvoicePrerequisites(t, orgId, userId)
+
+      const invoiceId = await createInvoiceDirectly(t, orgId, projectId, companyId, {
+        status: 'Paid',
+      })
+
+      const result = await t.query(api.workflows.dealToDelivery.api.invoices.checkCanVoidInvoice, {
+        invoiceId,
+      })
+
+      expect(result.canVoid).toBe(false)
+      expect(result.reason).toContain('reversal')
+    })
+
+    it('should return canVoid: false for already Void invoice', async () => {
+      const t = setup()
+      const { organizationId: orgId, userId } = await setupUserWithRole(
+        t,
+        'staff-user',
+        STAFF_SCOPES
+      )
+      const { companyId, projectId } = await setupInvoicePrerequisites(t, orgId, userId)
+
+      const invoiceId = await createInvoiceDirectly(t, orgId, projectId, companyId, {
+        status: 'Void',
+      })
+
+      const result = await t.query(api.workflows.dealToDelivery.api.invoices.checkCanVoidInvoice, {
+        invoiceId,
+      })
+
+      expect(result.canVoid).toBe(false)
+      expect(result.reason).toContain('already voided')
+    })
+  })
 })

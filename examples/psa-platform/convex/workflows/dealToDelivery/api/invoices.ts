@@ -30,6 +30,8 @@ import {
   recalculateInvoiceTotals,
   finalizeInvoice as finalizeInvoiceDb,
   markInvoiceSent,
+  voidInvoice as voidInvoiceDb,
+  canVoidInvoice,
 } from '../db'
 
 // =============================================================================
@@ -471,5 +473,102 @@ export const sendInvoice = mutation({
     const trackingId = `TRK-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`
 
     return { sent: true, trackingId }
+  },
+})
+
+/**
+ * Void an invoice (instead of deleting it).
+ * Per spec 11-workflow-invoice-generation.md line 444: "Void not delete" for finalized invoices.
+ * Authorization: Requires dealToDelivery:invoices:void scope.
+ *
+ * Valid states for voiding: Finalized, Sent, Viewed
+ * Cannot void: Draft (delete instead), Paid (requires reversal first)
+ *
+ * @param args.invoiceId - The invoice to void
+ * @param args.reason - Optional: Reason for voiding the invoice
+ * @returns Object with voided status and void details
+ */
+export const voidInvoice = mutation({
+  args: {
+    invoiceId: v.id('invoices'),
+    reason: v.optional(v.string()),
+  },
+  handler: async (
+    ctx,
+    args
+  ): Promise<{ voided: boolean; voidedAt: number; canVoid: boolean }> => {
+    const userId = await requirePsaStaffMember(ctx)
+
+    const invoice = await getInvoiceFromDb(ctx.db, args.invoiceId)
+    if (!invoice) {
+      throw new Error(`Invoice not found: ${args.invoiceId}`)
+    }
+
+    // Check if invoice can be voided
+    if (!canVoidInvoice(invoice)) {
+      if (invoice.status === 'Draft') {
+        throw new Error('Draft invoices should be deleted, not voided')
+      }
+      if (invoice.status === 'Paid') {
+        throw new Error('Cannot void a paid invoice. Record a refund or reversal first.')
+      }
+      if (invoice.status === 'Void') {
+        // Already voided - return success without error
+        return {
+          voided: true,
+          voidedAt: invoice.voidedAt ?? Date.now(),
+          canVoid: false,
+        }
+      }
+      throw new Error(`Invoice in ${invoice.status} status cannot be voided`)
+    }
+
+    // Void the invoice
+    await voidInvoiceDb(ctx.db, args.invoiceId, userId, args.reason)
+
+    return {
+      voided: true,
+      voidedAt: Date.now(),
+      canVoid: true,
+    }
+  },
+})
+
+/**
+ * Check if an invoice can be voided.
+ * Authorization: Requires dealToDelivery:staff scope.
+ *
+ * @param args.invoiceId - The invoice to check
+ * @returns Object with canVoid flag and reason if not voidable
+ */
+export const checkCanVoidInvoice = query({
+  args: {
+    invoiceId: v.id('invoices'),
+  },
+  handler: async (ctx, args): Promise<{ canVoid: boolean; reason?: string }> => {
+    await requirePsaStaffMember(ctx)
+
+    const invoice = await getInvoiceFromDb(ctx.db, args.invoiceId)
+    if (!invoice) {
+      return { canVoid: false, reason: 'Invoice not found' }
+    }
+
+    if (canVoidInvoice(invoice)) {
+      return { canVoid: true }
+    }
+
+    if (invoice.status === 'Draft') {
+      return { canVoid: false, reason: 'Draft invoices should be deleted, not voided' }
+    }
+
+    if (invoice.status === 'Paid') {
+      return { canVoid: false, reason: 'Paid invoices require a reversal before voiding' }
+    }
+
+    if (invoice.status === 'Void') {
+      return { canVoid: false, reason: 'Invoice is already voided' }
+    }
+
+    return { canVoid: false, reason: `Invoice in ${invoice.status} status cannot be voided` }
   },
 })

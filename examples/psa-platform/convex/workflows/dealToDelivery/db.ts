@@ -204,6 +204,8 @@ export {
   markInvoiceSent,
   markInvoiceViewed,
   markInvoicePaid,
+  voidInvoice,
+  canVoidInvoice,
   insertInvoiceLineItem,
   getInvoiceLineItem,
   updateInvoiceLineItem,

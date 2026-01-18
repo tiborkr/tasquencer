@@ -175,6 +175,71 @@ export async function markInvoicePaid(
   });
 }
 
+/**
+ * Void an invoice (instead of deleting it).
+ *
+ * Per spec 11-workflow-invoice-generation.md line 444: "Void not delete" for finalized invoices.
+ * Once finalized, invoices should never be deleted - they should be voided instead.
+ *
+ * @param db - Database writer
+ * @param invoiceId - The invoice to void
+ * @param voidedBy - User who is voiding the invoice
+ * @param reason - Optional reason for voiding
+ * @throws Error if invoice is Draft (can be deleted) or Paid (requires reversal)
+ */
+export async function voidInvoice(
+  db: DatabaseWriter,
+  invoiceId: Id<"invoices">,
+  voidedBy: Id<"users">,
+  reason?: string
+): Promise<void> {
+  const invoice = await getInvoice(db, invoiceId);
+  if (!invoice) {
+    throw new EntityNotFoundError("Invoice", { invoiceId });
+  }
+
+  // Draft invoices can be deleted, no need to void
+  if (invoice.status === "Draft") {
+    throw new Error(
+      "Draft invoices should be deleted, not voided. Use delete operation instead."
+    );
+  }
+
+  // Already voided - no-op
+  if (invoice.status === "Void") {
+    return;
+  }
+
+  // Paid invoices require special handling (reversal/refund)
+  if (invoice.status === "Paid") {
+    throw new Error(
+      "Cannot void a paid invoice directly. Record a refund or reversal first, then void."
+    );
+  }
+
+  // Valid states for voiding: Finalized, Sent, Viewed
+  await updateInvoice(db, invoiceId, {
+    status: "Void",
+    voidedAt: Date.now(),
+    voidedBy,
+    voidReason: reason,
+  });
+}
+
+/**
+ * Check if an invoice can be voided.
+ *
+ * @param invoice - The invoice to check
+ * @returns true if the invoice can be voided
+ */
+export function canVoidInvoice(invoice: Doc<"invoices">): boolean {
+  return (
+    invoice.status === "Finalized" ||
+    invoice.status === "Sent" ||
+    invoice.status === "Viewed"
+  );
+}
+
 // Invoice Line Items
 
 export async function insertInvoiceLineItem(
