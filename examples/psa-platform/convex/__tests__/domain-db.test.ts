@@ -306,7 +306,9 @@ import {
 import {
   insertContact,
   getContact,
+  updateContact,
   listContactsByCompany,
+  listContactsByOrganization,
   getPrimaryContactForCompany,
 } from '../workflows/dealToDelivery/db/contacts'
 
@@ -783,6 +785,92 @@ describe('Contacts DB Functions', () => {
       })
 
       expect(contacts).toHaveLength(2)
+    })
+  })
+
+  describe('updateContact', () => {
+    it('should update contact fields', async () => {
+      const t = setup()
+      const { id: orgId } = await createTestOrganization(t)
+      const { id: companyId } = await createTestCompany(t, orgId)
+      const { id: contactId } = await createTestContact(t, orgId, companyId, {
+        name: 'Original Name',
+        email: 'original@example.com',
+        phone: '+1-555-0100',
+        isPrimary: false,
+      })
+
+      // Update multiple fields
+      await t.run(async (ctx) => {
+        await updateContact(ctx.db, contactId, {
+          name: 'Updated Name',
+          email: 'updated@example.com',
+          isPrimary: true,
+        })
+      })
+
+      // Verify updates
+      const updated = await t.run(async (ctx) => {
+        return await getContact(ctx.db, contactId)
+      })
+
+      expect(updated?.name).toBe('Updated Name')
+      expect(updated?.email).toBe('updated@example.com')
+      expect(updated?.isPrimary).toBe(true)
+      expect(updated?.phone).toBe('+1-555-0100') // Unchanged
+    })
+
+    it('should throw EntityNotFoundError for non-existent contact', async () => {
+      const t = setup()
+      const fakeContactId = 'invalid_id' as Id<'contacts'>
+
+      await expect(
+        t.run(async (ctx) => {
+          await updateContact(ctx.db, fakeContactId, { name: 'New Name' })
+        })
+      ).rejects.toThrow(EntityNotFoundError)
+    })
+  })
+
+  describe('listContactsByOrganization', () => {
+    it('should return all contacts for an organization', async () => {
+      const t = setup()
+      const { id: orgId } = await createTestOrganization(t)
+      const { id: company1 } = await createTestCompany(t, orgId, { name: 'Company 1' })
+      const { id: company2 } = await createTestCompany(t, orgId, { name: 'Company 2' })
+
+      // Create contacts across multiple companies
+      await createTestContact(t, orgId, company1, { name: 'Contact A' })
+      await createTestContact(t, orgId, company1, { name: 'Contact B' })
+      await createTestContact(t, orgId, company2, { name: 'Contact C' })
+
+      const contacts = await t.run(async (ctx) => {
+        return await listContactsByOrganization(ctx.db, orgId)
+      })
+
+      expect(contacts).toHaveLength(3)
+      const names = contacts.map((c) => c.name)
+      expect(names).toContain('Contact A')
+      expect(names).toContain('Contact B')
+      expect(names).toContain('Contact C')
+    })
+
+    it('should not return contacts from other organizations', async () => {
+      const t = setup()
+      const { id: org1 } = await createTestOrganization(t, { name: 'Org 1' })
+      const { id: org2 } = await createTestOrganization(t, { name: 'Org 2' })
+      const { id: company1 } = await createTestCompany(t, org1)
+      const { id: company2 } = await createTestCompany(t, org2)
+
+      await createTestContact(t, org1, company1, { name: 'Org1 Contact' })
+      await createTestContact(t, org2, company2, { name: 'Org2 Contact' })
+
+      const org1Contacts = await t.run(async (ctx) => {
+        return await listContactsByOrganization(ctx.db, org1)
+      })
+
+      expect(org1Contacts).toHaveLength(1)
+      expect(org1Contacts[0].name).toBe('Org1 Contact')
     })
   })
 
