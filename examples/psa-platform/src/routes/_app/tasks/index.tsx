@@ -16,129 +16,19 @@ import {
   Loader2,
   RefreshCw,
   ExternalLink,
+  ClipboardEdit,
 } from 'lucide-react'
 import { cn } from '@repo/ui/lib/utils'
+import {
+  getTaskRoute,
+  getTaskCategory,
+  getCategoryColor,
+  TASK_TYPE_LABELS,
+} from '@/features/psa/task/task-routing'
 
 export const Route = createFileRoute('/_app/tasks/')({
   component: TasksPage,
 })
-
-// Work item type to user-friendly name mapping
-const TASK_TYPE_LABELS: Record<string, string> = {
-  createDeal: 'Create Deal',
-  qualifyLead: 'Qualify Lead',
-  disqualifyLead: 'Disqualify Lead',
-  createEstimate: 'Create Estimate',
-  createProposal: 'Create Proposal',
-  sendProposal: 'Send Proposal',
-  negotiateTerms: 'Negotiate Terms',
-  reviseProposal: 'Revise Proposal',
-  getProposalSigned: 'Get Proposal Signed',
-  archiveDeal: 'Archive Deal',
-  createProject: 'Create Project',
-  setBudget: 'Set Budget',
-  viewTeamAvailability: 'View Team Availability',
-  filterBySkillsRole: 'Filter by Skills/Role',
-  recordPlannedTimeOff: 'Record Time Off',
-  createBookings: 'Create Bookings',
-  reviewBookings: 'Review Bookings',
-  checkConfirmationNeeded: 'Check Confirmation',
-  confirmBookings: 'Confirm Bookings',
-  createAndAssignTasks: 'Create & Assign Tasks',
-  monitorBudgetBurn: 'Monitor Budget',
-  pauseWork: 'Pause Work',
-  requestChangeOrder: 'Request Change Order',
-  getChangeOrderApproval: 'Get Change Order Approval',
-  selectEntryMethod: 'Select Entry Method',
-  useTimer: 'Use Timer',
-  manualEntry: 'Manual Time Entry',
-  importFromCalendar: 'Import from Calendar',
-  autoFromBookings: 'Auto from Bookings',
-  submitTimeEntry: 'Submit Time Entry',
-  selectExpenseType: 'Select Expense Type',
-  logSoftwareExpense: 'Log Software Expense',
-  logTravelExpense: 'Log Travel Expense',
-  logMaterialsExpense: 'Log Materials Expense',
-  logSubcontractorExpense: 'Log Subcontractor Expense',
-  logOtherExpense: 'Log Other Expense',
-  attachReceipt: 'Attach Receipt',
-  markBillable: 'Mark Billable',
-  setBillableRate: 'Set Billable Rate',
-  submitExpense: 'Submit Expense',
-  reviewTimesheet: 'Review Timesheet',
-  approveTimesheet: 'Approve Timesheet',
-  rejectTimesheet: 'Reject Timesheet',
-  reviseTimesheet: 'Revise Timesheet',
-  reviewExpense: 'Review Expense',
-  approveExpense: 'Approve Expense',
-  rejectExpense: 'Reject Expense',
-  reviseExpense: 'Revise Expense',
-  selectInvoicingMethod: 'Select Invoicing Method',
-  invoiceTimeAndMaterials: 'Invoice T&M',
-  invoiceFixedFee: 'Invoice Fixed Fee',
-  invoiceMilestone: 'Invoice Milestone',
-  invoiceRecurring: 'Invoice Recurring',
-  reviewDraft: 'Review Draft',
-  editDraft: 'Edit Draft',
-  finalizeInvoice: 'Finalize Invoice',
-  sendInvoice: 'Send Invoice',
-  sendViaEmail: 'Send via Email',
-  sendViaPdf: 'Send via PDF',
-  sendViaPortal: 'Send via Portal',
-  recordPayment: 'Record Payment',
-  checkMoreBilling: 'Check More Billing',
-  closeProject: 'Close Project',
-  conductRetro: 'Conduct Retrospective',
-}
-
-// Get category from task type
-function getTaskCategory(taskType: string): string {
-  if (['createDeal', 'qualifyLead', 'disqualifyLead', 'createEstimate', 'createProposal', 'sendProposal', 'negotiateTerms', 'reviseProposal', 'getProposalSigned', 'archiveDeal'].includes(taskType)) {
-    return 'Sales'
-  }
-  if (['createProject', 'setBudget'].includes(taskType)) {
-    return 'Planning'
-  }
-  if (['viewTeamAvailability', 'filterBySkillsRole', 'recordPlannedTimeOff', 'createBookings', 'reviewBookings', 'checkConfirmationNeeded', 'confirmBookings'].includes(taskType)) {
-    return 'Resources'
-  }
-  if (['createAndAssignTasks', 'monitorBudgetBurn', 'pauseWork', 'requestChangeOrder', 'getChangeOrderApproval'].includes(taskType)) {
-    return 'Execution'
-  }
-  if (['selectEntryMethod', 'useTimer', 'manualEntry', 'importFromCalendar', 'autoFromBookings', 'submitTimeEntry'].includes(taskType)) {
-    return 'Time'
-  }
-  if (['selectExpenseType', 'logSoftwareExpense', 'logTravelExpense', 'logMaterialsExpense', 'logSubcontractorExpense', 'logOtherExpense', 'attachReceipt', 'markBillable', 'setBillableRate', 'submitExpense'].includes(taskType)) {
-    return 'Expenses'
-  }
-  if (['reviewTimesheet', 'approveTimesheet', 'rejectTimesheet', 'reviseTimesheet', 'reviewExpense', 'approveExpense', 'rejectExpense', 'reviseExpense'].includes(taskType)) {
-    return 'Approvals'
-  }
-  if (['selectInvoicingMethod', 'invoiceTimeAndMaterials', 'invoiceFixedFee', 'invoiceMilestone', 'invoiceRecurring', 'reviewDraft', 'editDraft', 'finalizeInvoice', 'sendInvoice', 'sendViaEmail', 'sendViaPdf', 'sendViaPortal', 'recordPayment', 'checkMoreBilling'].includes(taskType)) {
-    return 'Invoicing'
-  }
-  if (['closeProject', 'conductRetro'].includes(taskType)) {
-    return 'Close'
-  }
-  return 'Other'
-}
-
-// Get category color
-function getCategoryColor(category: string): string {
-  const colors: Record<string, string> = {
-    Sales: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
-    Planning: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300',
-    Resources: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300',
-    Execution: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300',
-    Time: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
-    Expenses: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
-    Approvals: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
-    Invoicing: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300',
-    Close: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300',
-    Other: 'bg-slate-100 text-slate-800 dark:bg-slate-900/30 dark:text-slate-300',
-  }
-  return colors[category] ?? colors.Other
-}
 
 // Get status badge variant
 function getStatusBadgeVariant(status: string): 'default' | 'secondary' | 'outline' | 'destructive' {
@@ -151,34 +41,6 @@ function getStatusBadgeVariant(status: string): 'default' | 'secondary' | 'outli
       return 'outline'
     default:
       return 'outline'
-  }
-}
-
-// Get the link to work on a task based on its category
-function getTaskLink(taskType: string, aggregateId: string): { to: string; params?: Record<string, string> } {
-  const category = getTaskCategory(taskType)
-
-  switch (category) {
-    case 'Sales':
-      return { to: '/deals/$dealId', params: { dealId: aggregateId } }
-    case 'Planning':
-    case 'Execution':
-    case 'Resources':
-    case 'Close':
-      return { to: '/projects' }
-    case 'Time':
-      return { to: '/timesheet' }
-    case 'Expenses':
-      return { to: '/expenses' }
-    case 'Approvals':
-      if (taskType.includes('Timesheet')) {
-        return { to: '/approvals/timesheets' }
-      }
-      return { to: '/expenses' }
-    case 'Invoicing':
-      return { to: '/projects' }
-    default:
-      return { to: '/deals' }
   }
 }
 
@@ -200,7 +62,7 @@ type WorkItemResponse = {
 function TaskCard({ task }: { task: WorkItemResponse }) {
   const category = getTaskCategory(task.taskType)
   const label = TASK_TYPE_LABELS[task.taskType] ?? task.taskName
-  const linkInfo = getTaskLink(task.taskType, task.aggregateTableId)
+  const routeInfo = getTaskRoute(task.taskType, task.workItemId, task.aggregateTableId)
 
   return (
     <Card className="hover:shadow-md transition-shadow">
@@ -217,6 +79,11 @@ function TaskCard({ task }: { task: WorkItemResponse }) {
               {task.workItemState && task.workItemState !== task.status && (
                 <Badge variant="outline" className="text-xs">
                   {task.workItemState}
+                </Badge>
+              )}
+              {routeInfo.hasDirectForm && (
+                <Badge variant="outline" className="text-xs bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
+                  Form
                 </Badge>
               )}
             </div>
@@ -237,15 +104,22 @@ function TaskCard({ task }: { task: WorkItemResponse }) {
             </div>
           </div>
           <div className="flex flex-col gap-2">
-            {linkInfo.params ? (
-              <Link to={linkInfo.to as '/deals/$dealId'} params={linkInfo.params as { dealId: string }}>
+            {routeInfo.hasDirectForm ? (
+              <Link to={routeInfo.to} params={routeInfo.params}>
+                <Button size="sm" variant="default">
+                  <ClipboardEdit className="h-4 w-4 mr-1" />
+                  Open Task
+                </Button>
+              </Link>
+            ) : routeInfo.params ? (
+              <Link to={routeInfo.to as '/deals/$dealId'} params={routeInfo.params as { dealId: string }}>
                 <Button size="sm" variant="outline">
                   <ExternalLink className="h-4 w-4 mr-1" />
                   View
                 </Button>
               </Link>
             ) : (
-              <Link to={linkInfo.to as '/timesheet'}>
+              <Link to={routeInfo.to as '/timesheet'}>
                 <Button size="sm" variant="outline">
                   <ArrowRight className="h-4 w-4 mr-1" />
                   Go
