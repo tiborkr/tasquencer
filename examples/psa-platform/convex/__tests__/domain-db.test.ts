@@ -1546,7 +1546,8 @@ describe('Invoices DB Functions', () => {
         return await finalizeInvoice(ctx.db, invoiceId, userId)
       })
 
-      expect(invoiceNumber).toMatch(/^INV-\d{4}-\d{4}$/)
+      // Invoice number format: INV-{YEAR}-{5-digit-sequence} per spec 11 line 408-409
+      expect(invoiceNumber).toMatch(/^INV-\d{4}-\d{5}$/)
 
       const invoice = await t.run(async (ctx) => {
         return await ctx.db.get(invoiceId)

@@ -113,7 +113,8 @@ export async function getNextInvoiceNumber(
     i.number?.startsWith(`INV-${year}-`)
   );
   const sequence = thisYearInvoices.length + 1;
-  return `INV-${year}-${String(sequence).padStart(4, "0")}`;
+  // Per spec 11 line 408-409: INV-{YEAR}-{SEQUENCE} with 5-digit padding (e.g., INV-2024-00142)
+  return `INV-${year}-${String(sequence).padStart(5, "0")}`;
 }
 
 export async function finalizeInvoice(
