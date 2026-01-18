@@ -882,6 +882,7 @@ const dealToDeliveryWorkItems = defineWorkItemMetadataTable("deals").withPayload
       taskName: v.string(),
       priority: workItemPriority,
       invoiceId: v.optional(v.id("invoices")),
+      approved: v.optional(v.boolean()), // Approval decision for workflow routing
     }),
     v.object({
       type: v.literal("editDraft"),

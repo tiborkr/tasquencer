@@ -16,7 +16,7 @@ import { initializeDealWorkItemAuth, updateWorkItemMetadataPayload } from "./hel
 import { authService } from "../../../authorization";
 import { authComponent } from "../../../auth";
 import { getProject } from "../db/projects";
-import { getMilestone, completeMilestone } from "../db/milestones";
+import { getMilestone, completeMilestone, markMilestoneInvoiced } from "../db/milestones";
 import { listBillableUninvoicedExpenses } from "../db/expenses";
 import { insertInvoice, insertInvoiceLineItem, recalculateInvoiceTotals } from "../db/invoices";
 import { getRootWorkflowAndDealForWorkItem } from "../db/workItemContext";
@@ -152,6 +152,9 @@ const invoiceMilestoneWorkItemActions = authService.builders.workItemActions
 
       // Recalculate totals
       await recalculateInvoiceTotals(mutationCtx.db, invoiceId);
+
+      // Link the milestone to the invoice (prevents double-invoicing per spec 11 line 444 "Milestone Once" rule)
+      await markMilestoneInvoiced(mutationCtx.db, payload.milestoneId, invoiceId);
 
       // Update work item metadata
       await updateWorkItemMetadataPayload(mutationCtx, workItem.id, {

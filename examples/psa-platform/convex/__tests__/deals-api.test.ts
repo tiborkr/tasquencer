@@ -25,7 +25,6 @@ import type { Doc } from '../_generated/dataModel'
 
 // All scopes needed for deal tests
 const STAFF_SCOPES = ['dealToDelivery:staff']
-const DEALS_CREATE_SCOPES = ['dealToDelivery:staff', 'dealToDelivery:deals:create']
 
 beforeEach(() => {
   vi.useFakeTimers()

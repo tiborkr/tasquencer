@@ -10,6 +10,7 @@ import { finalizeInvoiceTask } from '../workItems/finalizeInvoice.workItem'
 import { getProjectByWorkflowId } from '../db/projects'
 import { getBudgetByProjectId } from '../db/budgets'
 import { assertProjectExists } from '../exceptions'
+import { DealToDeliveryWorkItemHelpers } from '../helpers'
 
 export const invoiceGenerationWorkflow = Builder.workflow('invoiceGeneration')
   .startCondition('start')
@@ -62,10 +63,30 @@ export const invoiceGenerationWorkflow = Builder.workflow('invoiceGeneration')
     to
       .task('editDraft')
       .task('finalizeInvoice')
-      .route(async ({ route }) => {
-        // Default to finalizeInvoice as the happy path
-        // The editDraft→reviewDraft loop would be triggered manually by the user
-        // if they need to make changes during the review process
+      .route(async ({ mutationCtx, route, workItem }) => {
+        // Get all work item IDs for this task
+        const workItemIds = await workItem.getAllWorkItemIds()
+
+        // Check the most recent work item's metadata for the approval decision
+        for (const workItemId of workItemIds) {
+          const metadata = await DealToDeliveryWorkItemHelpers.getWorkItemMetadata(
+            mutationCtx.db,
+            workItemId
+          )
+
+          if (metadata?.payload.type === 'reviewDraft' && metadata.payload.approved !== undefined) {
+            if (metadata.payload.approved === true) {
+              // Draft approved - proceed to finalization
+              return route.toTask('finalizeInvoice')
+            } else {
+              // Draft needs edits - route to editDraft
+              return route.toTask('editDraft')
+            }
+          }
+        }
+
+        // Fallback: if no decision found, default to finalize (happy path)
+        // This should not happen in normal operation
         return route.toTask('finalizeInvoice')
       })
   )
