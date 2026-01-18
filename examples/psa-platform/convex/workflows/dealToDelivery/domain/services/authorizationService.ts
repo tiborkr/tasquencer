@@ -75,3 +75,21 @@ export async function requireDealsEditAccess(
 ): Promise<Id<"users">> {
   return requirePsaStaffMember(ctx, "dealToDelivery:deals:edit:own");
 }
+
+/**
+ * Checks if the current user has admin rights.
+ * Returns true if the user has the admin:users scope.
+ *
+ * This is used for features like releasing other users' work items.
+ *
+ * @param ctx - Query context
+ * @returns True if user has admin access
+ */
+export async function hasAdminAccess(ctx: QueryCtx): Promise<boolean> {
+  try {
+    await assertUserHasScope(ctx, "dealToDelivery:admin:users");
+    return true;
+  } catch {
+    return false;
+  }
+}

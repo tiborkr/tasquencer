@@ -14,7 +14,7 @@
 import { v } from 'convex/values'
 import { query, mutation } from '../../../_generated/server'
 import type { Id } from '../../../_generated/dataModel'
-import { requirePsaStaffMember } from '../domain/services/authorizationService'
+import { requirePsaStaffMember, hasAdminAccess } from '../domain/services/authorizationService'
 import { DealToDeliveryWorkItemHelpers } from '../helpers'
 import { authComponent } from '../../../auth'
 import { isHumanOffer, isHumanClaim } from '@repo/tasquencer'
@@ -324,11 +324,12 @@ export const releaseWorkItem = mutation({
       throw new Error('Work item is not claimed')
     }
 
-    // Check if claimed by current user (or user is admin)
-    // For now, only allow the claiming user to release
-    // TODO: Add admin override check for scope 'psa:admin:write'
-    if (!isHumanClaim(metadata.claim) || metadata.claim.userId !== userId) {
-      throw new Error('You can only release work items you have claimed')
+    // Check if claimed by current user or user has admin access
+    const isClaimingUser = isHumanClaim(metadata.claim) && metadata.claim.userId === userId
+    const isAdmin = await hasAdminAccess(ctx)
+
+    if (!isClaimingUser && !isAdmin) {
+      throw new Error('You can only release work items you have claimed (unless you are an admin)')
     }
 
     // Release the work item
