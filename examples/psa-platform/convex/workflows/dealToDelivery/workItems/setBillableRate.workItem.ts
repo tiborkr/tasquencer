@@ -27,8 +27,12 @@ const expensesEditPolicy = authService.policies.requireScope(
   "dealToDelivery:expenses:edit:own"
 );
 
-// Maximum allowed markup rate (150% = 50% markup)
+// Per spec 08-workflow-expense-tracking.md line 426:
+// "Markup Limits: Markup cannot exceed 50% without manager override"
+// Maximum allowed markup rate (150% = 50% markup) without override
 const MAX_MARKUP_RATE = 1.5;
+// Maximum markup rate WITH manager override (200% = 100% markup)
+const MAX_MARKUP_RATE_WITH_OVERRIDE = 2.0;
 
 /**
  * Actions for the setBillableRate work item.
@@ -81,7 +85,9 @@ const setBillableRateWorkItemActions = authService.builders.workItemActions
   .complete(
     z.object({
       expenseId: zid("expenses"),
-      markupRate: z.number().min(1.0).max(MAX_MARKUP_RATE),
+      markupRate: z.number().min(1.0).max(MAX_MARKUP_RATE_WITH_OVERRIDE),
+      // Per spec 08-workflow-expense-tracking.md line 426: manager override allows > 50% markup
+      hasManagerOverride: z.boolean().default(false),
     }),
     expensesEditPolicy,
     async ({ mutationCtx, workItem }, payload) => {
@@ -115,10 +121,20 @@ const setBillableRateWorkItemActions = authService.builders.workItemActions
       }
 
       // Validate markup rate is within allowed range
-      if (payload.markupRate > MAX_MARKUP_RATE) {
+      // Per spec 08-workflow-expense-tracking.md line 426: "Markup cannot exceed 50% without manager override"
+      if (payload.markupRate > MAX_MARKUP_RATE && !payload.hasManagerOverride) {
         throw new Error(
           `Markup rate cannot exceed ${(MAX_MARKUP_RATE - 1) * 100}% without manager override. ` +
-          `Requested: ${(payload.markupRate - 1) * 100}%`
+          `Requested: ${((payload.markupRate - 1) * 100).toFixed(0)}%. ` +
+          `Set hasManagerOverride: true if this markup has been approved by a manager.`
+        );
+      }
+
+      // Even with override, cap at absolute maximum
+      if (payload.markupRate > MAX_MARKUP_RATE_WITH_OVERRIDE) {
+        throw new Error(
+          `Markup rate cannot exceed ${(MAX_MARKUP_RATE_WITH_OVERRIDE - 1) * 100}% even with manager override. ` +
+          `Requested: ${((payload.markupRate - 1) * 100).toFixed(0)}%`
         );
       }
 

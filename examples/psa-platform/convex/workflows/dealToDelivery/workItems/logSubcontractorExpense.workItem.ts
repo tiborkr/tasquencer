@@ -29,6 +29,10 @@ const expensesCreatePolicy = authService.policies.requireScope(
   "dealToDelivery:expenses:create"
 );
 
+// Per spec 08-workflow-expense-tracking.md line 424 and 21-ui-expense-form.md line 189:
+// "Tax ID (required for > $600 total)" for subcontractor expenses
+const SUBCONTRACTOR_TAX_ID_THRESHOLD = 60000; // $600 in cents
+
 /**
  * Actions for the logSubcontractorExpense work item.
  *
@@ -102,6 +106,15 @@ const logSubcontractorExpenseWorkItemActions = authService.builders.workItemActi
       // Validate project exists
       const project = await getProject(mutationCtx.db, payload.projectId);
       assertProjectExists(project, { projectId: payload.projectId });
+
+      // Per spec 08-workflow-expense-tracking.md line 424 and 21-ui-expense-form.md line 189:
+      // Tax ID is required for subcontractor expenses > $600 for 1099 compliance
+      if (payload.amount > SUBCONTRACTOR_TAX_ID_THRESHOLD && !payload.vendorTaxId) {
+        throw new Error(
+          `Vendor Tax ID is required for subcontractor expenses over $${SUBCONTRACTOR_TAX_ID_THRESHOLD / 100} (1099 compliance). ` +
+          `Amount: $${(payload.amount / 100).toFixed(2)}`
+        );
+      }
 
       // Check for potential duplicates (warn, don't block)
       // Per spec 10-workflow-expense-approval.md line 275: "Not duplicate"

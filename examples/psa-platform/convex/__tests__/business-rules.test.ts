@@ -2263,3 +2263,194 @@ describe('Timer Duration Validation', () => {
     })
   })
 })
+
+// =============================================================================
+// Service Rate Validation (Iteration 43)
+// =============================================================================
+
+describe('Service Rate Validation', () => {
+  // Per spec 04-workflow-planning-phase.md line 150: "Rates must be > 0 for billable services"
+  const serviceRateSchema = z.number().positive("Rate must be greater than 0 for billable services")
+
+  describe('Valid service rates', () => {
+    it('accepts positive rate (e.g., $50/hr)', () => {
+      expect(() => serviceRateSchema.parse(50)).not.toThrow()
+    })
+
+    it('accepts small positive rate (e.g., $0.01/hr)', () => {
+      expect(() => serviceRateSchema.parse(0.01)).not.toThrow()
+    })
+
+    it('accepts large rate (e.g., $500/hr)', () => {
+      expect(() => serviceRateSchema.parse(500)).not.toThrow()
+    })
+  })
+
+  describe('Invalid service rates', () => {
+    it('rejects zero rate for billable services', () => {
+      expect(() => serviceRateSchema.parse(0)).toThrow()
+    })
+
+    it('rejects negative rate', () => {
+      expect(() => serviceRateSchema.parse(-10)).toThrow()
+    })
+  })
+})
+
+// =============================================================================
+// Subcontractor Tax ID Requirement (Iteration 43)
+// =============================================================================
+
+describe('Subcontractor Tax ID Validation', () => {
+  // Per spec 08-workflow-expense-tracking.md line 424 and 21-ui-expense-form.md line 189:
+  // "Tax ID (required for > $600 total)" for subcontractor expenses
+  const SUBCONTRACTOR_TAX_ID_THRESHOLD = 60000 // $600 in cents
+
+  function validateSubcontractorTaxId(amount: number, vendorTaxId: string | undefined): boolean {
+    if (amount > SUBCONTRACTOR_TAX_ID_THRESHOLD && !vendorTaxId) {
+      return false // Validation fails - tax ID required but not provided
+    }
+    return true
+  }
+
+  describe('Tax ID not required for amounts <= $600', () => {
+    it('allows $500 expense without tax ID', () => {
+      expect(validateSubcontractorTaxId(50000, undefined)).toBe(true)
+    })
+
+    it('allows $600 expense without tax ID (boundary)', () => {
+      expect(validateSubcontractorTaxId(60000, undefined)).toBe(true)
+    })
+
+    it('allows small expense without tax ID', () => {
+      expect(validateSubcontractorTaxId(10000, undefined)).toBe(true) // $100
+    })
+  })
+
+  describe('Tax ID required for amounts > $600', () => {
+    it('requires tax ID for $601 expense', () => {
+      expect(validateSubcontractorTaxId(60100, undefined)).toBe(false)
+    })
+
+    it('requires tax ID for $1000 expense', () => {
+      expect(validateSubcontractorTaxId(100000, undefined)).toBe(false)
+    })
+
+    it('requires tax ID for large expense ($5000)', () => {
+      expect(validateSubcontractorTaxId(500000, undefined)).toBe(false)
+    })
+  })
+
+  describe('Tax ID provided (always valid)', () => {
+    it('allows $601 expense with tax ID', () => {
+      expect(validateSubcontractorTaxId(60100, '12-3456789')).toBe(true)
+    })
+
+    it('allows $1000 expense with tax ID', () => {
+      expect(validateSubcontractorTaxId(100000, '98-7654321')).toBe(true)
+    })
+
+    it('allows small expense with tax ID (optional)', () => {
+      expect(validateSubcontractorTaxId(10000, '12-3456789')).toBe(true)
+    })
+  })
+
+  describe('Constants verification', () => {
+    it('threshold is $600 (60000 cents)', () => {
+      expect(SUBCONTRACTOR_TAX_ID_THRESHOLD).toBe(60000)
+    })
+  })
+})
+
+// =============================================================================
+// Markup Rate Manager Override (Iteration 43)
+// =============================================================================
+
+describe('Markup Rate Manager Override', () => {
+  // Per spec 08-workflow-expense-tracking.md line 426:
+  // "Markup Limits: Markup cannot exceed 50% without manager override"
+  const MAX_MARKUP_RATE_NO_OVERRIDE = 1.5 // 50% markup
+  const MAX_MARKUP_RATE_WITH_OVERRIDE = 2.0 // 100% markup
+
+  function validateMarkupRate(markupRate: number, hasManagerOverride: boolean): { valid: boolean; message?: string } {
+    // Even with override, cap at absolute maximum
+    if (markupRate > MAX_MARKUP_RATE_WITH_OVERRIDE) {
+      return {
+        valid: false,
+        message: `Markup rate cannot exceed ${(MAX_MARKUP_RATE_WITH_OVERRIDE - 1) * 100}% even with manager override`
+      }
+    }
+
+    // Without override, cap at 50%
+    if (markupRate > MAX_MARKUP_RATE_NO_OVERRIDE && !hasManagerOverride) {
+      return {
+        valid: false,
+        message: `Markup rate cannot exceed ${(MAX_MARKUP_RATE_NO_OVERRIDE - 1) * 100}% without manager override`
+      }
+    }
+
+    return { valid: true }
+  }
+
+  describe('Markup rates without override', () => {
+    it('allows 0% markup (rate 1.0) without override', () => {
+      expect(validateMarkupRate(1.0, false)).toEqual({ valid: true })
+    })
+
+    it('allows 25% markup (rate 1.25) without override', () => {
+      expect(validateMarkupRate(1.25, false)).toEqual({ valid: true })
+    })
+
+    it('allows 50% markup (rate 1.5) without override (boundary)', () => {
+      expect(validateMarkupRate(1.5, false)).toEqual({ valid: true })
+    })
+
+    it('rejects 60% markup (rate 1.6) without override', () => {
+      const result = validateMarkupRate(1.6, false)
+      expect(result.valid).toBe(false)
+      expect(result.message).toContain('without manager override')
+    })
+
+    it('rejects 100% markup (rate 2.0) without override', () => {
+      const result = validateMarkupRate(2.0, false)
+      expect(result.valid).toBe(false)
+      expect(result.message).toContain('without manager override')
+    })
+  })
+
+  describe('Markup rates with manager override', () => {
+    it('allows 60% markup (rate 1.6) with manager override', () => {
+      expect(validateMarkupRate(1.6, true)).toEqual({ valid: true })
+    })
+
+    it('allows 75% markup (rate 1.75) with manager override', () => {
+      expect(validateMarkupRate(1.75, true)).toEqual({ valid: true })
+    })
+
+    it('allows 100% markup (rate 2.0) with manager override (maximum)', () => {
+      expect(validateMarkupRate(2.0, true)).toEqual({ valid: true })
+    })
+
+    it('rejects 150% markup (rate 2.5) even with manager override', () => {
+      const result = validateMarkupRate(2.5, true)
+      expect(result.valid).toBe(false)
+      expect(result.message).toContain('even with manager override')
+    })
+
+    it('rejects 200% markup (rate 3.0) even with manager override', () => {
+      const result = validateMarkupRate(3.0, true)
+      expect(result.valid).toBe(false)
+      expect(result.message).toContain('even with manager override')
+    })
+  })
+
+  describe('Constants verification', () => {
+    it('max without override is 1.5 (50% markup)', () => {
+      expect(MAX_MARKUP_RATE_NO_OVERRIDE).toBe(1.5)
+    })
+
+    it('max with override is 2.0 (100% markup)', () => {
+      expect(MAX_MARKUP_RATE_WITH_OVERRIDE).toBe(2.0)
+    })
+  })
+})

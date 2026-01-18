@@ -32,9 +32,10 @@ import { assertBudgetExists, assertProjectExists } from "../exceptions";
 const budgetsCreatePolicy = authService.policies.requireScope("dealToDelivery:budgets:create");
 
 // Service schema for budget line items
+// Per spec 04-workflow-planning-phase.md line 150: "Rates must be > 0 for billable services"
 const serviceSchema = z.object({
   name: z.string().min(1, "Service name is required"),
-  rate: z.number().min(0, "Rate must be non-negative"),
+  rate: z.number().positive("Rate must be greater than 0 for billable services"),
   estimatedHours: z.number().min(0, "Estimated hours must be non-negative"),
 });
 
