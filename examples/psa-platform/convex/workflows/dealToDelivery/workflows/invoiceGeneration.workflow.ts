@@ -67,14 +67,21 @@ export const invoiceGenerationWorkflow = Builder.workflow('invoiceGeneration')
         // Get all work item IDs for this task
         const workItemIds = await workItem.getAllWorkItemIds()
 
-        // Check the most recent work item's metadata for the approval decision
-        for (const workItemId of workItemIds) {
-          const metadata = await DealToDeliveryWorkItemHelpers.getWorkItemMetadata(
-            mutationCtx.db,
-            workItemId
-          )
+        // Fetch all metadata documents for deterministic ordering
+        // TENET-ROUTING-DETERMINISM: In looped workflows (reviewDraft → editDraft → reviewDraft),
+        // we must read the most recent review decision to avoid routing based on stale data
+        const allMetadata = await Promise.all(
+          workItemIds.map(id => DealToDeliveryWorkItemHelpers.getWorkItemMetadata(mutationCtx.db, id))
+        )
 
-          if (metadata?.payload.type === 'reviewDraft' && metadata.payload.approved !== undefined) {
+        // Sort by _creationTime descending (most recent first) for deterministic routing
+        const sortedMetadata = allMetadata
+          .filter((m): m is NonNullable<typeof m> => m !== null)
+          .sort((a, b) => b._creationTime - a._creationTime)
+
+        // Find the most recent work item with an approval decision
+        for (const metadata of sortedMetadata) {
+          if (metadata.payload.type === 'reviewDraft' && metadata.payload.approved !== undefined) {
             if (metadata.payload.approved === true) {
               // Draft approved - proceed to finalization
               return route.toTask('finalizeInvoice')

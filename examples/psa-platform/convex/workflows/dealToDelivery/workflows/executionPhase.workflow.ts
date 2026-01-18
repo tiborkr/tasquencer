@@ -79,13 +79,21 @@ export const executionPhaseWorkflow = Builder.workflow('executionPhase')
       // The monitorBudgetBurn work item calculates burn and stores budgetOk in metadata
       const workItemIds = await workItem.getAllWorkItemIds()
 
-      for (const workItemId of workItemIds) {
-        const metadata = await DealToDeliveryWorkItemHelpers.getWorkItemMetadata(
-          mutationCtx.db,
-          workItemId
-        )
+      // Fetch all metadata documents for deterministic ordering
+      // TENET-ROUTING-DETERMINISM: In looped workflows (monitorBudgetBurn → pauseWork → requestChangeOrder → getChangeOrderApproval → monitorBudgetBurn),
+      // we must read the most recent budget check to avoid routing based on stale data
+      const allMetadata = await Promise.all(
+        workItemIds.map(id => DealToDeliveryWorkItemHelpers.getWorkItemMetadata(mutationCtx.db, id))
+      )
 
-        if (metadata?.payload.type === 'monitorBudgetBurn' && metadata.payload.budgetOk !== undefined) {
+      // Sort by _creationTime descending (most recent first) for deterministic routing
+      const sortedMetadata = allMetadata
+        .filter((m): m is NonNullable<typeof m> => m !== null)
+        .sort((a, b) => b._creationTime - a._creationTime)
+
+      // Find the most recent work item with a budget decision
+      for (const metadata of sortedMetadata) {
+        if (metadata.payload.type === 'monitorBudgetBurn' && metadata.payload.budgetOk !== undefined) {
           if (metadata.payload.budgetOk) {
             // Budget OK (burn <= 90%) - continue to completion
             return route.toTask('completeExecution')

@@ -22,15 +22,21 @@ export const timesheetApprovalWorkflow = Builder.workflow('timesheetApproval')
         // Get all completed work items for the reviewTimesheet task
         const workItemIds = await workItem.getAllWorkItemIds()
 
-        // Get the most recent completed work item's metadata to check the decision
-        // In practice there should only be one work item per task execution
-        for (const workItemId of workItemIds) {
-          const metadata = await DealToDeliveryWorkItemHelpers.getWorkItemMetadata(
-            mutationCtx.db,
-            workItemId
-          )
+        // Fetch all metadata documents for deterministic ordering
+        // TENET-ROUTING-DETERMINISM: In looped workflows (reviewTimesheet → rejectTimesheet → reviseTimesheet → reviewTimesheet),
+        // we must read the most recent review decision to avoid routing based on stale data
+        const allMetadata = await Promise.all(
+          workItemIds.map(id => DealToDeliveryWorkItemHelpers.getWorkItemMetadata(mutationCtx.db, id))
+        )
 
-          if (metadata?.payload.type === 'reviewTimesheet' && metadata.payload.decision) {
+        // Sort by _creationTime descending (most recent first) for deterministic routing
+        const sortedMetadata = allMetadata
+          .filter((m): m is NonNullable<typeof m> => m !== null)
+          .sort((a, b) => b._creationTime - a._creationTime)
+
+        // Find the most recent work item with a decision
+        for (const metadata of sortedMetadata) {
+          if (metadata.payload.type === 'reviewTimesheet' && metadata.payload.decision) {
             if (metadata.payload.decision === 'approve') {
               return route.toTask('approveTimesheet')
             } else if (metadata.payload.decision === 'reject') {
