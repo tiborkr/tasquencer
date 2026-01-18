@@ -1912,3 +1912,354 @@ describe('Cost Rate Validation', () => {
     })
   })
 })
+
+// =============================================================================
+// Date Limits Validation Tests
+// Reference: spec 07-workflow-time-tracking.md line 286, 08-workflow-expense-tracking.md line 427
+// =============================================================================
+
+import {
+  TIME_ENTRY_WARNING_DAYS,
+  MAX_ENTRY_AGE_DAYS,
+  TIMER_MAX_HOURS,
+  getEntryAgeInDays,
+  isFutureDate,
+  checkEntryDateLimits,
+  checkTimeEntryDateLimits,
+  checkExpenseDateLimits,
+  requiresAdminApprovalForDate,
+  isInWarningRange,
+  checkTimerDuration,
+  getTimerHours,
+  wouldTimerAutoStop,
+} from '../workflows/dealToDelivery/db/dateLimits'
+
+const DAY_MS = 24 * 60 * 60 * 1000
+const HOUR_MS = 60 * 60 * 1000
+
+describe('Date Limits Validation', () => {
+  describe('Constants', () => {
+    it('has correct TIME_ENTRY_WARNING_DAYS (30 days)', () => {
+      expect(TIME_ENTRY_WARNING_DAYS).toBe(30)
+    })
+
+    it('has correct MAX_ENTRY_AGE_DAYS (90 days)', () => {
+      expect(MAX_ENTRY_AGE_DAYS).toBe(90)
+    })
+
+    it('has correct TIMER_MAX_HOURS (12 hours)', () => {
+      expect(TIMER_MAX_HOURS).toBe(12)
+    })
+  })
+
+  describe('getEntryAgeInDays', () => {
+    it('returns 0 for entry from today', () => {
+      const now = Date.now()
+      expect(getEntryAgeInDays(now, now)).toBe(0)
+    })
+
+    it('returns correct positive age for past dates', () => {
+      const now = Date.now()
+      const tenDaysAgo = now - (10 * DAY_MS)
+      expect(getEntryAgeInDays(tenDaysAgo, now)).toBe(10)
+    })
+
+    it('returns correct age for exactly 30 days ago', () => {
+      const now = Date.now()
+      const thirtyDaysAgo = now - (30 * DAY_MS)
+      expect(getEntryAgeInDays(thirtyDaysAgo, now)).toBe(30)
+    })
+
+    it('returns correct age for exactly 90 days ago', () => {
+      const now = Date.now()
+      const ninetyDaysAgo = now - (90 * DAY_MS)
+      expect(getEntryAgeInDays(ninetyDaysAgo, now)).toBe(90)
+    })
+
+    it('returns negative age for future dates', () => {
+      const now = Date.now()
+      const tomorrow = now + DAY_MS
+      expect(getEntryAgeInDays(tomorrow, now)).toBeLessThan(0)
+    })
+  })
+
+  describe('isFutureDate', () => {
+    it('returns false for entry from today', () => {
+      const now = Date.now()
+      expect(isFutureDate(now, now)).toBe(false)
+    })
+
+    it('returns false for entry from yesterday', () => {
+      const now = Date.now()
+      const yesterday = now - DAY_MS
+      expect(isFutureDate(yesterday, now)).toBe(false)
+    })
+
+    it('returns true for entry tomorrow', () => {
+      const now = Date.now()
+      const tomorrow = now + DAY_MS
+      expect(isFutureDate(tomorrow, now)).toBe(true)
+    })
+
+    it('allows entries from same calendar day even if timestamp is later', () => {
+      // Create a reference date at 9 AM
+      const referenceDate = new Date()
+      referenceDate.setHours(9, 0, 0, 0)
+
+      // Create an entry time at 5 PM same day
+      const entryDate = new Date(referenceDate)
+      entryDate.setHours(17, 0, 0, 0)
+
+      // Same day should not be considered future
+      expect(isFutureDate(entryDate.getTime(), referenceDate.getTime())).toBe(false)
+    })
+  })
+
+  describe('checkEntryDateLimits', () => {
+    it('returns valid for entry from today (within normal limits)', () => {
+      const now = Date.now()
+      const result = checkEntryDateLimits(now, now)
+
+      expect(result.isValid).toBe(true)
+      expect(result.hasWarning).toBe(false)
+      expect(result.requiresAdminApproval).toBe(false)
+      expect(result.ageInDays).toBe(0)
+      expect(result.message).toBeNull()
+    })
+
+    it('returns valid without warning for entry 29 days ago', () => {
+      const now = Date.now()
+      const twentyNineDaysAgo = now - (29 * DAY_MS)
+      const result = checkEntryDateLimits(twentyNineDaysAgo, now)
+
+      expect(result.isValid).toBe(true)
+      expect(result.hasWarning).toBe(false)
+      expect(result.requiresAdminApproval).toBe(false)
+    })
+
+    it('returns valid with warning for entry exactly 31 days ago', () => {
+      const now = Date.now()
+      const thirtyOneDaysAgo = now - (31 * DAY_MS)
+      const result = checkEntryDateLimits(thirtyOneDaysAgo, now)
+
+      expect(result.isValid).toBe(true)
+      expect(result.hasWarning).toBe(true)
+      expect(result.requiresAdminApproval).toBe(false)
+      expect(result.ageInDays).toBe(31)
+      expect(result.message).toContain('31 days old')
+      expect(result.message).toContain('warning threshold')
+    })
+
+    it('returns valid with warning for entry 60 days ago', () => {
+      const now = Date.now()
+      const sixtyDaysAgo = now - (60 * DAY_MS)
+      const result = checkEntryDateLimits(sixtyDaysAgo, now)
+
+      expect(result.isValid).toBe(true)
+      expect(result.hasWarning).toBe(true)
+      expect(result.requiresAdminApproval).toBe(false)
+    })
+
+    it('returns invalid requiring admin for entry exactly 91 days ago', () => {
+      const now = Date.now()
+      const ninetyOneDaysAgo = now - (91 * DAY_MS)
+      const result = checkEntryDateLimits(ninetyOneDaysAgo, now)
+
+      expect(result.isValid).toBe(false)
+      expect(result.hasWarning).toBe(true)
+      expect(result.requiresAdminApproval).toBe(true)
+      expect(result.ageInDays).toBe(91)
+      expect(result.message).toContain('91 days old')
+      expect(result.message).toContain('requires admin approval')
+    })
+
+    it('returns invalid requiring admin for entry 120 days ago', () => {
+      const now = Date.now()
+      const oneHundredTwentyDaysAgo = now - (120 * DAY_MS)
+      const result = checkEntryDateLimits(oneHundredTwentyDaysAgo, now)
+
+      expect(result.isValid).toBe(false)
+      expect(result.requiresAdminApproval).toBe(true)
+    })
+
+    it('returns invalid for future dates', () => {
+      const now = Date.now()
+      const tomorrow = now + DAY_MS
+      const result = checkEntryDateLimits(tomorrow, now)
+
+      expect(result.isValid).toBe(false)
+      expect(result.hasWarning).toBe(false)
+      expect(result.requiresAdminApproval).toBe(false)
+      expect(result.message).toContain('future dates')
+    })
+  })
+
+  describe('checkTimeEntryDateLimits (alias)', () => {
+    it('works same as checkEntryDateLimits', () => {
+      const now = Date.now()
+      const fiftyDaysAgo = now - (50 * DAY_MS)
+
+      const generic = checkEntryDateLimits(fiftyDaysAgo, now)
+      const timeEntry = checkTimeEntryDateLimits(fiftyDaysAgo, now)
+
+      expect(timeEntry).toEqual(generic)
+    })
+  })
+
+  describe('checkExpenseDateLimits (alias)', () => {
+    it('works same as checkEntryDateLimits for 90-day rule', () => {
+      const now = Date.now()
+      const hundredDaysAgo = now - (100 * DAY_MS)
+
+      const result = checkExpenseDateLimits(hundredDaysAgo, now)
+
+      expect(result.isValid).toBe(false)
+      expect(result.requiresAdminApproval).toBe(true)
+      expect(result.message).toContain('requires admin approval')
+    })
+  })
+
+  describe('requiresAdminApprovalForDate', () => {
+    it('returns false for entries within 90 days', () => {
+      const now = Date.now()
+      expect(requiresAdminApprovalForDate(now, now)).toBe(false)
+      expect(requiresAdminApprovalForDate(now - (30 * DAY_MS), now)).toBe(false)
+      expect(requiresAdminApprovalForDate(now - (60 * DAY_MS), now)).toBe(false)
+      expect(requiresAdminApprovalForDate(now - (90 * DAY_MS), now)).toBe(false)
+    })
+
+    it('returns true for entries older than 90 days', () => {
+      const now = Date.now()
+      expect(requiresAdminApprovalForDate(now - (91 * DAY_MS), now)).toBe(true)
+      expect(requiresAdminApprovalForDate(now - (180 * DAY_MS), now)).toBe(true)
+    })
+  })
+
+  describe('isInWarningRange', () => {
+    it('returns false for entries less than 30 days old', () => {
+      const now = Date.now()
+      expect(isInWarningRange(now - (10 * DAY_MS), now)).toBe(false)
+      expect(isInWarningRange(now - (29 * DAY_MS), now)).toBe(false)
+    })
+
+    it('returns true for entries 31-90 days old', () => {
+      const now = Date.now()
+      expect(isInWarningRange(now - (31 * DAY_MS), now)).toBe(true)
+      expect(isInWarningRange(now - (60 * DAY_MS), now)).toBe(true)
+      expect(isInWarningRange(now - (90 * DAY_MS), now)).toBe(true)
+    })
+
+    it('returns false for entries older than 90 days (requires admin)', () => {
+      const now = Date.now()
+      expect(isInWarningRange(now - (91 * DAY_MS), now)).toBe(false)
+    })
+  })
+})
+
+// =============================================================================
+// Timer Duration Validation Tests
+// Reference: spec 07-workflow-time-tracking.md line 300 - "Timer auto-stops after 12 hours with warning"
+// =============================================================================
+
+describe('Timer Duration Validation', () => {
+  describe('checkTimerDuration', () => {
+    it('returns correct hours for short timer (2 hours)', () => {
+      const startTime = Date.now() - (2 * HOUR_MS)
+      const result = checkTimerDuration(startTime)
+
+      expect(result.hours).toBeCloseTo(2, 1)
+      expect(result.wasAutoStopped).toBe(false)
+      expect(result.hasWarning).toBe(false)
+      expect(result.message).toBeNull()
+    })
+
+    it('returns correct hours for 8-hour workday timer', () => {
+      const startTime = Date.now() - (8 * HOUR_MS)
+      const result = checkTimerDuration(startTime)
+
+      expect(result.hours).toBeCloseTo(8, 1)
+      expect(result.wasAutoStopped).toBe(false)
+      expect(result.hasWarning).toBe(false)
+    })
+
+    it('shows warning for timer approaching 12-hour limit (11 hours)', () => {
+      const startTime = Date.now() - (11 * HOUR_MS)
+      const result = checkTimerDuration(startTime)
+
+      expect(result.hours).toBeCloseTo(11, 1)
+      expect(result.wasAutoStopped).toBe(false)
+      expect(result.hasWarning).toBe(true)
+      expect(result.message).toContain('approaching')
+      expect(result.message).toContain('12 hour limit')
+    })
+
+    it('auto-stops timer at exactly 12 hours', () => {
+      const startTime = Date.now() - (12 * HOUR_MS)
+      const result = checkTimerDuration(startTime)
+
+      // Exactly 12 hours should not be auto-stopped (boundary)
+      expect(result.hours).toBeCloseTo(12, 1)
+      expect(result.wasAutoStopped).toBe(false)
+    })
+
+    it('auto-stops timer exceeding 12 hours (13 hours)', () => {
+      const startTime = Date.now() - (13 * HOUR_MS)
+      const result = checkTimerDuration(startTime)
+
+      expect(result.hours).toBe(TIMER_MAX_HOURS) // Capped at 12
+      expect(result.wasAutoStopped).toBe(true)
+      expect(result.hasWarning).toBe(true)
+      expect(result.message).toContain('exceeded')
+      expect(result.message).toContain('12 hours')
+      expect(result.message).toContain('auto-stopped')
+    })
+
+    it('auto-stops timer running for 24 hours at 12 hours', () => {
+      const startTime = Date.now() - (24 * HOUR_MS)
+      const result = checkTimerDuration(startTime)
+
+      expect(result.hours).toBe(TIMER_MAX_HOURS) // Capped at 12
+      expect(result.wasAutoStopped).toBe(true)
+      expect(result.message).toContain('Original duration')
+      expect(result.message).toContain('24')
+    })
+
+    it('handles very short timer durations (30 minutes)', () => {
+      const startTime = Date.now() - (0.5 * HOUR_MS)
+      const result = checkTimerDuration(startTime)
+
+      expect(result.hours).toBeCloseTo(0.5, 1)
+      expect(result.wasAutoStopped).toBe(false)
+      expect(result.hasWarning).toBe(false)
+    })
+  })
+
+  describe('getTimerHours', () => {
+    it('returns actual hours for short timers', () => {
+      const startTime = Date.now() - (5 * HOUR_MS)
+      expect(getTimerHours(startTime)).toBeCloseTo(5, 1)
+    })
+
+    it('returns capped hours for long timers', () => {
+      const startTime = Date.now() - (20 * HOUR_MS)
+      expect(getTimerHours(startTime)).toBe(TIMER_MAX_HOURS)
+    })
+  })
+
+  describe('wouldTimerAutoStop', () => {
+    it('returns false for timer under 12 hours', () => {
+      const startTime = Date.now() - (10 * HOUR_MS)
+      expect(wouldTimerAutoStop(startTime)).toBe(false)
+    })
+
+    it('returns false for timer at exactly 12 hours', () => {
+      const startTime = Date.now() - (12 * HOUR_MS)
+      expect(wouldTimerAutoStop(startTime)).toBe(false)
+    })
+
+    it('returns true for timer over 12 hours', () => {
+      const startTime = Date.now() - (13 * HOUR_MS)
+      expect(wouldTimerAutoStop(startTime)).toBe(true)
+    })
+  })
+})

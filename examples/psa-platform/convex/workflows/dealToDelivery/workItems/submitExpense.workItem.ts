@@ -17,6 +17,7 @@ import { authService } from "../../../authorization";
 import { authComponent } from "../../../auth";
 import { getExpense, updateExpenseStatus } from "../db/expenses";
 import { getRootWorkflowAndDealForWorkItem } from "../db/workItemContext";
+import { checkExpenseDateLimits } from "../db/dateLimits";
 import { assertExpenseExists, assertAuthenticatedUser } from "../exceptions";
 import { DealToDeliveryWorkItemHelpers } from "../helpers";
 import type { Id } from "../../../_generated/dataModel";
@@ -101,6 +102,22 @@ const submitExpenseWorkItemActions = authService.builders.workItemActions
       if (expense.status !== "Draft") {
         throw new Error(
           `Expense must be in Draft status to submit. Current status: ${expense.status}`
+        );
+      }
+
+      // Check expense date limits (90-day rule)
+      // Per spec 08-workflow-expense-tracking.md line 427: "Expenses older than 90 days require approval exception"
+      const dateCheck = checkExpenseDateLimits(expense.date);
+
+      if (dateCheck.requiresAdminApproval) {
+        // Block submission of expenses older than 90 days without admin approval
+        throw new Error(dateCheck.message ?? "Expense is too old and requires admin approval exception");
+      }
+
+      if (dateCheck.hasWarning) {
+        // Log warning for expenses 30-90 days old
+        console.warn(
+          `[submitExpense] Date warning for expense ${payload.expenseId}: ${dateCheck.message}`
         );
       }
 

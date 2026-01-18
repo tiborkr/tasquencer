@@ -283,3 +283,24 @@ export {
   listActiveHumanWorkItemsByDeal,
   listActiveClaimedWorkItemsForUser,
 } from "./db/workItems";
+
+// Date Limits (entry age validation, timer duration checks)
+export {
+  TIME_ENTRY_WARNING_DAYS,
+  MAX_ENTRY_AGE_DAYS,
+  TIMER_MAX_HOURS,
+  getEntryAgeInDays,
+  isFutureDate,
+  checkEntryDateLimits,
+  checkTimeEntryDateLimits,
+  checkExpenseDateLimits,
+  requiresAdminApprovalForDate,
+  isInWarningRange,
+  checkTimerDuration,
+  getTimerHours,
+  wouldTimerAutoStop,
+  validateTimeEntryDate,
+  validateExpenseDate,
+  getDateWarningMessage,
+} from "./db/dateLimits";
+export type { DateLimitCheckResult, TimerDurationCheckResult } from "./db/dateLimits";

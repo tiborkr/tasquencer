@@ -17,6 +17,7 @@ import { authService } from "../../../authorization";
 import { authComponent } from "../../../auth";
 import { getTimeEntry, updateTimeEntryStatus } from "../db/timeEntries";
 import { getRootWorkflowAndDealForWorkItem } from "../db/workItemContext";
+import { checkTimeEntryDateLimits } from "../db/dateLimits";
 import { assertTimeEntryExists, assertAuthenticatedUser } from "../exceptions";
 import { DealToDeliveryWorkItemHelpers } from "../helpers";
 import type { Id } from "../../../_generated/dataModel";
@@ -101,6 +102,22 @@ const submitTimeEntryWorkItemActions = authService.builders.workItemActions
       if (timeEntry.status !== "Draft") {
         throw new Error(
           `Time entry must be in Draft status to submit. Current status: ${timeEntry.status}`
+        );
+      }
+
+      // Check time entry date limits (90-day rule)
+      // Per spec: Similar to expenses, time entries older than 90 days may require admin approval
+      const dateCheck = checkTimeEntryDateLimits(timeEntry.date);
+
+      if (dateCheck.requiresAdminApproval) {
+        // Block submission of time entries older than 90 days without admin approval
+        throw new Error(dateCheck.message ?? "Time entry is too old and requires admin approval exception");
+      }
+
+      if (dateCheck.hasWarning) {
+        // Log warning for time entries 30-90 days old
+        console.warn(
+          `[submitTimeEntry] Date warning for time entry ${payload.timeEntryId}: ${dateCheck.message}`
         );
       }
 

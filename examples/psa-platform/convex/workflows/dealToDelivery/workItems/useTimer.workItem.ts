@@ -19,6 +19,7 @@ import { getProject } from "../db/projects";
 import { insertTimeEntry } from "../db/timeEntries";
 import { getRootWorkflowAndDealForWorkItem } from "../db/workItemContext";
 import { checkTimeEntryDuplicates } from "../db/duplicateDetection";
+import { checkTimerDuration, TIMER_MAX_HOURS } from "../db/dateLimits";
 import { assertProjectExists, assertAuthenticatedUser } from "../exceptions";
 import type { Id } from "../../../_generated/dataModel";
 
@@ -94,16 +95,24 @@ const useTimerWorkItemActions = authService.builders.workItemActions
       const project = await getProject(mutationCtx.db, payload.projectId);
       assertProjectExists(project, { projectId: payload.projectId });
 
-      // Calculate duration in hours: (now - startTime) / 3600000
-      const durationMs = now - payload.startTime;
-      const hours = Math.round((durationMs / 3600000) * 100) / 100; // Round to 2 decimals
+      // Check timer duration and handle auto-stop at 12 hours
+      // Per spec 07-workflow-time-tracking.md line 300: "Timer auto-stops after 12 hours with warning"
+      const timerCheck = checkTimerDuration(payload.startTime, now);
+      const hours = timerCheck.hours;
 
-      // Validate hours (per spec: 0.25 - 24 range)
+      // Log warning if timer was auto-stopped or is approaching limit
+      if (timerCheck.wasAutoStopped) {
+        console.warn(
+          `[useTimer] Timer auto-stopped after ${TIMER_MAX_HOURS} hours. ` +
+          `${timerCheck.message}`
+        );
+      } else if (timerCheck.hasWarning) {
+        console.warn(`[useTimer] ${timerCheck.message}`);
+      }
+
+      // Validate minimum hours (per spec: 0.25 minimum)
       if (hours < 0.25) {
         throw new Error("Timer duration must be at least 15 minutes (0.25 hours)");
-      }
-      if (hours > 24) {
-        throw new Error("Timer duration cannot exceed 24 hours");
       }
 
       // Check for potential duplicates (warn, don't block)
