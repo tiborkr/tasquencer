@@ -86,6 +86,17 @@ const reviseProposalWorkItemActions = authService.builders.workItemActions
       // Get next version number for this deal
       const version = await getNextProposalVersion(mutationCtx.db, payload.dealId);
 
+      // Enforce revision limit: max 5 revisions (version 6 = 5th revision)
+      // Version 1 is the original, versions 2-6 are the 5 allowed revisions
+      // Version 7+ requires manager approval (per spec 03-workflow-sales-phase.md line 390)
+      const MAX_REVISION_VERSION = 6;
+      if (version > MAX_REVISION_VERSION) {
+        throw new Error(
+          `Maximum 5 proposal revisions reached (current version: ${version - 1}). ` +
+          "Manager approval is required to continue revising."
+        );
+      }
+
       // Create the new proposal version
       await insertProposal(mutationCtx.db, {
         organizationId: deal.organizationId,

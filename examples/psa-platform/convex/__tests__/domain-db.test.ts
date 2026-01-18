@@ -2132,3 +2132,268 @@ describe('Estimates DB Functions', () => {
     })
   })
 })
+
+// =============================================================================
+// Proposal DB Function Imports (for proposal tests)
+// =============================================================================
+
+import {
+  insertProposal,
+  getProposal,
+  listProposalsByDeal,
+  getLatestProposalForDeal,
+  getNextProposalVersion,
+  markProposalSent,
+  markProposalSigned,
+  markProposalRejected,
+} from '../workflows/dealToDelivery/db/proposals'
+
+// =============================================================================
+// Proposal Tests
+// =============================================================================
+
+/**
+ * Create a test proposal
+ */
+async function createTestProposal(
+  t: TestContext,
+  orgId: Id<'organizations'>,
+  dealId: Id<'deals'>,
+  overrides: Partial<OmitIdAndCreationTime<Doc<'proposals'>>> = {}
+): Promise<{ id: Id<'proposals'>; data: OmitIdAndCreationTime<Doc<'proposals'>> }> {
+  const data: OmitIdAndCreationTime<Doc<'proposals'>> = {
+    organizationId: orgId,
+    dealId,
+    version: 1,
+    status: 'Draft',
+    documentUrl: 'https://example.com/proposal.pdf',
+    createdAt: Date.now(),
+    ...overrides,
+  }
+  const id = await t.run(async (ctx) => {
+    return await insertProposal(ctx.db, data)
+  })
+  return { id, data }
+}
+
+describe('Proposals DB Functions', () => {
+  describe('insertProposal', () => {
+    it('should insert a new proposal', async () => {
+      const t = setup()
+      const { orgId, userId, companyId, contactId } = await createBaseTestData(t)
+      const { id: dealId } = await createTestDeal(t, orgId, companyId, userId, contactId)
+
+      const proposalId = await t.run(async (ctx) => {
+        return await insertProposal(ctx.db, {
+          organizationId: orgId,
+          dealId,
+          version: 1,
+          status: 'Draft',
+          documentUrl: 'https://example.com/proposal.pdf',
+          createdAt: Date.now(),
+        })
+      })
+
+      expect(proposalId).toBeDefined()
+    })
+  })
+
+  describe('getProposal', () => {
+    it('should return proposal by ID', async () => {
+      const t = setup()
+      const { orgId, userId, companyId, contactId } = await createBaseTestData(t)
+      const { id: dealId } = await createTestDeal(t, orgId, companyId, userId, contactId)
+      const { id: proposalId } = await createTestProposal(t, orgId, dealId)
+
+      const proposal = await t.run(async (ctx) => {
+        return await getProposal(ctx.db, proposalId)
+      })
+
+      expect(proposal?.version).toBe(1)
+      expect(proposal?.status).toBe('Draft')
+    })
+  })
+
+  describe('listProposalsByDeal', () => {
+    it('should return proposals for a deal ordered by descending creation', async () => {
+      const t = setup()
+      const { orgId, userId, companyId, contactId } = await createBaseTestData(t)
+      const { id: dealId } = await createTestDeal(t, orgId, companyId, userId, contactId)
+
+      // Create multiple proposals
+      await createTestProposal(t, orgId, dealId, { version: 1 })
+      await createTestProposal(t, orgId, dealId, { version: 2 })
+      await createTestProposal(t, orgId, dealId, { version: 3 })
+
+      const proposals = await t.run(async (ctx) => {
+        return await listProposalsByDeal(ctx.db, dealId)
+      })
+
+      expect(proposals).toHaveLength(3)
+      // Should be ordered descending
+      expect(proposals[0].version).toBe(3)
+      expect(proposals[1].version).toBe(2)
+      expect(proposals[2].version).toBe(1)
+    })
+  })
+
+  describe('getLatestProposalForDeal', () => {
+    it('should return the most recent proposal', async () => {
+      const t = setup()
+      const { orgId, userId, companyId, contactId } = await createBaseTestData(t)
+      const { id: dealId } = await createTestDeal(t, orgId, companyId, userId, contactId)
+
+      await createTestProposal(t, orgId, dealId, { version: 1 })
+      await createTestProposal(t, orgId, dealId, { version: 2 })
+
+      const latest = await t.run(async (ctx) => {
+        return await getLatestProposalForDeal(ctx.db, dealId)
+      })
+
+      expect(latest?.version).toBe(2)
+    })
+
+    it('should return null if no proposals exist', async () => {
+      const t = setup()
+      const { orgId, userId, companyId, contactId } = await createBaseTestData(t)
+      const { id: dealId } = await createTestDeal(t, orgId, companyId, userId, contactId)
+
+      const latest = await t.run(async (ctx) => {
+        return await getLatestProposalForDeal(ctx.db, dealId)
+      })
+
+      expect(latest).toBeNull()
+    })
+  })
+
+  describe('getNextProposalVersion', () => {
+    it('should return 1 for first proposal', async () => {
+      const t = setup()
+      const { orgId, userId, companyId, contactId } = await createBaseTestData(t)
+      const { id: dealId } = await createTestDeal(t, orgId, companyId, userId, contactId)
+
+      const nextVersion = await t.run(async (ctx) => {
+        return await getNextProposalVersion(ctx.db, dealId)
+      })
+
+      expect(nextVersion).toBe(1)
+    })
+
+    it('should return next sequential version number', async () => {
+      const t = setup()
+      const { orgId, userId, companyId, contactId } = await createBaseTestData(t)
+      const { id: dealId } = await createTestDeal(t, orgId, companyId, userId, contactId)
+
+      // Create 3 proposals
+      await createTestProposal(t, orgId, dealId, { version: 1 })
+      await createTestProposal(t, orgId, dealId, { version: 2 })
+      await createTestProposal(t, orgId, dealId, { version: 3 })
+
+      const nextVersion = await t.run(async (ctx) => {
+        return await getNextProposalVersion(ctx.db, dealId)
+      })
+
+      expect(nextVersion).toBe(4)
+    })
+
+    it('should handle gaps in version numbers', async () => {
+      const t = setup()
+      const { orgId, userId, companyId, contactId } = await createBaseTestData(t)
+      const { id: dealId } = await createTestDeal(t, orgId, companyId, userId, contactId)
+
+      // Create proposals with gaps (simulating deleted versions)
+      await createTestProposal(t, orgId, dealId, { version: 1 })
+      await createTestProposal(t, orgId, dealId, { version: 5 })
+
+      const nextVersion = await t.run(async (ctx) => {
+        return await getNextProposalVersion(ctx.db, dealId)
+      })
+
+      expect(nextVersion).toBe(6)
+    })
+
+    it('should correctly track version count for revision limit enforcement', async () => {
+      // This test verifies the version counting that the reviseProposal work item
+      // uses to enforce the maximum 5 revisions rule (spec 03-workflow-sales-phase.md line 390)
+      // Version 1 = original proposal, Versions 2-6 = 5 allowed revisions
+      // Version 7+ requires manager approval
+      const t = setup()
+      const { orgId, userId, companyId, contactId } = await createBaseTestData(t)
+      const { id: dealId } = await createTestDeal(t, orgId, companyId, userId, contactId)
+
+      // Create 6 proposals (original + 5 revisions = the limit)
+      for (let i = 1; i <= 6; i++) {
+        await createTestProposal(t, orgId, dealId, { version: i })
+      }
+
+      const nextVersion = await t.run(async (ctx) => {
+        return await getNextProposalVersion(ctx.db, dealId)
+      })
+
+      // Next version would be 7, which exceeds the MAX_REVISION_VERSION of 6
+      // The reviseProposal.workItem.ts enforces: if (version > 6) throw Error
+      expect(nextVersion).toBe(7)
+      expect(nextVersion > 6).toBe(true) // Would trigger revision limit error
+    })
+  })
+
+  describe('markProposalSent', () => {
+    it('should update proposal status to Sent', async () => {
+      const t = setup()
+      const { orgId, userId, companyId, contactId } = await createBaseTestData(t)
+      const { id: dealId } = await createTestDeal(t, orgId, companyId, userId, contactId)
+      const { id: proposalId } = await createTestProposal(t, orgId, dealId)
+
+      await t.run(async (ctx) => {
+        await markProposalSent(ctx.db, proposalId)
+      })
+
+      const proposal = await t.run(async (ctx) => {
+        return await getProposal(ctx.db, proposalId)
+      })
+
+      expect(proposal?.status).toBe('Sent')
+      expect(proposal?.sentAt).toBeDefined()
+    })
+  })
+
+  describe('markProposalSigned', () => {
+    it('should update proposal status to Signed', async () => {
+      const t = setup()
+      const { orgId, userId, companyId, contactId } = await createBaseTestData(t)
+      const { id: dealId } = await createTestDeal(t, orgId, companyId, userId, contactId)
+      const { id: proposalId } = await createTestProposal(t, orgId, dealId)
+
+      await t.run(async (ctx) => {
+        await markProposalSigned(ctx.db, proposalId)
+      })
+
+      const proposal = await t.run(async (ctx) => {
+        return await getProposal(ctx.db, proposalId)
+      })
+
+      expect(proposal?.status).toBe('Signed')
+      expect(proposal?.signedAt).toBeDefined()
+    })
+  })
+
+  describe('markProposalRejected', () => {
+    it('should update proposal status to Rejected', async () => {
+      const t = setup()
+      const { orgId, userId, companyId, contactId } = await createBaseTestData(t)
+      const { id: dealId } = await createTestDeal(t, orgId, companyId, userId, contactId)
+      const { id: proposalId } = await createTestProposal(t, orgId, dealId)
+
+      await t.run(async (ctx) => {
+        await markProposalRejected(ctx.db, proposalId)
+      })
+
+      const proposal = await t.run(async (ctx) => {
+        return await getProposal(ctx.db, proposalId)
+      })
+
+      expect(proposal?.status).toBe('Rejected')
+      expect(proposal?.rejectedAt).toBeDefined()
+    })
+  })
+})
