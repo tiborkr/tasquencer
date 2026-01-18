@@ -436,27 +436,6 @@ describe('Estimates API', () => {
       expect(estimate!.total).toBe(150_00 * 20 + 175_00 * 40)
     })
 
-    it('creates estimate with empty services array', async () => {
-      const t = setup()
-      const { userId, organizationId } = await setupUserWithRole(
-        t,
-        'staff',
-        STAFF_SCOPES
-      )
-
-      const { dealId } = await createTestDeal(t, organizationId, userId)
-
-      const estimateId = await t.mutation(api.workflows.dealToDelivery.api.estimates.createEstimate, {
-        dealId,
-        services: [],
-      })
-
-      expect(estimateId).toBeDefined()
-
-      const estimate = await getEstimateDirectly(t, estimateId)
-      expect(estimate!.total).toBe(0)
-    })
-
     it('throws error for non-existent deal', async () => {
       const t = setup()
       const { userId, organizationId } = await setupUserWithRole(
@@ -471,10 +450,11 @@ describe('Estimates API', () => {
         await ctx.db.delete(dealId)
       })
 
+      // Note: Pass valid services array to test deal validation (not service validation)
       await expect(
         t.mutation(api.workflows.dealToDelivery.api.estimates.createEstimate, {
           dealId,
-          services: [],
+          services: [{ name: 'Test Service', rate: 100_00, hours: 10 }],
         })
       ).rejects.toThrow(/Deal not found/)
     })
@@ -810,6 +790,316 @@ describe('Estimates API', () => {
           serviceId,
         })
       ).rejects.toThrow(/Estimate service not found/)
+    })
+  })
+
+  // =============================================================================
+  // Service Rate and Hours Validation Tests
+  // =============================================================================
+
+  describe('Service Rate and Hours Validation', () => {
+    describe('createEstimate validation', () => {
+      it('rejects estimate with empty services array', async () => {
+        const t = setup()
+        const { userId, organizationId } = await setupUserWithRole(
+          t,
+          'staff',
+          STAFF_SCOPES
+        )
+
+        const { dealId } = await createTestDeal(t, organizationId, userId)
+
+        await expect(
+          t.mutation(api.workflows.dealToDelivery.api.estimates.createEstimate, {
+            dealId,
+            services: [],
+          })
+        ).rejects.toThrow('Estimate must have at least one service')
+      })
+
+      it('rejects service with zero rate', async () => {
+        const t = setup()
+        const { userId, organizationId } = await setupUserWithRole(
+          t,
+          'staff',
+          STAFF_SCOPES
+        )
+
+        const { dealId } = await createTestDeal(t, organizationId, userId)
+
+        await expect(
+          t.mutation(api.workflows.dealToDelivery.api.estimates.createEstimate, {
+            dealId,
+            services: [{ name: 'Consulting', rate: 0, hours: 10 }],
+          })
+        ).rejects.toThrow('Service rate must be greater than 0: Consulting')
+      })
+
+      it('rejects service with negative rate', async () => {
+        const t = setup()
+        const { userId, organizationId } = await setupUserWithRole(
+          t,
+          'staff',
+          STAFF_SCOPES
+        )
+
+        const { dealId } = await createTestDeal(t, organizationId, userId)
+
+        await expect(
+          t.mutation(api.workflows.dealToDelivery.api.estimates.createEstimate, {
+            dealId,
+            services: [{ name: 'Consulting', rate: -100_00, hours: 10 }],
+          })
+        ).rejects.toThrow('Service rate must be greater than 0: Consulting')
+      })
+
+      it('rejects service with zero hours', async () => {
+        const t = setup()
+        const { userId, organizationId } = await setupUserWithRole(
+          t,
+          'staff',
+          STAFF_SCOPES
+        )
+
+        const { dealId } = await createTestDeal(t, organizationId, userId)
+
+        await expect(
+          t.mutation(api.workflows.dealToDelivery.api.estimates.createEstimate, {
+            dealId,
+            services: [{ name: 'Consulting', rate: 150_00, hours: 0 }],
+          })
+        ).rejects.toThrow('Service hours must be greater than 0: Consulting')
+      })
+
+      it('rejects service with negative hours', async () => {
+        const t = setup()
+        const { userId, organizationId } = await setupUserWithRole(
+          t,
+          'staff',
+          STAFF_SCOPES
+        )
+
+        const { dealId } = await createTestDeal(t, organizationId, userId)
+
+        await expect(
+          t.mutation(api.workflows.dealToDelivery.api.estimates.createEstimate, {
+            dealId,
+            services: [{ name: 'Consulting', rate: 150_00, hours: -5 }],
+          })
+        ).rejects.toThrow('Service hours must be greater than 0: Consulting')
+      })
+
+      it('allows minimum valid rate (1 cent)', async () => {
+        const t = setup()
+        const { userId, organizationId } = await setupUserWithRole(
+          t,
+          'staff',
+          STAFF_SCOPES
+        )
+
+        const { dealId } = await createTestDeal(t, organizationId, userId)
+
+        const estimateId = await t.mutation(
+          api.workflows.dealToDelivery.api.estimates.createEstimate,
+          {
+            dealId,
+            services: [{ name: 'Minimum Rate', rate: 1, hours: 1 }],
+          }
+        )
+
+        const estimate = await getEstimateDirectly(t, estimateId)
+        expect(estimate!.total).toBe(1)
+      })
+    })
+
+    describe('addEstimateService validation', () => {
+      it('rejects service with zero rate', async () => {
+        const t = setup()
+        const { userId, organizationId } = await setupUserWithRole(
+          t,
+          'staff',
+          STAFF_SCOPES
+        )
+
+        const { dealId } = await createTestDeal(t, organizationId, userId)
+        const estimateId = await createEstimateDirectly(t, organizationId, dealId)
+
+        await expect(
+          t.mutation(api.workflows.dealToDelivery.api.estimates.addEstimateService, {
+            estimateId,
+            name: 'Invalid Service',
+            rate: 0,
+            hours: 10,
+          })
+        ).rejects.toThrow('Service rate must be greater than 0')
+      })
+
+      it('rejects service with negative rate', async () => {
+        const t = setup()
+        const { userId, organizationId } = await setupUserWithRole(
+          t,
+          'staff',
+          STAFF_SCOPES
+        )
+
+        const { dealId } = await createTestDeal(t, organizationId, userId)
+        const estimateId = await createEstimateDirectly(t, organizationId, dealId)
+
+        await expect(
+          t.mutation(api.workflows.dealToDelivery.api.estimates.addEstimateService, {
+            estimateId,
+            name: 'Invalid Service',
+            rate: -100_00,
+            hours: 10,
+          })
+        ).rejects.toThrow('Service rate must be greater than 0')
+      })
+
+      it('rejects service with zero hours', async () => {
+        const t = setup()
+        const { userId, organizationId } = await setupUserWithRole(
+          t,
+          'staff',
+          STAFF_SCOPES
+        )
+
+        const { dealId } = await createTestDeal(t, organizationId, userId)
+        const estimateId = await createEstimateDirectly(t, organizationId, dealId)
+
+        await expect(
+          t.mutation(api.workflows.dealToDelivery.api.estimates.addEstimateService, {
+            estimateId,
+            name: 'Invalid Service',
+            rate: 150_00,
+            hours: 0,
+          })
+        ).rejects.toThrow('Service hours must be greater than 0')
+      })
+
+      it('rejects service with negative hours', async () => {
+        const t = setup()
+        const { userId, organizationId } = await setupUserWithRole(
+          t,
+          'staff',
+          STAFF_SCOPES
+        )
+
+        const { dealId } = await createTestDeal(t, organizationId, userId)
+        const estimateId = await createEstimateDirectly(t, organizationId, dealId)
+
+        await expect(
+          t.mutation(api.workflows.dealToDelivery.api.estimates.addEstimateService, {
+            estimateId,
+            name: 'Invalid Service',
+            rate: 150_00,
+            hours: -5,
+          })
+        ).rejects.toThrow('Service hours must be greater than 0')
+      })
+    })
+
+    describe('updateEstimateService validation', () => {
+      it('rejects update with zero rate', async () => {
+        const t = setup()
+        const { userId, organizationId } = await setupUserWithRole(
+          t,
+          'staff',
+          STAFF_SCOPES
+        )
+
+        const { dealId } = await createTestDeal(t, organizationId, userId)
+        const estimateId = await createEstimateDirectly(t, organizationId, dealId)
+        const serviceId = await createServiceDirectly(t, estimateId)
+
+        await expect(
+          t.mutation(api.workflows.dealToDelivery.api.estimates.updateEstimateService, {
+            serviceId,
+            rate: 0,
+          })
+        ).rejects.toThrow('Service rate must be greater than 0')
+      })
+
+      it('rejects update with negative rate', async () => {
+        const t = setup()
+        const { userId, organizationId } = await setupUserWithRole(
+          t,
+          'staff',
+          STAFF_SCOPES
+        )
+
+        const { dealId } = await createTestDeal(t, organizationId, userId)
+        const estimateId = await createEstimateDirectly(t, organizationId, dealId)
+        const serviceId = await createServiceDirectly(t, estimateId)
+
+        await expect(
+          t.mutation(api.workflows.dealToDelivery.api.estimates.updateEstimateService, {
+            serviceId,
+            rate: -100_00,
+          })
+        ).rejects.toThrow('Service rate must be greater than 0')
+      })
+
+      it('rejects update with zero hours', async () => {
+        const t = setup()
+        const { userId, organizationId } = await setupUserWithRole(
+          t,
+          'staff',
+          STAFF_SCOPES
+        )
+
+        const { dealId } = await createTestDeal(t, organizationId, userId)
+        const estimateId = await createEstimateDirectly(t, organizationId, dealId)
+        const serviceId = await createServiceDirectly(t, estimateId)
+
+        await expect(
+          t.mutation(api.workflows.dealToDelivery.api.estimates.updateEstimateService, {
+            serviceId,
+            hours: 0,
+          })
+        ).rejects.toThrow('Service hours must be greater than 0')
+      })
+
+      it('rejects update with negative hours', async () => {
+        const t = setup()
+        const { userId, organizationId } = await setupUserWithRole(
+          t,
+          'staff',
+          STAFF_SCOPES
+        )
+
+        const { dealId } = await createTestDeal(t, organizationId, userId)
+        const estimateId = await createEstimateDirectly(t, organizationId, dealId)
+        const serviceId = await createServiceDirectly(t, estimateId)
+
+        await expect(
+          t.mutation(api.workflows.dealToDelivery.api.estimates.updateEstimateService, {
+            serviceId,
+            hours: -5,
+          })
+        ).rejects.toThrow('Service hours must be greater than 0')
+      })
+
+      it('allows update of only name (no rate/hours validation)', async () => {
+        const t = setup()
+        const { userId, organizationId } = await setupUserWithRole(
+          t,
+          'staff',
+          STAFF_SCOPES
+        )
+
+        const { dealId } = await createTestDeal(t, organizationId, userId)
+        const estimateId = await createEstimateDirectly(t, organizationId, dealId)
+        const serviceId = await createServiceDirectly(t, estimateId)
+
+        // Should succeed - only updating name, no rate/hours validation needed
+        await t.mutation(api.workflows.dealToDelivery.api.estimates.updateEstimateService, {
+          serviceId,
+          name: 'Updated Name',
+        })
+
+        const service = await getServiceDirectly(t, serviceId)
+        expect(service!.name).toBe('Updated Name')
+      })
     })
   })
 

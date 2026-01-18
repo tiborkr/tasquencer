@@ -149,6 +149,21 @@ export const createEstimate = mutation({
   handler: async (ctx, args): Promise<Id<'estimates'>> => {
     await requirePsaStaffMember(ctx)
 
+    // Validate services array is not empty (spec 04-workflow-planning-phase.md line 149)
+    if (args.services.length === 0) {
+      throw new Error('Estimate must have at least one service')
+    }
+
+    // Validate rate and hours for each service (spec 04-workflow-planning-phase.md line 150)
+    for (const service of args.services) {
+      if (service.rate <= 0) {
+        throw new Error(`Service rate must be greater than 0: ${service.name}`)
+      }
+      if (service.hours <= 0) {
+        throw new Error(`Service hours must be greater than 0: ${service.name}`)
+      }
+    }
+
     // Get deal to verify it exists and get organization ID
     const deal = await getDeal(ctx.db, args.dealId)
     if (!deal) {
@@ -205,6 +220,14 @@ export const addEstimateService = mutation({
   handler: async (ctx, args): Promise<Id<'estimateServices'>> => {
     await requirePsaStaffMember(ctx)
 
+    // Validate rate and hours (spec 04-workflow-planning-phase.md line 150)
+    if (args.rate <= 0) {
+      throw new Error('Service rate must be greater than 0')
+    }
+    if (args.hours <= 0) {
+      throw new Error('Service hours must be greater than 0')
+    }
+
     // Verify estimate exists
     const estimate = await getEstimateFromDb(ctx.db, args.estimateId)
     if (!estimate) {
@@ -249,6 +272,14 @@ export const updateEstimateService = mutation({
   },
   handler: async (ctx, args): Promise<void> => {
     await requirePsaStaffMember(ctx)
+
+    // Validate rate and hours if provided (spec 04-workflow-planning-phase.md line 150)
+    if (args.rate !== undefined && args.rate <= 0) {
+      throw new Error('Service rate must be greater than 0')
+    }
+    if (args.hours !== undefined && args.hours <= 0) {
+      throw new Error('Service hours must be greater than 0')
+    }
 
     // Verify service exists
     const service = await getEstimateServiceFromDb(ctx.db, args.serviceId)
