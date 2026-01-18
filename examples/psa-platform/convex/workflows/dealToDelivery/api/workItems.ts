@@ -18,7 +18,13 @@ import { requirePsaStaffMember } from '../domain/services/authorizationService'
 import { DealToDeliveryWorkItemHelpers } from '../helpers'
 import { authComponent } from '../../../auth'
 import { isHumanOffer, isHumanClaim } from '@repo/tasquencer'
-import { getProject } from '../db/projects'
+import {
+  getProject,
+  getWorkItem,
+  listActiveClaimedWorkItemsForUser,
+  listActiveHumanWorkItems,
+  listActiveHumanWorkItemsByDeal,
+} from '../db'
 
 /**
  * Maps work item metadata to a standardized response format.
@@ -118,27 +124,8 @@ export const getMyClaimedTasks = query({
 
     const userId = authUser.userId as Id<'users'>
 
-    // Query work items where the claim has this userId
-    const allMetadata = await ctx.db
-      .query('dealToDeliveryWorkItems')
-      .collect()
-
-    // Filter for claimed by this user and load work items
-    const claimedItems = allMetadata.filter(
-      (m) => isHumanClaim(m.claim) && m.claim.userId === userId,
-    )
-
-    const workItems = await Promise.all(
-      claimedItems.map((m) => ctx.db.get(m.workItemId)),
-    )
-
-    // Filter for active (not completed/failed/canceled)
-    const activeItems = claimedItems
-      .map((metadata, idx) => ({ metadata, workItem: workItems[idx] }))
-      .filter(
-        ({ workItem }) =>
-          workItem?.state === 'initialized' || workItem?.state === 'started',
-      )
+    // Use domain layer function to get claimed work items
+    const activeItems = await listActiveClaimedWorkItemsForUser(ctx.db, userId)
 
     return activeItems.map(({ metadata, workItem }) =>
       mapWorkItemToResponse(metadata, workItem, { includeWorkItemState: true }),
@@ -157,23 +144,8 @@ export const getAllAvailableTasks = query({
   handler: async (ctx) => {
     await requirePsaStaffMember(ctx)
 
-    const allMetadata = await ctx.db
-      .query('dealToDeliveryWorkItems')
-      .collect()
-
-    // Load all work items in parallel
-    const workItems = await Promise.all(
-      allMetadata.map((metadata) => ctx.db.get(metadata.workItemId)),
-    )
-
-    // Filter active work items with human offers
-    const activeItems = allMetadata
-      .map((metadata, idx) => ({ metadata, workItem: workItems[idx] }))
-      .filter(
-        ({ workItem }) =>
-          workItem?.state === 'initialized' || workItem?.state === 'started',
-      )
-      .filter(({ metadata }) => isHumanOffer(metadata.offer))
+    // Use domain layer function to get active human work items
+    const activeItems = await listActiveHumanWorkItems(ctx.db)
 
     return activeItems.map(({ metadata, workItem }) =>
       mapWorkItemToResponse(metadata, workItem, {
@@ -194,24 +166,10 @@ export const getTasksByDeal = query({
   handler: async (ctx, args) => {
     await requirePsaStaffMember(ctx)
 
-    const allMetadata = await ctx.db
-      .query('dealToDeliveryWorkItems')
-      .withIndex('by_aggregateTableId', (q) =>
-        q.eq('aggregateTableId', args.dealId),
-      )
-      .collect()
+    // Use domain layer function to get active human work items for the deal
+    const activeItems = await listActiveHumanWorkItemsByDeal(ctx.db, args.dealId)
 
-    // Load work items
-    const workItems = await Promise.all(
-      allMetadata.map((m) => ctx.db.get(m.workItemId)),
-    )
-
-    // Filter human-offered items
-    const humanItems = allMetadata
-      .map((metadata, idx) => ({ metadata, workItem: workItems[idx] }))
-      .filter(({ metadata }) => isHumanOffer(metadata.offer))
-
-    return humanItems.map(({ metadata, workItem }) =>
+    return activeItems.map(({ metadata, workItem }) =>
       mapWorkItemToResponse(metadata, workItem, { includeWorkItemState: true }),
     )
   },
@@ -235,25 +193,10 @@ export const getTasksByProject = query({
       return []
     }
 
-    const dealId = project.dealId
-    const allMetadata = await ctx.db
-      .query('dealToDeliveryWorkItems')
-      .withIndex('by_aggregateTableId', (q) =>
-        q.eq('aggregateTableId', dealId),
-      )
-      .collect()
+    // Use domain layer function to get active human work items for the deal
+    const activeItems = await listActiveHumanWorkItemsByDeal(ctx.db, project.dealId)
 
-    // Load work items
-    const workItems = await Promise.all(
-      allMetadata.map((m) => ctx.db.get(m.workItemId)),
-    )
-
-    // Filter human-offered items
-    const humanItems = allMetadata
-      .map((metadata, idx) => ({ metadata, workItem: workItems[idx] }))
-      .filter(({ metadata }) => isHumanOffer(metadata.offer))
-
-    return humanItems.map(({ metadata, workItem }) =>
+    return activeItems.map(({ metadata, workItem }) =>
       mapWorkItemToResponse(metadata, workItem, { includeWorkItemState: true }),
     )
   },
@@ -276,7 +219,8 @@ export const getWorkItemMetadataByWorkItemId = query({
     )
     if (!metadata) return null
 
-    const workItem = await ctx.db.get(args.workItemId)
+    // Use domain layer function to get work item
+    const workItem = await getWorkItem(ctx.db, args.workItemId)
 
     return mapWorkItemToResponse(metadata, workItem, {
       includeWorkItemState: true,
@@ -337,7 +281,8 @@ export const claimWorkItem = mutation({
       ctx.db,
       args.workItemId,
     )
-    const workItem = await ctx.db.get(args.workItemId)
+    // Use domain layer function to get work item
+    const workItem = await getWorkItem(ctx.db, args.workItemId)
 
     return mapWorkItemToResponse(updatedMetadata!, workItem, {
       includeWorkItemState: true,

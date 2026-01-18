@@ -269,3 +269,17 @@ export {
   getRootWorkflowAndDealForWorkItem,
   getWorkflowIdsForWorkItem,
 } from "./db/workItemContext";
+
+// Work Items (domain layer for work item access)
+export {
+  getWorkItem,
+  getWorkItemWithMetadata,
+  listAllWorkItemMetadata,
+  listAllWorkItemsWithMetadata,
+  listActiveWorkItems,
+  listActiveHumanWorkItems,
+  listWorkItemMetadataByDeal,
+  listWorkItemsWithMetadataByDeal,
+  listActiveHumanWorkItemsByDeal,
+  listActiveClaimedWorkItemsForUser,
+} from "./db/workItems";
