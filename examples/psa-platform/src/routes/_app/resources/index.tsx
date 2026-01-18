@@ -387,9 +387,9 @@ function ResourceSchedulerPage() {
   const [isModalOpen, setIsModalOpen] = useState(false)
 
   // Filter state
-  const [skillFilter, setSkillFilter] = useState<string>('')
-  const [roleFilter, setRoleFilter] = useState<string>('')
-  const [deptFilter, setDeptFilter] = useState<string>('')
+  const [skillFilter, setSkillFilter] = useState<string>('all')
+  const [roleFilter, setRoleFilter] = useState<string>('all')
+  const [deptFilter, setDeptFilter] = useState<string>('all')
 
   const viewEnd = useMemo(() => {
     const end = new Date(viewStart)
@@ -405,9 +405,9 @@ function ResourceSchedulerPage() {
     {
       startDate: viewStart.getTime(),
       endDate: viewEnd.getTime(),
-      skills: skillFilter ? [skillFilter] : undefined,
-      roles: roleFilter ? [roleFilter] : undefined,
-      departments: deptFilter ? [deptFilter] : undefined,
+      skills: skillFilter === 'all' ? undefined : [skillFilter],
+      roles: roleFilter === 'all' ? undefined : [roleFilter],
+      departments: deptFilter === 'all' ? undefined : [deptFilter],
     }
   )
 
@@ -557,7 +557,7 @@ function ResourceSchedulerPage() {
                   <SelectValue placeholder="Skills" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Skills</SelectItem>
+                  <SelectItem value="all">All Skills</SelectItem>
                   {filterOptions.skills.map((skill) => (
                     <SelectItem key={skill} value={skill}>
                       {skill}
@@ -570,7 +570,7 @@ function ResourceSchedulerPage() {
                   <SelectValue placeholder="Role" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Roles</SelectItem>
+                  <SelectItem value="all">All Roles</SelectItem>
                   {filterOptions.roles.map((role) => (
                     <SelectItem key={role} value={role}>
                       {role}
@@ -583,7 +583,7 @@ function ResourceSchedulerPage() {
                   <SelectValue placeholder="Department" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Depts</SelectItem>
+                  <SelectItem value="all">All Depts</SelectItem>
                   {filterOptions.departments.map((dept) => (
                     <SelectItem key={dept} value={dept}>
                       {dept}
@@ -607,7 +607,9 @@ function ResourceSchedulerPage() {
                   <Users className="h-12 w-12 text-muted-foreground/50 mb-4" />
                   <h3 className="text-lg font-medium">No team members found</h3>
                   <p className="text-muted-foreground mt-1">
-                    {skillFilter || roleFilter || deptFilter
+                    {(skillFilter !== 'all' ||
+                      roleFilter !== 'all' ||
+                      deptFilter !== 'all')
                       ? 'Try adjusting your filters.'
                       : 'Add team members to start scheduling.'}
                   </p>
