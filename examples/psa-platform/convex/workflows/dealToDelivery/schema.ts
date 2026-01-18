@@ -945,6 +945,14 @@ const dealToDeliveryWorkItems = defineWorkItemMetadataTable("deals").withPayload
       priority: workItemPriority,
       invoiceId: v.optional(v.id("invoices")),
     }),
+    // TENET-WF-EXEC: Invoice voiding is now work item-driven for audit trail
+    v.object({
+      type: v.literal("voidInvoice"),
+      taskName: v.string(),
+      priority: workItemPriority,
+      invoiceId: v.optional(v.id("invoices")),
+      voidReason: v.optional(v.string()),
+    }),
     v.object({
       type: v.literal("checkMoreBilling"),
       taskName: v.string(),

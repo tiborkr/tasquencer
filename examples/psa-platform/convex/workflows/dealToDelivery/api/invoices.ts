@@ -7,13 +7,16 @@
  *
  * TENET-AUTHZ: All queries and mutations are protected by scope-based authorization.
  * TENET-DOMAIN-BOUNDARY: All data access goes through domain functions (db.ts).
+ * TENET-WF-EXEC: Invoice voiding is workflow-driven for proper audit trails.
  *
  * Reference: .review/recipes/psa-platform/specs/26-api-endpoints.md
  */
 import { v } from 'convex/values'
 import { mutation, query } from '../../../_generated/server'
+import { internal } from '../../../_generated/api'
 import type { Doc, Id } from '../../../_generated/dataModel'
 import { requirePsaStaffMember } from '../domain/services/authorizationService'
+import { assertUserHasScope } from '../../../authorization'
 import {
   getInvoice as getInvoiceFromDb,
   insertInvoice,
@@ -30,7 +33,6 @@ import {
   recalculateInvoiceTotals,
   finalizeInvoice as finalizeInvoiceDb,
   markInvoiceSent,
-  voidInvoice as voidInvoiceDb,
   canVoidInvoice,
 } from '../db'
 
@@ -479,6 +481,10 @@ export const sendInvoice = mutation({
 /**
  * Void an invoice (instead of deleting it).
  * Per spec 11-workflow-invoice-generation.md line 444: "Void not delete" for finalized invoices.
+ *
+ * TENET-WF-EXEC: Invoice voiding is now workflow-driven via the invoiceVoid workflow.
+ * This creates proper audit trails through the Tasquencer work item system.
+ *
  * Authorization: Requires dealToDelivery:invoices:void scope.
  *
  * Valid states for voiding: Finalized, Sent, Viewed
@@ -486,7 +492,7 @@ export const sendInvoice = mutation({
  *
  * @param args.invoiceId - The invoice to void
  * @param args.reason - Optional: Reason for voiding the invoice
- * @returns Object with voided status and void details
+ * @returns Object with voided status, void details, and workflow ID
  */
 export const voidInvoice = mutation({
   args: {
@@ -496,15 +502,17 @@ export const voidInvoice = mutation({
   handler: async (
     ctx,
     args
-  ): Promise<{ voided: boolean; voidedAt: number; canVoid: boolean }> => {
-    const userId = await requirePsaStaffMember(ctx)
+  ): Promise<{ voided: boolean; voidedAt: number; canVoid: boolean; workflowId?: Id<'tasquencerWorkflows'> }> => {
+    // TENET-AUTHZ: Require invoices:void scope (not just staff)
+    await requirePsaStaffMember(ctx)
+    await assertUserHasScope(ctx, 'dealToDelivery:invoices:void')
 
     const invoice = await getInvoiceFromDb(ctx.db, args.invoiceId)
     if (!invoice) {
       throw new Error(`Invoice not found: ${args.invoiceId}`)
     }
 
-    // Check if invoice can be voided
+    // Check if invoice can be voided (pre-flight validation before workflow)
     if (!canVoidInvoice(invoice)) {
       if (invoice.status === 'Draft') {
         throw new Error('Draft invoices should be deleted, not voided')
@@ -513,7 +521,7 @@ export const voidInvoice = mutation({
         throw new Error('Cannot void a paid invoice. Record a refund or reversal first.')
       }
       if (invoice.status === 'Void') {
-        // Already voided - return success without error
+        // Already voided - return success without error (idempotent)
         return {
           voided: true,
           voidedAt: invoice.voidedAt ?? Date.now(),
@@ -523,13 +531,57 @@ export const voidInvoice = mutation({
       throw new Error(`Invoice in ${invoice.status} status cannot be voided`)
     }
 
-    // Void the invoice
-    await voidInvoiceDb(ctx.db, args.invoiceId, userId, args.reason)
+    // TENET-WF-EXEC: Use workflow for invoice voiding to create audit trail
+    // Step 1: Initialize the invoiceVoid root workflow
+    const workflowId = await ctx.runMutation(
+      internal.workflows.dealToDelivery.api.invoiceVoidWorkflow.internalInitializeInvoiceVoidWorkflow,
+      {
+        payload: {},
+      },
+    )
+
+    // Step 2: Initialize the voidInvoice work item
+    const workItemId = await ctx.runMutation(
+      internal.workflows.dealToDelivery.api.invoiceVoidWorkflow.internalInitializeInvoiceVoidWorkItem,
+      {
+        target: {
+          path: ['invoiceVoid', 'voidInvoice', 'voidInvoice'],
+          parentWorkflowId: workflowId,
+          parentTaskName: 'voidInvoice',
+        },
+        args: { name: 'voidInvoice' as const, payload: { invoiceId: args.invoiceId } },
+      },
+    )
+
+    // Step 3: Start the voidInvoice work item
+    await ctx.runMutation(
+      internal.workflows.dealToDelivery.api.invoiceVoidWorkflow.internalStartInvoiceVoidWorkItem,
+      {
+        workItemId,
+        args: { name: 'voidInvoice' as const },
+      },
+    )
+
+    // Step 4: Complete the voidInvoice work item
+    await ctx.runMutation(
+      internal.workflows.dealToDelivery.api.invoiceVoidWorkflow.internalCompleteInvoiceVoidWorkItem,
+      {
+        workItemId,
+        args: {
+          name: 'voidInvoice' as const,
+          payload: {
+            invoiceId: args.invoiceId,
+            reason: args.reason,
+          },
+        },
+      },
+    )
 
     return {
       voided: true,
       voidedAt: Date.now(),
       canVoid: true,
+      workflowId,
     }
   },
 })

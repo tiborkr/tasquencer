@@ -21,6 +21,7 @@ import type * as workflows_dealToDelivery_api_companies from "../workflows/dealT
 import type * as workflows_dealToDelivery_api_deals from "../workflows/dealToDelivery/api/deals.js";
 import type * as workflows_dealToDelivery_api_estimates from "../workflows/dealToDelivery/api/estimates.js";
 import type * as workflows_dealToDelivery_api_expenses from "../workflows/dealToDelivery/api/expenses.js";
+import type * as workflows_dealToDelivery_api_invoiceVoidWorkflow from "../workflows/dealToDelivery/api/invoiceVoidWorkflow.js";
 import type * as workflows_dealToDelivery_api_invoices from "../workflows/dealToDelivery/api/invoices.js";
 import type * as workflows_dealToDelivery_api_organizations from "../workflows/dealToDelivery/api/organizations.js";
 import type * as workflows_dealToDelivery_api_permissions from "../workflows/dealToDelivery/api/permissions.js";
@@ -64,6 +65,7 @@ import type * as workflows_dealToDelivery_definition from "../workflows/dealToDe
 import type * as workflows_dealToDelivery_domain_services_authorizationService from "../workflows/dealToDelivery/domain/services/authorizationService.js";
 import type * as workflows_dealToDelivery_exceptions from "../workflows/dealToDelivery/exceptions.js";
 import type * as workflows_dealToDelivery_helpers from "../workflows/dealToDelivery/helpers.js";
+import type * as workflows_dealToDelivery_invoiceVoidDefinition from "../workflows/dealToDelivery/invoiceVoidDefinition.js";
 import type * as workflows_dealToDelivery_scopes from "../workflows/dealToDelivery/scopes.js";
 import type * as workflows_dealToDelivery_workItems_authHelpers from "../workflows/dealToDelivery/workItems/authHelpers.js";
 import type * as workflows_dealToDelivery_workItems_helpers from "../workflows/dealToDelivery/workItems/helpers.js";
@@ -90,6 +92,7 @@ declare const fullApi: ApiFromModules<{
   "workflows/dealToDelivery/api/deals": typeof workflows_dealToDelivery_api_deals;
   "workflows/dealToDelivery/api/estimates": typeof workflows_dealToDelivery_api_estimates;
   "workflows/dealToDelivery/api/expenses": typeof workflows_dealToDelivery_api_expenses;
+  "workflows/dealToDelivery/api/invoiceVoidWorkflow": typeof workflows_dealToDelivery_api_invoiceVoidWorkflow;
   "workflows/dealToDelivery/api/invoices": typeof workflows_dealToDelivery_api_invoices;
   "workflows/dealToDelivery/api/organizations": typeof workflows_dealToDelivery_api_organizations;
   "workflows/dealToDelivery/api/permissions": typeof workflows_dealToDelivery_api_permissions;
@@ -133,6 +136,7 @@ declare const fullApi: ApiFromModules<{
   "workflows/dealToDelivery/domain/services/authorizationService": typeof workflows_dealToDelivery_domain_services_authorizationService;
   "workflows/dealToDelivery/exceptions": typeof workflows_dealToDelivery_exceptions;
   "workflows/dealToDelivery/helpers": typeof workflows_dealToDelivery_helpers;
+  "workflows/dealToDelivery/invoiceVoidDefinition": typeof workflows_dealToDelivery_invoiceVoidDefinition;
   "workflows/dealToDelivery/scopes": typeof workflows_dealToDelivery_scopes;
   "workflows/dealToDelivery/workItems/authHelpers": typeof workflows_dealToDelivery_workItems_authHelpers;
   "workflows/dealToDelivery/workItems/helpers": typeof workflows_dealToDelivery_workItems_helpers;

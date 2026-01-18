@@ -25,6 +25,16 @@ import type { Id, Doc } from '../_generated/dataModel'
 
 // All scopes needed for invoice tests
 const STAFF_SCOPES = ['dealToDelivery:staff']
+// Finance scopes for operations like voiding invoices (per spec 02-authorization.md)
+const FINANCE_SCOPES = [
+  'dealToDelivery:staff',
+  'dealToDelivery:invoices:void',
+  'dealToDelivery:invoices:create',
+  'dealToDelivery:invoices:edit',
+  'dealToDelivery:invoices:finalize',
+  'dealToDelivery:invoices:send',
+  'dealToDelivery:invoices:view:all',
+]
 
 beforeEach(() => {
   vi.useFakeTimers()
@@ -1245,10 +1255,11 @@ describe('Invoices API', () => {
   describe('voidInvoice', () => {
     it('should void a Finalized invoice', async () => {
       const t = setup()
+      // Use FINANCE_SCOPES since voidInvoice requires dealToDelivery:invoices:void
       const { organizationId: orgId, userId } = await setupUserWithRole(
         t,
-        'staff-user',
-        STAFF_SCOPES
+        'finance-user',
+        FINANCE_SCOPES
       )
       const { companyId, projectId } = await setupInvoicePrerequisites(t, orgId, userId)
 
@@ -1264,6 +1275,8 @@ describe('Invoices API', () => {
       expect(result.voided).toBe(true)
       expect(result.voidedAt).toBeDefined()
       expect(result.canVoid).toBe(true)
+      // TENET-WF-EXEC: Verify workflow ID is returned
+      expect(result.workflowId).toBeDefined()
 
       // Verify invoice status is now Void
       const invoice = await t.run(async (ctx) => ctx.db.get(invoiceId))
@@ -1275,8 +1288,8 @@ describe('Invoices API', () => {
       const t = setup()
       const { organizationId: orgId, userId } = await setupUserWithRole(
         t,
-        'staff-user',
-        STAFF_SCOPES
+        'finance-user',
+        FINANCE_SCOPES
       )
       const { companyId, projectId } = await setupInvoicePrerequisites(t, orgId, userId)
 
@@ -1299,8 +1312,8 @@ describe('Invoices API', () => {
       const t = setup()
       const { organizationId: orgId, userId } = await setupUserWithRole(
         t,
-        'staff-user',
-        STAFF_SCOPES
+        'finance-user',
+        FINANCE_SCOPES
       )
       const { companyId, projectId } = await setupInvoicePrerequisites(t, orgId, userId)
 
@@ -1323,8 +1336,8 @@ describe('Invoices API', () => {
       const t = setup()
       const { organizationId: orgId, userId } = await setupUserWithRole(
         t,
-        'staff-user',
-        STAFF_SCOPES
+        'finance-user',
+        FINANCE_SCOPES
       )
       const { companyId, projectId } = await setupInvoicePrerequisites(t, orgId, userId)
 
@@ -1343,8 +1356,8 @@ describe('Invoices API', () => {
       const t = setup()
       const { organizationId: orgId, userId } = await setupUserWithRole(
         t,
-        'staff-user',
-        STAFF_SCOPES
+        'finance-user',
+        FINANCE_SCOPES
       )
       const { companyId, projectId } = await setupInvoicePrerequisites(t, orgId, userId)
 
@@ -1363,8 +1376,8 @@ describe('Invoices API', () => {
       const t = setup()
       const { organizationId: orgId, userId } = await setupUserWithRole(
         t,
-        'staff-user',
-        STAFF_SCOPES
+        'finance-user',
+        FINANCE_SCOPES
       )
       const { companyId, projectId } = await setupInvoicePrerequisites(t, orgId, userId)
 
@@ -1384,8 +1397,8 @@ describe('Invoices API', () => {
       const t = setup()
       const { organizationId: orgId, userId } = await setupUserWithRole(
         t,
-        'staff-user',
-        STAFF_SCOPES
+        'finance-user',
+        FINANCE_SCOPES
       )
       const { companyId, projectId } = await setupInvoicePrerequisites(t, orgId, userId)
 
@@ -1403,6 +1416,27 @@ describe('Invoices API', () => {
       expect(invoice?.voidedBy).toBe(userId)
       expect(invoice?.voidedAt).toBeGreaterThanOrEqual(beforeVoid)
       expect(invoice?.voidReason).toBe('Test void reason')
+    })
+
+    it('should reject voiding without invoices:void scope', async () => {
+      const t = setup()
+      // Regular staff user without void scope
+      const { organizationId: orgId, userId } = await setupUserWithRole(
+        t,
+        'staff-user',
+        STAFF_SCOPES
+      )
+      const { companyId, projectId } = await setupInvoicePrerequisites(t, orgId, userId)
+
+      const invoiceId = await createInvoiceDirectly(t, orgId, projectId, companyId, {
+        status: 'Finalized',
+      })
+
+      await expect(
+        t.mutation(api.workflows.dealToDelivery.api.invoices.voidInvoice, {
+          invoiceId,
+        })
+      ).rejects.toThrow('does not have scope dealToDelivery:invoices:void')
     })
   })
 

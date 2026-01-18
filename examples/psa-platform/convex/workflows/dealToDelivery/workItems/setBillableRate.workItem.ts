@@ -16,6 +16,7 @@ import { startAndClaimWorkItem, cleanupWorkItemOnCancel } from "./helpers";
 import { initializeDealWorkItemAuth, updateWorkItemMetadataPayload } from "./helpersAuth";
 import { authService } from "../../../authorization";
 import { authComponent } from "../../../auth";
+import { assertUserHasScope } from "../../../authorization";
 import { getExpense, updateExpense } from "../db/expenses";
 import { getRootWorkflowAndDealForWorkItem } from "../db/workItemContext";
 import { assertExpenseExists, assertAuthenticatedUser } from "../exceptions";
@@ -128,6 +129,19 @@ const setBillableRateWorkItemActions = authService.builders.workItemActions
           `Requested: ${((payload.markupRate - 1) * 100).toFixed(0)}%. ` +
           `Set hasManagerOverride: true if this markup has been approved by a manager.`
         );
+      }
+
+      // TENET-AUTHZ: When manager override is used, verify the user has expenses:approve scope
+      // This prevents regular team members from bypassing the 50% cap by setting hasManagerOverride=true
+      if (payload.hasManagerOverride) {
+        try {
+          await assertUserHasScope(mutationCtx, "dealToDelivery:expenses:approve");
+        } catch {
+          throw new Error(
+            "Manager override requires 'expenses:approve' permission. " +
+            "Only managers can authorize markup rates above 50%."
+          );
+        }
       }
 
       // Even with override, cap at absolute maximum
