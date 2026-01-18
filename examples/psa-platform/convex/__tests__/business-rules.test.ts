@@ -1042,3 +1042,482 @@ describe('Revision Cycle Escalation Validation', () => {
     })
   })
 })
+
+// =============================================================================
+// Duplicate Detection Tests (spec 09-workflow-timesheet-approval.md line 249,
+// spec 10-workflow-expense-approval.md line 275)
+// =============================================================================
+
+import {
+  checkTimeEntryDuplicates,
+  isTimeEntryDuplicate,
+  checkExpenseDuplicates,
+  isExpenseDuplicate,
+  normalizeDateToDay,
+  isSameDay,
+} from '../workflows/dealToDelivery/db/duplicateDetection'
+
+describe('Duplicate Detection Validation', () => {
+  describe('Date Utility Functions', () => {
+    it('normalizeDateToDay sets time to midnight UTC', () => {
+      const timestamp = new Date('2024-06-15T14:30:45.123Z').getTime()
+      const normalized = normalizeDateToDay(timestamp)
+      const normalizedDate = new Date(normalized)
+      expect(normalizedDate.getUTCHours()).toBe(0)
+      expect(normalizedDate.getUTCMinutes()).toBe(0)
+      expect(normalizedDate.getUTCSeconds()).toBe(0)
+      expect(normalizedDate.getUTCMilliseconds()).toBe(0)
+    })
+
+    it('isSameDay returns true for timestamps on the same day', () => {
+      const t1 = new Date('2024-06-15T09:00:00Z').getTime()
+      const t2 = new Date('2024-06-15T18:30:00Z').getTime()
+      expect(isSameDay(t1, t2)).toBe(true)
+    })
+
+    it('isSameDay returns false for timestamps on different days', () => {
+      const t1 = new Date('2024-06-15T23:59:59Z').getTime()
+      const t2 = new Date('2024-06-16T00:00:00Z').getTime()
+      expect(isSameDay(t1, t2)).toBe(false)
+    })
+  })
+
+  describe('Time Entry Duplicate Detection', () => {
+    let testContext: TestContext
+
+    beforeEach(() => {
+      testContext = setup()
+    })
+
+    it('returns no duplicates when no entries exist', async () => {
+      const { teamMemberId, projectId } = await createTestData(testContext)
+
+      const result = await testContext.run(async (ctx) => {
+        return await checkTimeEntryDuplicates(ctx.db, {
+          userId: teamMemberId,
+          projectId,
+          date: Date.now(),
+        })
+      })
+
+      expect(result.hasPotentialDuplicates).toBe(false)
+      expect(result.duplicateIds).toHaveLength(0)
+      expect(result.warningMessage).toBeNull()
+      expect(result.confidence).toBeNull()
+    })
+
+    it('detects exact duplicates when same task exists on same date', async () => {
+      const { orgId, teamMemberId, projectId } = await createTestData(testContext)
+
+      // Create a task
+      const taskId = await testContext.run(async (ctx) => {
+        return await ctx.db.insert('tasks', {
+          organizationId: orgId,
+          projectId,
+          name: 'Test Task',
+          description: 'Test task for duplicate detection',
+          status: 'InProgress',
+          priority: 'Medium',
+          assigneeIds: [],
+          dependencies: [],
+          sortOrder: 1,
+          createdAt: Date.now(),
+        })
+      })
+
+      const testDate = Date.now()
+
+      // Create existing entry
+      await testContext.run(async (ctx) => {
+        return await ctx.db.insert('timeEntries', {
+          organizationId: orgId,
+          userId: teamMemberId,
+          projectId,
+          taskId,
+          date: testDate,
+          hours: 4,
+          status: 'Draft',
+          billable: true,
+          createdAt: Date.now(),
+        })
+      })
+
+      // Check for duplicates
+      const result = await testContext.run(async (ctx) => {
+        return await checkTimeEntryDuplicates(ctx.db, {
+          userId: teamMemberId,
+          projectId,
+          date: testDate,
+          taskId,
+        })
+      })
+
+      expect(result.hasPotentialDuplicates).toBe(true)
+      expect(result.duplicateIds).toHaveLength(1)
+      expect(result.confidence).toBe('exact')
+      expect(result.warningMessage).toContain('same task')
+    })
+
+    it('detects likely duplicates when same project/date exists', async () => {
+      const { orgId, teamMemberId, projectId } = await createTestData(testContext)
+
+      const testDate = Date.now()
+
+      // Create existing entry without task
+      await testContext.run(async (ctx) => {
+        return await ctx.db.insert('timeEntries', {
+          organizationId: orgId,
+          userId: teamMemberId,
+          projectId,
+          date: testDate,
+          hours: 4,
+          status: 'Draft',
+          billable: true,
+          createdAt: Date.now(),
+        })
+      })
+
+      // Check for duplicates (no task specified)
+      const result = await testContext.run(async (ctx) => {
+        return await checkTimeEntryDuplicates(ctx.db, {
+          userId: teamMemberId,
+          projectId,
+          date: testDate,
+        })
+      })
+
+      expect(result.hasPotentialDuplicates).toBe(true)
+      expect(result.confidence).toBe('likely')
+      expect(result.warningMessage).toContain('same date')
+    })
+
+    it('excludes current entry when checking for duplicates', async () => {
+      const { orgId, teamMemberId, projectId } = await createTestData(testContext)
+
+      const testDate = Date.now()
+
+      // Create an entry
+      const entryId = await testContext.run(async (ctx) => {
+        return await ctx.db.insert('timeEntries', {
+          organizationId: orgId,
+          userId: teamMemberId,
+          projectId,
+          date: testDate,
+          hours: 4,
+          status: 'Draft',
+          billable: true,
+          createdAt: Date.now(),
+        })
+      })
+
+      // Check excluding the entry itself
+      const result = await testContext.run(async (ctx) => {
+        return await checkTimeEntryDuplicates(
+          ctx.db,
+          {
+            userId: teamMemberId,
+            projectId,
+            date: testDate,
+          },
+          entryId
+        )
+      })
+
+      expect(result.hasPotentialDuplicates).toBe(false)
+    })
+
+    it('isTimeEntryDuplicate returns true for exact matches', async () => {
+      const { orgId, teamMemberId, projectId } = await createTestData(testContext)
+
+      const taskId = await testContext.run(async (ctx) => {
+        return await ctx.db.insert('tasks', {
+          organizationId: orgId,
+          projectId,
+          name: 'Test Task',
+          description: 'Test task for duplicate detection',
+          status: 'InProgress',
+          priority: 'Medium',
+          assigneeIds: [],
+          dependencies: [],
+          sortOrder: 1,
+          createdAt: Date.now(),
+        })
+      })
+
+      const testDate = Date.now()
+
+      await testContext.run(async (ctx) => {
+        return await ctx.db.insert('timeEntries', {
+          organizationId: orgId,
+          userId: teamMemberId,
+          projectId,
+          taskId,
+          date: testDate,
+          hours: 4,
+          status: 'Draft',
+          billable: true,
+          createdAt: Date.now(),
+        })
+      })
+
+      const isDuplicate = await testContext.run(async (ctx) => {
+        return await isTimeEntryDuplicate(ctx.db, {
+          userId: teamMemberId,
+          projectId,
+          date: testDate,
+          taskId,
+        })
+      })
+
+      expect(isDuplicate).toBe(true)
+    })
+  })
+
+  describe('Expense Duplicate Detection', () => {
+    let testContext: TestContext
+
+    beforeEach(() => {
+      testContext = setup()
+    })
+
+    it('returns no duplicates when no expenses exist', async () => {
+      const { teamMemberId, projectId } = await createTestData(testContext)
+
+      const result = await testContext.run(async (ctx) => {
+        return await checkExpenseDuplicates(ctx.db, {
+          userId: teamMemberId,
+          projectId,
+          date: Date.now(),
+          amount: 5000,
+          type: 'Other',
+        })
+      })
+
+      expect(result.hasPotentialDuplicates).toBe(false)
+      expect(result.duplicateIds).toHaveLength(0)
+    })
+
+    it('detects exact duplicates when same amount and type exists', async () => {
+      const { orgId, teamMemberId, projectId } = await createTestData(testContext)
+
+      const testDate = Date.now()
+      const testAmount = 5000
+
+      // Create existing expense
+      await testContext.run(async (ctx) => {
+        return await ctx.db.insert('expenses', {
+          organizationId: orgId,
+          userId: teamMemberId,
+          projectId,
+          type: 'Software',
+          amount: testAmount,
+          currency: 'USD',
+          billable: true,
+          status: 'Draft',
+          date: testDate,
+          description: 'Existing expense',
+          createdAt: Date.now(),
+        })
+      })
+
+      // Check for duplicates
+      const result = await testContext.run(async (ctx) => {
+        return await checkExpenseDuplicates(ctx.db, {
+          userId: teamMemberId,
+          projectId,
+          date: testDate,
+          amount: testAmount,
+          type: 'Software',
+        })
+      })
+
+      expect(result.hasPotentialDuplicates).toBe(true)
+      expect(result.confidence).toBe('exact')
+      expect(result.warningMessage).toContain('appears to be a duplicate')
+    })
+
+    it('detects likely duplicates when similar amount exists (within 10%)', async () => {
+      const { orgId, teamMemberId, projectId } = await createTestData(testContext)
+
+      const testDate = Date.now()
+
+      // Create existing expense with $50
+      await testContext.run(async (ctx) => {
+        return await ctx.db.insert('expenses', {
+          organizationId: orgId,
+          userId: teamMemberId,
+          projectId,
+          type: 'Materials',
+          amount: 5000, // $50
+          currency: 'USD',
+          billable: true,
+          status: 'Draft',
+          date: testDate,
+          description: 'Existing expense',
+          createdAt: Date.now(),
+        })
+      })
+
+      // Check with similar amount ($52, within 10%)
+      const result = await testContext.run(async (ctx) => {
+        return await checkExpenseDuplicates(ctx.db, {
+          userId: teamMemberId,
+          projectId,
+          date: testDate,
+          amount: 5200, // $52
+          type: 'Materials',
+        })
+      })
+
+      expect(result.hasPotentialDuplicates).toBe(true)
+      expect(result.confidence).toBe('likely')
+      expect(result.warningMessage).toContain('similar')
+    })
+
+    it('detects possible duplicates when same type/date but different amount', async () => {
+      const { orgId, teamMemberId, projectId } = await createTestData(testContext)
+
+      const testDate = Date.now()
+
+      // Create existing expense with $50
+      await testContext.run(async (ctx) => {
+        return await ctx.db.insert('expenses', {
+          organizationId: orgId,
+          userId: teamMemberId,
+          projectId,
+          type: 'Travel',
+          amount: 5000, // $50
+          currency: 'USD',
+          billable: true,
+          status: 'Draft',
+          date: testDate,
+          description: 'Existing expense',
+          createdAt: Date.now(),
+        })
+      })
+
+      // Check with very different amount ($200)
+      const result = await testContext.run(async (ctx) => {
+        return await checkExpenseDuplicates(ctx.db, {
+          userId: teamMemberId,
+          projectId,
+          date: testDate,
+          amount: 20000, // $200 - more than 10% different
+          type: 'Travel',
+        })
+      })
+
+      expect(result.hasPotentialDuplicates).toBe(true)
+      expect(result.confidence).toBe('possible')
+      expect(result.warningMessage).toContain('Consider if this is a duplicate')
+    })
+
+    it('does not flag expenses of different types as duplicates', async () => {
+      const { orgId, teamMemberId, projectId } = await createTestData(testContext)
+
+      const testDate = Date.now()
+
+      // Create Software expense
+      await testContext.run(async (ctx) => {
+        return await ctx.db.insert('expenses', {
+          organizationId: orgId,
+          userId: teamMemberId,
+          projectId,
+          type: 'Software',
+          amount: 5000,
+          currency: 'USD',
+          billable: true,
+          status: 'Draft',
+          date: testDate,
+          description: 'Software expense',
+          createdAt: Date.now(),
+        })
+      })
+
+      // Check for Travel expense
+      const result = await testContext.run(async (ctx) => {
+        return await checkExpenseDuplicates(ctx.db, {
+          userId: teamMemberId,
+          projectId,
+          date: testDate,
+          amount: 5000,
+          type: 'Travel',
+        })
+      })
+
+      expect(result.hasPotentialDuplicates).toBe(false)
+    })
+
+    it('isExpenseDuplicate returns true for exact matches', async () => {
+      const { orgId, teamMemberId, projectId } = await createTestData(testContext)
+
+      const testDate = Date.now()
+
+      await testContext.run(async (ctx) => {
+        return await ctx.db.insert('expenses', {
+          organizationId: orgId,
+          userId: teamMemberId,
+          projectId,
+          type: 'Other',
+          amount: 2500,
+          currency: 'USD',
+          billable: true,
+          status: 'Draft',
+          date: testDate,
+          description: 'Existing expense',
+          createdAt: Date.now(),
+        })
+      })
+
+      const isDuplicate = await testContext.run(async (ctx) => {
+        return await isExpenseDuplicate(ctx.db, {
+          userId: teamMemberId,
+          projectId,
+          date: testDate,
+          amount: 2500,
+          type: 'Other',
+        })
+      })
+
+      expect(isDuplicate).toBe(true)
+    })
+
+    it('excludes current expense when checking for duplicates', async () => {
+      const { orgId, teamMemberId, projectId } = await createTestData(testContext)
+
+      const testDate = Date.now()
+
+      const expenseId = await testContext.run(async (ctx) => {
+        return await ctx.db.insert('expenses', {
+          organizationId: orgId,
+          userId: teamMemberId,
+          projectId,
+          type: 'Other',
+          amount: 5000,
+          currency: 'USD',
+          billable: true,
+          status: 'Draft',
+          date: testDate,
+          description: 'Test expense',
+          createdAt: Date.now(),
+        })
+      })
+
+      const result = await testContext.run(async (ctx) => {
+        return await checkExpenseDuplicates(
+          ctx.db,
+          {
+            userId: teamMemberId,
+            projectId,
+            date: testDate,
+            amount: 5000,
+            type: 'Other',
+          },
+          expenseId
+        )
+      })
+
+      expect(result.hasPotentialDuplicates).toBe(false)
+    })
+  })
+})
