@@ -15,10 +15,11 @@ import { startAndClaimWorkItem, cleanupWorkItemOnCancel } from "./helpers";
 import { initializeDealWorkItemAuth, updateWorkItemMetadataPayload } from "./helpersAuth";
 import { authService } from "../../../authorization";
 import { authComponent } from "../../../auth";
-import { getTimeEntry, updateTimeEntryStatus } from "../db/timeEntries";
+import { getTimeEntry, rejectTimeEntryWithRevisionTracking } from "../db/timeEntries";
 import { getRootWorkflowAndDealForWorkItem } from "../db/workItemContext";
 import { assertTimeEntryExists, assertAuthenticatedUser } from "../exceptions";
 import { DealToDeliveryWorkItemHelpers } from "../helpers";
+import { MAX_REVISION_CYCLES } from "../db/revisionCycle";
 
 // Policy: Requires 'dealToDelivery:time:approve' scope (approvers can also reject)
 const timeApprovePolicy = authService.policies.requireScope(
@@ -82,7 +83,11 @@ const rejectTimesheetWorkItemActions = authService.builders.workItemActions
       });
 
 
-      // Reject each time entry
+      // Track if any entries need escalation
+      let anyEscalated = false;
+      const rejectionResults: Array<{ entryId: string; revisionCount: number; escalated: boolean }> = [];
+
+      // Reject each time entry with revision tracking
       for (const timeEntryId of payload.timeEntryIds) {
         const timeEntry = await getTimeEntry(mutationCtx.db, timeEntryId);
         assertTimeEntryExists(timeEntry, { timeEntryId });
@@ -94,11 +99,26 @@ const rejectTimesheetWorkItemActions = authService.builders.workItemActions
           );
         }
 
-        // Update status to Rejected
-        await updateTimeEntryStatus(mutationCtx.db, timeEntryId, "Rejected");
+        // Reject with revision tracking (per spec 09-workflow-timesheet-approval.md line 281)
+        const result = await rejectTimeEntryWithRevisionTracking(
+          mutationCtx.db,
+          timeEntryId,
+          payload.comments,
+          MAX_REVISION_CYCLES
+        );
+
+        rejectionResults.push({
+          entryId: timeEntryId,
+          revisionCount: result.newRevisionCount,
+          escalated: result.escalated,
+        });
+
+        if (result.escalated) {
+          anyEscalated = true;
+        }
       }
 
-      // Update work item metadata
+      // Update work item metadata with escalation status
       const metadata = await DealToDeliveryWorkItemHelpers.getWorkItemMetadata(
         mutationCtx.db,
         workItem.id
@@ -106,12 +126,13 @@ const rejectTimesheetWorkItemActions = authService.builders.workItemActions
       if (metadata) {
         await updateWorkItemMetadataPayload(mutationCtx, workItem.id, {
           type: "rejectTimesheet",
-          taskName: "Reject Timesheet",
-          priority: "normal",
+          taskName: anyEscalated ? "Reject Timesheet (Escalated to Admin)" : "Reject Timesheet",
+          priority: anyEscalated ? "high" : "normal",
         });
       }
 
       // TODO: Notify team member that their timesheet was rejected with comments
+      // If escalated, also notify admin (per spec 09-workflow-timesheet-approval.md line 281)
       // (deferred:timesheet-approval-notifications)
 
       await workItem.complete();

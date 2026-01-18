@@ -330,6 +330,9 @@ const timeEntries = defineTable({
   approvedAt: v.optional(v.number()),
   rejectionComments: v.optional(v.string()),
   invoiceId: v.optional(v.id("invoices")), // FK when invoiced
+  // Revision cycle tracking (spec 09-workflow-timesheet-approval.md line 281)
+  revisionCount: v.optional(v.number()), // Number of reject-revise cycles
+  escalatedToAdmin: v.optional(v.boolean()), // True if escalated after 3 cycles
   createdAt: v.number(),
 })
   .index("by_user", ["userId"])
@@ -374,6 +377,9 @@ const expenses = defineTable({
   // Policy limit tracking (spec 10-workflow-expense-approval.md lines 288-304)
   policyLimitExceeded: v.optional(v.boolean()), // True if amount exceeds policy limit
   policyLimitDetails: v.optional(v.string()), // Description of the violation
+  // Revision cycle tracking (spec 10-workflow-expense-approval.md line 288)
+  revisionCount: v.optional(v.number()), // Number of reject-revise cycles
+  escalatedToAdmin: v.optional(v.boolean()), // True if escalated after 3 cycles
   createdAt: v.number(),
 })
   .index("by_user", ["userId"])

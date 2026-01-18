@@ -51,6 +51,7 @@ import type * as workflows_dealToDelivery_db_organizations from "../workflows/de
 import type * as workflows_dealToDelivery_db_projects from "../workflows/dealToDelivery/db/projects.js";
 import type * as workflows_dealToDelivery_db_proposals from "../workflows/dealToDelivery/db/proposals.js";
 import type * as workflows_dealToDelivery_db_rateCards from "../workflows/dealToDelivery/db/rateCards.js";
+import type * as workflows_dealToDelivery_db_revisionCycle from "../workflows/dealToDelivery/db/revisionCycle.js";
 import type * as workflows_dealToDelivery_db_tasks from "../workflows/dealToDelivery/db/tasks.js";
 import type * as workflows_dealToDelivery_db_timeEntries from "../workflows/dealToDelivery/db/timeEntries.js";
 import type * as workflows_dealToDelivery_db_users from "../workflows/dealToDelivery/db/users.js";
@@ -116,6 +117,7 @@ declare const fullApi: ApiFromModules<{
   "workflows/dealToDelivery/db/projects": typeof workflows_dealToDelivery_db_projects;
   "workflows/dealToDelivery/db/proposals": typeof workflows_dealToDelivery_db_proposals;
   "workflows/dealToDelivery/db/rateCards": typeof workflows_dealToDelivery_db_rateCards;
+  "workflows/dealToDelivery/db/revisionCycle": typeof workflows_dealToDelivery_db_revisionCycle;
   "workflows/dealToDelivery/db/tasks": typeof workflows_dealToDelivery_db_tasks;
   "workflows/dealToDelivery/db/timeEntries": typeof workflows_dealToDelivery_db_timeEntries;
   "workflows/dealToDelivery/db/users": typeof workflows_dealToDelivery_db_users;

@@ -784,3 +784,261 @@ describe('Expense Policy Limits Validation', () => {
     })
   })
 })
+
+// =============================================================================
+// Revision Cycle Escalation Tests (spec 09-workflow-timesheet-approval.md line 281,
+// spec 10-workflow-expense-approval.md line 288)
+// =============================================================================
+
+import {
+  MAX_REVISION_CYCLES,
+  checkRevisionCycleOnRejection,
+  requiresAdminIntervention,
+  getRemainingRevisionAttempts,
+  getEscalationWarning,
+} from '../workflows/dealToDelivery/db/revisionCycle'
+
+import {
+  rejectTimeEntryWithRevisionTracking,
+} from '../workflows/dealToDelivery/db/timeEntries'
+
+import {
+  rejectExpenseWithRevisionTracking,
+} from '../workflows/dealToDelivery/db/expenses'
+
+describe('Revision Cycle Escalation Validation', () => {
+  describe('MAX_REVISION_CYCLES constant', () => {
+    it('has correct value of 3 per spec', () => {
+      expect(MAX_REVISION_CYCLES).toBe(3)
+    })
+  })
+
+  describe('checkRevisionCycleOnRejection', () => {
+    it('increments count from 0 to 1 on first rejection', () => {
+      const result = checkRevisionCycleOnRejection(0)
+      expect(result.newRevisionCount).toBe(1)
+      expect(result.shouldEscalate).toBe(false)
+      expect(result.escalationMessage).toBeNull()
+    })
+
+    it('increments count from undefined to 1 on first rejection', () => {
+      const result = checkRevisionCycleOnRejection(undefined)
+      expect(result.newRevisionCount).toBe(1)
+      expect(result.shouldEscalate).toBe(false)
+    })
+
+    it('increments count from 1 to 2 on second rejection', () => {
+      const result = checkRevisionCycleOnRejection(1)
+      expect(result.newRevisionCount).toBe(2)
+      expect(result.shouldEscalate).toBe(false)
+    })
+
+    it('increments count from 2 to 3 and triggers escalation', () => {
+      const result = checkRevisionCycleOnRejection(2)
+      expect(result.newRevisionCount).toBe(3)
+      expect(result.shouldEscalate).toBe(true)
+      expect(result.escalationMessage).toContain('admin review')
+    })
+
+    it('escalates on counts beyond 3', () => {
+      const result = checkRevisionCycleOnRejection(5)
+      expect(result.newRevisionCount).toBe(6)
+      expect(result.shouldEscalate).toBe(true)
+    })
+  })
+
+  describe('requiresAdminIntervention', () => {
+    it('returns false for count 0', () => {
+      expect(requiresAdminIntervention(0, false)).toBe(false)
+    })
+
+    it('returns false for count 2', () => {
+      expect(requiresAdminIntervention(2, false)).toBe(false)
+    })
+
+    it('returns true for count 3', () => {
+      expect(requiresAdminIntervention(3, false)).toBe(true)
+    })
+
+    it('returns true when escalatedToAdmin is true', () => {
+      expect(requiresAdminIntervention(1, true)).toBe(true)
+    })
+
+    it('returns true for undefined count with escalatedToAdmin true', () => {
+      expect(requiresAdminIntervention(undefined, true)).toBe(true)
+    })
+  })
+
+  describe('getRemainingRevisionAttempts', () => {
+    it('returns 3 for count 0', () => {
+      expect(getRemainingRevisionAttempts(0)).toBe(3)
+    })
+
+    it('returns 3 for undefined count', () => {
+      expect(getRemainingRevisionAttempts(undefined)).toBe(3)
+    })
+
+    it('returns 2 for count 1', () => {
+      expect(getRemainingRevisionAttempts(1)).toBe(2)
+    })
+
+    it('returns 1 for count 2', () => {
+      expect(getRemainingRevisionAttempts(2)).toBe(1)
+    })
+
+    it('returns 0 for count 3', () => {
+      expect(getRemainingRevisionAttempts(3)).toBe(0)
+    })
+
+    it('returns negative for counts beyond 3', () => {
+      expect(getRemainingRevisionAttempts(5)).toBe(-2)
+    })
+  })
+
+  describe('getEscalationWarning', () => {
+    it('returns null for count 0 (no warning needed)', () => {
+      expect(getEscalationWarning(0)).toBeNull()
+    })
+
+    it('returns null for count 1 (still has 2 remaining)', () => {
+      expect(getEscalationWarning(undefined)).toBeNull()
+    })
+
+    it('returns warning for count 1 with 2 remaining', () => {
+      const warning = getEscalationWarning(1)
+      expect(warning).toContain('2 revision attempts remaining')
+    })
+
+    it('returns urgent warning for count 2 (last attempt)', () => {
+      const warning = getEscalationWarning(2)
+      expect(warning).toContain('last revision attempt')
+    })
+
+    it('returns exceeded message for count 3+', () => {
+      const warning = getEscalationWarning(3)
+      expect(warning).toContain('exceeded')
+      expect(warning).toContain('admin review')
+    })
+  })
+
+  describe('Database-level revision tracking', () => {
+    let testContext: TestContext
+
+    beforeEach(() => {
+      testContext = setup()
+    })
+
+    it('rejectTimeEntryWithRevisionTracking increments count and tracks escalation', async () => {
+      const { orgId, teamMemberId, projectId } = await createTestData(testContext)
+
+      // Create a time entry
+      const timeEntryId = await testContext.run(async (ctx) => {
+        return await ctx.db.insert('timeEntries', {
+          organizationId: orgId,
+          userId: teamMemberId,
+          projectId,
+          date: Date.now(),
+          hours: 8,
+          status: 'Submitted',
+          billable: true,
+          createdAt: Date.now(),
+        })
+      })
+
+      // First rejection
+      const result1 = await testContext.run(async (ctx) => {
+        return await rejectTimeEntryWithRevisionTracking(
+          ctx.db,
+          timeEntryId,
+          'First rejection'
+        )
+      })
+      expect(result1.newRevisionCount).toBe(1)
+      expect(result1.escalated).toBe(false)
+
+      // Check entry was updated
+      const entry1 = await testContext.run(async (ctx) => ctx.db.get(timeEntryId))
+      expect(entry1?.status).toBe('Rejected')
+      expect(entry1?.revisionCount).toBe(1)
+      expect(entry1?.escalatedToAdmin).toBe(false)
+
+      // Resubmit for second rejection
+      await testContext.run(async (ctx) => ctx.db.patch(timeEntryId, { status: 'Submitted' }))
+
+      // Second rejection
+      const result2 = await testContext.run(async (ctx) => {
+        return await rejectTimeEntryWithRevisionTracking(
+          ctx.db,
+          timeEntryId,
+          'Second rejection'
+        )
+      })
+      expect(result2.newRevisionCount).toBe(2)
+      expect(result2.escalated).toBe(false)
+
+      // Resubmit for third rejection
+      await testContext.run(async (ctx) => ctx.db.patch(timeEntryId, { status: 'Submitted' }))
+
+      // Third rejection - should escalate
+      const result3 = await testContext.run(async (ctx) => {
+        return await rejectTimeEntryWithRevisionTracking(
+          ctx.db,
+          timeEntryId,
+          'Third rejection - escalation'
+        )
+      })
+      expect(result3.newRevisionCount).toBe(3)
+      expect(result3.escalated).toBe(true)
+
+      // Check entry was escalated
+      const entry3 = await testContext.run(async (ctx) => ctx.db.get(timeEntryId))
+      expect(entry3?.escalatedToAdmin).toBe(true)
+    })
+
+    it('rejectExpenseWithRevisionTracking increments count and tracks escalation', async () => {
+      const { orgId, teamMemberId, projectId } = await createTestData(testContext)
+
+      // Create an expense
+      const expenseId = await testContext.run(async (ctx) => {
+        return await ctx.db.insert('expenses', {
+          organizationId: orgId,
+          userId: teamMemberId,
+          projectId,
+          type: 'Other',
+          amount: 5000,
+          currency: 'USD',
+          billable: true,
+          status: 'Submitted',
+          date: Date.now(),
+          description: 'Test expense',
+          createdAt: Date.now(),
+        })
+      })
+
+      // Reject 3 times
+      for (let i = 1; i <= 3; i++) {
+        if (i > 1) {
+          // Resubmit
+          await testContext.run(async (ctx) => ctx.db.patch(expenseId, { status: 'Submitted' }))
+        }
+
+        const result = await testContext.run(async (ctx) => {
+          return await rejectExpenseWithRevisionTracking(
+            ctx.db,
+            expenseId,
+            `Rejection ${i}`,
+            [{ type: 'other', details: `Issue ${i}` }]
+          )
+        })
+
+        expect(result.newRevisionCount).toBe(i)
+        expect(result.escalated).toBe(i >= 3)
+      }
+
+      // Check expense was escalated
+      const expense = await testContext.run(async (ctx) => ctx.db.get(expenseId))
+      expect(expense?.escalatedToAdmin).toBe(true)
+      expect(expense?.revisionCount).toBe(3)
+    })
+  })
+})

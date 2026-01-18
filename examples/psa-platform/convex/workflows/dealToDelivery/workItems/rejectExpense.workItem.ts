@@ -15,10 +15,11 @@ import { startAndClaimWorkItem, cleanupWorkItemOnCancel } from "./helpers";
 import { initializeDealWorkItemAuth, updateWorkItemMetadataPayload } from "./helpersAuth";
 import { authService } from "../../../authorization";
 import { authComponent } from "../../../auth";
-import { getExpense, rejectExpense } from "../db/expenses";
+import { getExpense, rejectExpenseWithRevisionTracking } from "../db/expenses";
 import { getRootWorkflowAndDealForWorkItem } from "../db/workItemContext";
 import { assertExpenseExists, assertAuthenticatedUser } from "../exceptions";
 import { DealToDeliveryWorkItemHelpers } from "../helpers";
+import { MAX_REVISION_CYCLES } from "../db/revisionCycle";
 
 // Policy: Requires 'dealToDelivery:expenses:approve' scope (approvers can also reject)
 const expensesApprovePolicy = authService.policies.requireScope(
@@ -107,10 +108,16 @@ const rejectExpenseWorkItemActions = authService.builders.workItemActions
         .join("\n");
       const fullComments = `${payload.rejectionReason}\n\nIssues:\n${issuesList}`;
 
-      // Reject the expense
-      await rejectExpense(mutationCtx.db, payload.expenseId, fullComments);
+      // Reject the expense with revision tracking (per spec 10-workflow-expense-approval.md line 288)
+      const result = await rejectExpenseWithRevisionTracking(
+        mutationCtx.db,
+        payload.expenseId,
+        fullComments,
+        payload.issues,
+        MAX_REVISION_CYCLES
+      );
 
-      // Update work item metadata
+      // Update work item metadata with escalation status
       const metadata = await DealToDeliveryWorkItemHelpers.getWorkItemMetadata(
         mutationCtx.db,
         workItem.id
@@ -118,11 +125,14 @@ const rejectExpenseWorkItemActions = authService.builders.workItemActions
       if (metadata) {
         await updateWorkItemMetadataPayload(mutationCtx, workItem.id, {
           type: "rejectExpense",
-          taskName: "Reject Expense",
-          priority: "normal",
+          taskName: result.escalated ? "Reject Expense (Escalated to Admin)" : "Reject Expense",
+          priority: result.escalated ? "high" : "normal",
           expenseId: payload.expenseId,
         });
       }
+
+      // TODO: If escalated, also notify admin (per spec 10-workflow-expense-approval.md line 288)
+      // (deferred:expense-approval-notifications)
 
       await workItem.complete();
     }

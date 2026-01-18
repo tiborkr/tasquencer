@@ -152,6 +152,36 @@ export async function rejectTimeEntry(
   });
 }
 
+/**
+ * Reject a time entry with revision cycle tracking.
+ * Increments the revision count and sets escalation flag if limit reached.
+ * Per spec 09-workflow-timesheet-approval.md line 281: "After 3 revision cycles, escalate to admin"
+ */
+export async function rejectTimeEntryWithRevisionTracking(
+  db: DatabaseWriter,
+  entryId: Id<"timeEntries">,
+  comments: string,
+  maxRevisionCycles: number = 3
+): Promise<{ newRevisionCount: number; escalated: boolean }> {
+  const entry = await db.get(entryId);
+  if (!entry) {
+    throw new EntityNotFoundError("TimeEntry", { timeEntryId: entryId });
+  }
+
+  const currentCount = entry.revisionCount ?? 0;
+  const newRevisionCount = currentCount + 1;
+  const escalated = newRevisionCount >= maxRevisionCycles;
+
+  await db.patch(entryId, {
+    status: "Rejected",
+    rejectionComments: comments,
+    revisionCount: newRevisionCount,
+    escalatedToAdmin: escalated,
+  });
+
+  return { newRevisionCount, escalated };
+}
+
 export async function lockTimeEntry(
   db: DatabaseWriter,
   entryId: Id<"timeEntries">,

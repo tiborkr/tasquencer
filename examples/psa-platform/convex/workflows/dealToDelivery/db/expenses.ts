@@ -148,6 +148,39 @@ export async function rejectExpense(
   });
 }
 
+/**
+ * Reject an expense with revision cycle tracking.
+ * Increments the revision count and sets escalation flag if limit reached.
+ * Per spec 10-workflow-expense-approval.md line 288: "After 3 revision cycles, escalate to admin"
+ */
+export async function rejectExpenseWithRevisionTracking(
+  db: DatabaseWriter,
+  expenseId: Id<"expenses">,
+  comments: string,
+  issues?: Array<{ type: string; details: string }>,
+  maxRevisionCycles: number = 3
+): Promise<{ newRevisionCount: number; escalated: boolean }> {
+  const expense = await db.get(expenseId);
+  if (!expense) {
+    throw new EntityNotFoundError("Expense", { expenseId });
+  }
+
+  const currentCount = expense.revisionCount ?? 0;
+  const newRevisionCount = currentCount + 1;
+  const escalated = newRevisionCount >= maxRevisionCycles;
+
+  await db.patch(expenseId, {
+    status: "Rejected",
+    rejectionComments: comments,
+    rejectionIssues: issues,
+    rejectedAt: Date.now(),
+    revisionCount: newRevisionCount,
+    escalatedToAdmin: escalated,
+  });
+
+  return { newRevisionCount, escalated };
+}
+
 export async function markExpenseInvoiced(
   db: DatabaseWriter,
   expenseId: Id<"expenses">,
