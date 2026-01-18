@@ -542,3 +542,245 @@ async function createTestData(t: TestContext) {
     return { orgId, managerId, teamMemberId, companyId, contactId, dealId, projectId }
   })
 }
+
+// =============================================================================
+// Expense Policy Limits Tests (spec 10-workflow-expense-approval.md lines 293-304)
+// =============================================================================
+
+import {
+  EXPENSE_PER_ITEM_LIMITS,
+  EXPENSE_TYPE_LIMITS,
+  checkExpensePolicyLimit,
+  checkTravelExpensePolicyLimit,
+  checkSoftwareExpensePolicyLimit,
+  checkMaterialsExpensePolicyLimit,
+  checkOtherExpensePolicyLimit,
+  formatAmountForDisplay,
+  getPolicyLimitForType,
+} from '../workflows/dealToDelivery/db/expensePolicyLimits'
+
+describe('Expense Policy Limits Validation', () => {
+  describe('Policy Limit Constants', () => {
+    it('has correct per-item limit for Airfare ($1,000)', () => {
+      expect(EXPENSE_PER_ITEM_LIMITS.Airfare).toBe(100_000) // cents
+    })
+
+    it('has correct per-item limit for Hotel ($250/night)', () => {
+      expect(EXPENSE_PER_ITEM_LIMITS.Hotel).toBe(25_000) // cents
+    })
+
+    it('has correct per-item limit for Meals ($30)', () => {
+      expect(EXPENSE_PER_ITEM_LIMITS.Meals).toBe(3_000) // cents
+    })
+
+    it('has correct limit for Software ($500)', () => {
+      expect(EXPENSE_TYPE_LIMITS.Software).toBe(50_000) // cents
+    })
+
+    it('has correct limit for Materials ($1,000)', () => {
+      expect(EXPENSE_TYPE_LIMITS.Materials).toBe(100_000) // cents
+    })
+
+    it('has correct limit for Other ($250)', () => {
+      expect(EXPENSE_TYPE_LIMITS.Other).toBe(25_000) // cents
+    })
+
+    it('has no fixed limit for Subcontractor', () => {
+      expect(EXPENSE_TYPE_LIMITS.Subcontractor).toBeNull()
+    })
+
+    it('has no fixed limit for Travel (uses subcategory limits)', () => {
+      expect(EXPENSE_TYPE_LIMITS.Travel).toBeNull()
+    })
+  })
+
+  describe('Travel Expense Policy Checks', () => {
+    describe('Airfare ($1,000 limit)', () => {
+      it('does not flag airfare under limit', () => {
+        const result = checkTravelExpensePolicyLimit(80_000, 'Airfare') // $800
+        expect(result.exceeded).toBe(false)
+        expect(result.violations).toHaveLength(0)
+        expect(result.summary).toBeNull()
+      })
+
+      it('does not flag airfare exactly at limit', () => {
+        const result = checkTravelExpensePolicyLimit(100_000, 'Airfare') // $1,000
+        expect(result.exceeded).toBe(false)
+        expect(result.violations).toHaveLength(0)
+      })
+
+      it('flags airfare over limit', () => {
+        const result = checkTravelExpensePolicyLimit(120_000, 'Airfare') // $1,200
+        expect(result.exceeded).toBe(true)
+        expect(result.violations).toHaveLength(1)
+        expect(result.violations[0].category).toBe('Airfare')
+        expect(result.violations[0].overBy).toBe(20_000)
+        expect(result.summary).toContain('exceeds policy limit')
+      })
+    })
+
+    describe('Hotel ($250/night limit)', () => {
+      it('does not flag hotel under limit for single night', () => {
+        const result = checkTravelExpensePolicyLimit(20_000, 'Hotel', 1) // $200
+        expect(result.exceeded).toBe(false)
+      })
+
+      it('does not flag hotel exactly at limit for single night', () => {
+        const result = checkTravelExpensePolicyLimit(25_000, 'Hotel', 1) // $250
+        expect(result.exceeded).toBe(false)
+      })
+
+      it('flags hotel over limit for single night', () => {
+        const result = checkTravelExpensePolicyLimit(35_000, 'Hotel', 1) // $350
+        expect(result.exceeded).toBe(true)
+        expect(result.violations[0].limit).toBe(25_000)
+      })
+
+      it('calculates limit correctly for multiple nights', () => {
+        const result = checkTravelExpensePolicyLimit(60_000, 'Hotel', 3) // $600 for 3 nights ($250 x 3 = $750 limit)
+        expect(result.exceeded).toBe(false)
+      })
+
+      it('flags hotel over limit for multiple nights', () => {
+        const result = checkTravelExpensePolicyLimit(80_000, 'Hotel', 3) // $800 for 3 nights ($750 limit)
+        expect(result.exceeded).toBe(true)
+        expect(result.violations[0].limit).toBe(75_000) // $250 x 3
+        expect(result.summary).toContain('$250.00/night x 3 nights')
+      })
+    })
+
+    describe('Meals ($30 per expense)', () => {
+      it('does not flag meals under limit', () => {
+        const result = checkTravelExpensePolicyLimit(2_500, 'Meals') // $25
+        expect(result.exceeded).toBe(false)
+      })
+
+      it('flags meals over limit', () => {
+        const result = checkTravelExpensePolicyLimit(4_500, 'Meals') // $45
+        expect(result.exceeded).toBe(true)
+        expect(result.violations[0].overBy).toBe(1_500) // $15 over
+      })
+    })
+
+    describe('Mileage (no fixed limit)', () => {
+      it('does not flag mileage regardless of amount', () => {
+        const result = checkTravelExpensePolicyLimit(50_000, 'Mileage') // $500 in mileage
+        expect(result.exceeded).toBe(false)
+      })
+    })
+  })
+
+  describe('Software Expense Policy Checks ($500 limit)', () => {
+    it('does not flag software expense under limit', () => {
+      const result = checkSoftwareExpensePolicyLimit(30_000) // $300
+      expect(result.exceeded).toBe(false)
+    })
+
+    it('does not flag software expense exactly at limit', () => {
+      const result = checkSoftwareExpensePolicyLimit(50_000) // $500
+      expect(result.exceeded).toBe(false)
+    })
+
+    it('flags software expense over limit', () => {
+      const result = checkSoftwareExpensePolicyLimit(75_000) // $750
+      expect(result.exceeded).toBe(true)
+      expect(result.violations[0].limit).toBe(50_000)
+      expect(result.violations[0].overBy).toBe(25_000)
+      expect(result.summary).toContain('Software expense')
+      expect(result.summary).toContain('$750.00')
+      expect(result.summary).toContain('$500.00')
+    })
+  })
+
+  describe('Materials Expense Policy Checks ($1,000 limit)', () => {
+    it('does not flag materials expense under limit', () => {
+      const result = checkMaterialsExpensePolicyLimit(80_000) // $800
+      expect(result.exceeded).toBe(false)
+    })
+
+    it('does not flag materials expense exactly at limit', () => {
+      const result = checkMaterialsExpensePolicyLimit(100_000) // $1,000
+      expect(result.exceeded).toBe(false)
+    })
+
+    it('flags materials expense over limit', () => {
+      const result = checkMaterialsExpensePolicyLimit(150_000) // $1,500
+      expect(result.exceeded).toBe(true)
+      expect(result.violations[0].overBy).toBe(50_000)
+    })
+  })
+
+  describe('Other Expense Policy Checks ($250 limit)', () => {
+    it('does not flag other expense under limit', () => {
+      const result = checkOtherExpensePolicyLimit(15_000) // $150
+      expect(result.exceeded).toBe(false)
+    })
+
+    it('does not flag other expense exactly at limit', () => {
+      const result = checkOtherExpensePolicyLimit(25_000) // $250
+      expect(result.exceeded).toBe(false)
+    })
+
+    it('flags other expense over limit', () => {
+      const result = checkOtherExpensePolicyLimit(40_000) // $400
+      expect(result.exceeded).toBe(true)
+      expect(result.violations[0].limit).toBe(25_000)
+      expect(result.violations[0].overBy).toBe(15_000)
+    })
+  })
+
+  describe('Generic checkExpensePolicyLimit', () => {
+    it('returns no violation for Subcontractor (no fixed limit)', () => {
+      const result = checkExpensePolicyLimit('Subcontractor', 500_000) // $5,000
+      expect(result.exceeded).toBe(false)
+    })
+
+    it('routes Travel expense to subcategory limit when provided', () => {
+      const result = checkExpensePolicyLimit('Travel', 120_000, 'Airfare')
+      expect(result.exceeded).toBe(true)
+      expect(result.violations[0].category).toBe('Airfare')
+    })
+
+    it('returns no violation for Travel without subcategory (no general limit)', () => {
+      const result = checkExpensePolicyLimit('Travel', 500_000)
+      expect(result.exceeded).toBe(false)
+    })
+  })
+
+  describe('Utility Functions', () => {
+    it('formats amount correctly for display', () => {
+      expect(formatAmountForDisplay(10_000)).toBe('$100.00')
+      expect(formatAmountForDisplay(150_099)).toBe('$1500.99')
+      expect(formatAmountForDisplay(0)).toBe('$0.00')
+    })
+
+    it('gets correct policy limit for expense type', () => {
+      expect(getPolicyLimitForType('Software')).toBe(50_000)
+      expect(getPolicyLimitForType('Materials')).toBe(100_000)
+      expect(getPolicyLimitForType('Other')).toBe(25_000)
+      expect(getPolicyLimitForType('Subcontractor')).toBeNull()
+      expect(getPolicyLimitForType('Travel')).toBeNull()
+    })
+
+    it('gets correct policy limit for travel subcategory', () => {
+      expect(getPolicyLimitForType('Travel', 'Airfare')).toBe(100_000)
+      expect(getPolicyLimitForType('Travel', 'Hotel')).toBe(25_000)
+      expect(getPolicyLimitForType('Travel', 'Meals')).toBe(3_000)
+    })
+  })
+
+  describe('PolicyViolation Structure', () => {
+    it('includes all required violation details', () => {
+      const result = checkSoftwareExpensePolicyLimit(60_000) // $600, over by $100
+      expect(result.exceeded).toBe(true)
+      const violation = result.violations[0]
+
+      expect(violation.type).toBe('per_expense')
+      expect(violation.category).toBe('Software')
+      expect(violation.amount).toBe(60_000)
+      expect(violation.limit).toBe(50_000)
+      expect(violation.overBy).toBe(10_000)
+      expect(violation.message).toBeTruthy()
+    })
+  })
+})

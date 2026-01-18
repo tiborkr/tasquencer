@@ -42,6 +42,7 @@ import type * as workflows_dealToDelivery_db_companies from "../workflows/dealTo
 import type * as workflows_dealToDelivery_db_contacts from "../workflows/dealToDelivery/db/contacts.js";
 import type * as workflows_dealToDelivery_db_deals from "../workflows/dealToDelivery/db/deals.js";
 import type * as workflows_dealToDelivery_db_estimates from "../workflows/dealToDelivery/db/estimates.js";
+import type * as workflows_dealToDelivery_db_expensePolicyLimits from "../workflows/dealToDelivery/db/expensePolicyLimits.js";
 import type * as workflows_dealToDelivery_db_expenses from "../workflows/dealToDelivery/db/expenses.js";
 import type * as workflows_dealToDelivery_db_invoices from "../workflows/dealToDelivery/db/invoices.js";
 import type * as workflows_dealToDelivery_db_lessonsLearned from "../workflows/dealToDelivery/db/lessonsLearned.js";
@@ -106,6 +107,7 @@ declare const fullApi: ApiFromModules<{
   "workflows/dealToDelivery/db/contacts": typeof workflows_dealToDelivery_db_contacts;
   "workflows/dealToDelivery/db/deals": typeof workflows_dealToDelivery_db_deals;
   "workflows/dealToDelivery/db/estimates": typeof workflows_dealToDelivery_db_estimates;
+  "workflows/dealToDelivery/db/expensePolicyLimits": typeof workflows_dealToDelivery_db_expensePolicyLimits;
   "workflows/dealToDelivery/db/expenses": typeof workflows_dealToDelivery_db_expenses;
   "workflows/dealToDelivery/db/invoices": typeof workflows_dealToDelivery_db_invoices;
   "workflows/dealToDelivery/db/lessonsLearned": typeof workflows_dealToDelivery_db_lessonsLearned;

@@ -371,6 +371,9 @@ const expenses = defineTable({
       taxId: v.optional(v.string()),
     })
   ),
+  // Policy limit tracking (spec 10-workflow-expense-approval.md lines 288-304)
+  policyLimitExceeded: v.optional(v.boolean()), // True if amount exceeds policy limit
+  policyLimitDetails: v.optional(v.string()), // Description of the violation
   createdAt: v.number(),
 })
   .index("by_user", ["userId"])

@@ -21,6 +21,7 @@ import { getProject } from "../db/projects";
 import { getRootWorkflowAndDealForWorkItem } from "../db/workItemContext";
 import { assertProjectExists, assertUserExists, assertAuthenticatedUser } from "../exceptions";
 import { DealToDeliveryWorkItemHelpers } from "../helpers";
+import { checkTravelExpensePolicyLimit } from "../db/expensePolicyLimits";
 import type { Id } from "../../../_generated/dataModel";
 
 // Policy: Requires 'dealToDelivery:expenses:create' scope
@@ -108,7 +109,13 @@ const logTravelExpenseWorkItemActions = authService.builders.workItemActions
         finalAmount = Math.round(payload.miles * payload.mileageRate * 100); // Convert to cents
       }
 
-      // Create expense record
+      // Check policy limits for travel category (spec 10-workflow-expense-approval.md lines 293-304)
+      const policyCheck = checkTravelExpensePolicyLimit(
+        finalAmount,
+        payload.travelCategory
+      );
+
+      // Create expense record with policy limit flag
       const expenseId = await insertExpense(mutationCtx.db, {
         organizationId: user.organizationId,
         userId,
@@ -121,6 +128,9 @@ const logTravelExpenseWorkItemActions = authService.builders.workItemActions
         date: payload.date,
         description: payload.description,
         createdAt: Date.now(),
+        // Policy limit tracking
+        policyLimitExceeded: policyCheck.exceeded,
+        policyLimitDetails: policyCheck.summary ?? undefined,
       });
 
       // Update work item metadata with the expense ID

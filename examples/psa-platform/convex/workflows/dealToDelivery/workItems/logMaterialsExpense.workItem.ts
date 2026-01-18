@@ -21,6 +21,7 @@ import { getProject } from "../db/projects";
 import { getRootWorkflowAndDealForWorkItem } from "../db/workItemContext";
 import { assertProjectExists, assertUserExists, assertAuthenticatedUser } from "../exceptions";
 import { DealToDeliveryWorkItemHelpers } from "../helpers";
+import { checkMaterialsExpensePolicyLimit } from "../db/expensePolicyLimits";
 import type { Id } from "../../../_generated/dataModel";
 
 // Policy: Requires 'dealToDelivery:expenses:create' scope
@@ -98,7 +99,10 @@ const logMaterialsExpenseWorkItemActions = authService.builders.workItemActions
       const project = await getProject(mutationCtx.db, payload.projectId);
       assertProjectExists(project, { projectId: payload.projectId });
 
-      // Create expense record
+      // Check policy limits for materials expenses ($1,000 limit, spec 10-workflow-expense-approval.md lines 293-304)
+      const policyCheck = checkMaterialsExpensePolicyLimit(payload.amount);
+
+      // Create expense record with policy limit flag
       const expenseId = await insertExpense(mutationCtx.db, {
         organizationId: user.organizationId,
         userId,
@@ -114,6 +118,9 @@ const logMaterialsExpenseWorkItemActions = authService.builders.workItemActions
         vendorInfo: {
           name: payload.vendor,
         },
+        // Policy limit tracking
+        policyLimitExceeded: policyCheck.exceeded,
+        policyLimitDetails: policyCheck.summary ?? undefined,
       });
 
       // Update work item metadata with the expense ID
