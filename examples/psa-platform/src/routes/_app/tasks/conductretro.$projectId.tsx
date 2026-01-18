@@ -1,4 +1,10 @@
-import { createFileRoute } from "@tanstack/react-router";
+/**
+ * Conduct Retrospective Task Route - Domain-First Routing
+ *
+ * TENET-UI-DOMAIN: Route uses projectId (domain ID) for navigation.
+ * The workItemId is looked up from the project for workflow execution.
+ */
+import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { Suspense } from "react";
 import { z } from "zod";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -26,6 +32,8 @@ import {
 } from "lucide-react";
 import { SpinningLoader } from "@/components/spinning-loader";
 import { createPsaTaskComponent } from "@/features/psa/task/createPsaTaskComponent";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
 
 // Category options for retro items
 const categories = [
@@ -565,17 +573,46 @@ const ConductRetroTaskComponent = createPsaTaskComponent({
   },
 });
 
-export const Route = createFileRoute("/_app/tasks/conductretro/$workItemId")({
+export const Route = createFileRoute("/_app/tasks/conductretro/$projectId")({
   component: ConductRetroTask,
 });
 
+/**
+ * Route component that looks up workItemId from projectId.
+ *
+ * TENET-UI-DOMAIN: Uses domain ID (projectId) for routing, looks up workItemId for execution.
+ */
 function ConductRetroTask() {
-  const { workItemId } = Route.useParams() as {
-    workItemId: Id<"tasquencerWorkItems">;
+  const { projectId } = Route.useParams() as {
+    projectId: Id<"projects">;
   };
+
+  // Look up the work item from the project ID and task type
+  const workItem = useQuery(
+    api.workflows.dealToDelivery.api.workItems.getWorkItemByProjectAndType,
+    { projectId, taskType: "conductRetro" }
+  );
+
+  // Loading state
+  if (workItem === undefined) {
+    return <SpinningLoader />;
+  }
+
+  // No active work item for this task - redirect to projects page
+  if (workItem === null) {
+    return (
+      <div className="p-8 text-center">
+        <p className="text-muted-foreground mb-4">
+          This task is not currently available for this project.
+        </p>
+        <Navigate to="/projects" />
+      </div>
+    );
+  }
+
   return (
     <Suspense fallback={<SpinningLoader />}>
-      <ConductRetroTaskComponent workItemId={workItemId} />
+      <ConductRetroTaskComponent workItemId={workItem.workItemId} />
     </Suspense>
   );
 }

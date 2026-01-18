@@ -364,3 +364,81 @@ export const canClaimWorkItem = query({
     )
   },
 })
+
+/**
+ * Gets work item metadata by domain ID and task type.
+ * Used for domain-first UI routing where routes use deal/project IDs
+ * instead of workflow work item IDs.
+ *
+ * TENET-UI-DOMAIN: Supports domain-first UI navigation while keeping
+ * workflow-driven execution via workItemId.
+ *
+ * @param args.dealId - The deal ID (domain aggregate)
+ * @param args.taskType - The work item type (e.g., "qualifyLead", "setBudget")
+ * @returns Work item metadata if found and active, null otherwise
+ */
+export const getWorkItemByDealAndType = query({
+  args: {
+    dealId: v.id('deals'),
+    taskType: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await requirePsaStaffMember(ctx)
+
+    // Get all active human work items for this deal
+    const activeItems = await listActiveHumanWorkItemsByDeal(ctx.db, args.dealId)
+
+    // Find the one matching the requested task type
+    const matchingItem = activeItems.find(({ metadata }) => {
+      const payload = metadata.payload as { type?: string }
+      return payload.type === args.taskType
+    })
+
+    if (!matchingItem) return null
+
+    return mapWorkItemToResponse(matchingItem.metadata, matchingItem.workItem, {
+      includeWorkItemState: true,
+    })
+  },
+})
+
+/**
+ * Gets work item metadata by project ID and task type.
+ * Projects are linked to deals; this looks up the deal first then finds the task.
+ *
+ * TENET-UI-DOMAIN: Supports domain-first UI navigation for project-scoped tasks.
+ *
+ * @param args.projectId - The project ID (domain aggregate)
+ * @param args.taskType - The work item type (e.g., "setBudget", "closeProject")
+ * @returns Work item metadata if found and active, null otherwise
+ */
+export const getWorkItemByProjectAndType = query({
+  args: {
+    projectId: v.id('projects'),
+    taskType: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await requirePsaStaffMember(ctx)
+
+    // Projects are linked to deals; work items are keyed by deal
+    const project = await getProject(ctx.db, args.projectId)
+    if (!project || !project.dealId) {
+      return null
+    }
+
+    // Get all active human work items for this project's deal
+    const activeItems = await listActiveHumanWorkItemsByDeal(ctx.db, project.dealId)
+
+    // Find the one matching the requested task type
+    const matchingItem = activeItems.find(({ metadata }) => {
+      const payload = metadata.payload as { type?: string }
+      return payload.type === args.taskType
+    })
+
+    if (!matchingItem) return null
+
+    return mapWorkItemToResponse(matchingItem.metadata, matchingItem.workItem, {
+      includeWorkItemState: true,
+    })
+  },
+})

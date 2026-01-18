@@ -371,11 +371,11 @@ export async function calculateProjectMetrics(
   const profitMargin = totalRevenue > 0 ? (profit / totalRevenue) * 100 : 0;
   const budgetVariance = budgetAmount > 0 ? (totalCost / budgetAmount) * 100 : 0;
 
-  // Calculate duration
+  // Calculate duration - use Math.round for accurate day counting
   const startDate = project.startDate;
-  const durationDays = Math.ceil((closeDate - startDate) / (24 * 60 * 60 * 1000));
+  const durationDays = Math.round((closeDate - startDate) / (24 * 60 * 60 * 1000));
   const plannedDurationDays = project.endDate
-    ? Math.ceil((project.endDate - startDate) / (24 * 60 * 60 * 1000))
+    ? Math.round((project.endDate - startDate) / (24 * 60 * 60 * 1000))
     : null;
 
   return {

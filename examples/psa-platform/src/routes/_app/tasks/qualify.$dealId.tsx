@@ -1,4 +1,10 @@
-import { createFileRoute } from "@tanstack/react-router";
+/**
+ * Qualify Lead Task Route - Domain-First Routing
+ *
+ * TENET-UI-DOMAIN: Route uses dealId (domain ID) for navigation.
+ * The workItemId is looked up from the deal for workflow execution.
+ */
+import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { Suspense } from "react";
 import { z } from "zod";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -8,6 +14,8 @@ import { Checkbox } from "@repo/ui/components/checkbox";
 import { UserCheck } from "lucide-react";
 import { SpinningLoader } from "@/components/spinning-loader";
 import { createPsaTaskComponent } from "@/features/psa/task/createPsaTaskComponent";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
 
 const schema = z.object({
   budgetConfirmed: z.boolean(),
@@ -153,15 +161,44 @@ const QualifyLeadTaskComponent = createPsaTaskComponent({
   },
 });
 
-export const Route = createFileRoute("/_app/tasks/qualify/$workItemId")({
+export const Route = createFileRoute("/_app/tasks/qualify/$dealId")({
   component: QualifyLeadTask,
 });
 
+/**
+ * Route component that looks up workItemId from dealId.
+ *
+ * TENET-UI-DOMAIN: Uses domain ID (dealId) for routing, looks up workItemId for execution.
+ */
 function QualifyLeadTask() {
-  const { workItemId } = Route.useParams() as { workItemId: Id<"tasquencerWorkItems"> };
+  const { dealId } = Route.useParams() as { dealId: Id<"deals"> };
+
+  // Look up the work item from the deal ID and task type
+  const workItem = useQuery(
+    api.workflows.dealToDelivery.api.workItems.getWorkItemByDealAndType,
+    { dealId, taskType: "qualifyLead" }
+  );
+
+  // Loading state
+  if (workItem === undefined) {
+    return <SpinningLoader />;
+  }
+
+  // No active work item for this task - redirect to deal page
+  if (workItem === null) {
+    return (
+      <div className="p-8 text-center">
+        <p className="text-muted-foreground mb-4">
+          This task is not currently available for this deal.
+        </p>
+        <Navigate to="/deals/$dealId" params={{ dealId }} />
+      </div>
+    );
+  }
+
   return (
     <Suspense fallback={<SpinningLoader />}>
-      <QualifyLeadTaskComponent workItemId={workItemId} />
+      <QualifyLeadTaskComponent workItemId={workItem.workItemId} />
     </Suspense>
   );
 }

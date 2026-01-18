@@ -43,11 +43,11 @@ import { Route as AppAuditTraceIdIndexRouteImport } from './routes/_app/audit/$t
 import { Route as AppAdminUsersIndexRouteImport } from './routes/_app/admin/users.index'
 import { Route as AppAdminRolesIndexRouteImport } from './routes/_app/admin/roles.index'
 import { Route as AppAdminGroupsIndexRouteImport } from './routes/_app/admin/groups.index'
-import { Route as AppTasksSetbudgetWorkItemIdRouteImport } from './routes/_app/tasks/setbudget.$workItemId'
-import { Route as AppTasksQualifyWorkItemIdRouteImport } from './routes/_app/tasks/qualify.$workItemId'
-import { Route as AppTasksConfirmbookingsWorkItemIdRouteImport } from './routes/_app/tasks/confirmbookings.$workItemId'
-import { Route as AppTasksConductretroWorkItemIdRouteImport } from './routes/_app/tasks/conductretro.$workItemId'
-import { Route as AppTasksCloseprojectWorkItemIdRouteImport } from './routes/_app/tasks/closeproject.$workItemId'
+import { Route as AppTasksSetbudgetProjectIdRouteImport } from './routes/_app/tasks/setbudget.$projectId'
+import { Route as AppTasksQualifyDealIdRouteImport } from './routes/_app/tasks/qualify.$dealId'
+import { Route as AppTasksConfirmbookingsProjectIdRouteImport } from './routes/_app/tasks/confirmbookings.$projectId'
+import { Route as AppTasksConductretroProjectIdRouteImport } from './routes/_app/tasks/conductretro.$projectId'
+import { Route as AppTasksCloseprojectProjectIdRouteImport } from './routes/_app/tasks/closeproject.$projectId'
 import { Route as AppDealsDealIdSignRouteImport } from './routes/_app/deals/$dealId/sign'
 import { Route as AppDealsDealIdSendProposalRouteImport } from './routes/_app/deals/$dealId/send-proposal'
 import { Route as AppDealsDealIdQualifyRouteImport } from './routes/_app/deals/$dealId/qualify'
@@ -229,34 +229,33 @@ const AppAdminGroupsIndexRoute = AppAdminGroupsIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppAdminGroupsRoute,
 } as any)
-const AppTasksSetbudgetWorkItemIdRoute =
-  AppTasksSetbudgetWorkItemIdRouteImport.update({
-    id: '/setbudget/$workItemId',
-    path: '/setbudget/$workItemId',
+const AppTasksSetbudgetProjectIdRoute =
+  AppTasksSetbudgetProjectIdRouteImport.update({
+    id: '/setbudget/$projectId',
+    path: '/setbudget/$projectId',
     getParentRoute: () => AppTasksRoute,
   } as any)
-const AppTasksQualifyWorkItemIdRoute =
-  AppTasksQualifyWorkItemIdRouteImport.update({
-    id: '/qualify/$workItemId',
-    path: '/qualify/$workItemId',
+const AppTasksQualifyDealIdRoute = AppTasksQualifyDealIdRouteImport.update({
+  id: '/qualify/$dealId',
+  path: '/qualify/$dealId',
+  getParentRoute: () => AppTasksRoute,
+} as any)
+const AppTasksConfirmbookingsProjectIdRoute =
+  AppTasksConfirmbookingsProjectIdRouteImport.update({
+    id: '/confirmbookings/$projectId',
+    path: '/confirmbookings/$projectId',
     getParentRoute: () => AppTasksRoute,
   } as any)
-const AppTasksConfirmbookingsWorkItemIdRoute =
-  AppTasksConfirmbookingsWorkItemIdRouteImport.update({
-    id: '/confirmbookings/$workItemId',
-    path: '/confirmbookings/$workItemId',
+const AppTasksConductretroProjectIdRoute =
+  AppTasksConductretroProjectIdRouteImport.update({
+    id: '/conductretro/$projectId',
+    path: '/conductretro/$projectId',
     getParentRoute: () => AppTasksRoute,
   } as any)
-const AppTasksConductretroWorkItemIdRoute =
-  AppTasksConductretroWorkItemIdRouteImport.update({
-    id: '/conductretro/$workItemId',
-    path: '/conductretro/$workItemId',
-    getParentRoute: () => AppTasksRoute,
-  } as any)
-const AppTasksCloseprojectWorkItemIdRoute =
-  AppTasksCloseprojectWorkItemIdRouteImport.update({
-    id: '/closeproject/$workItemId',
-    path: '/closeproject/$workItemId',
+const AppTasksCloseprojectProjectIdRoute =
+  AppTasksCloseprojectProjectIdRouteImport.update({
+    id: '/closeproject/$projectId',
+    path: '/closeproject/$projectId',
     getParentRoute: () => AppTasksRoute,
   } as any)
 const AppDealsDealIdSignRoute = AppDealsDealIdSignRouteImport.update({
@@ -358,11 +357,11 @@ export interface FileRoutesByFullPath {
   '/deals/$dealId/qualify': typeof AppDealsDealIdQualifyRoute
   '/deals/$dealId/send-proposal': typeof AppDealsDealIdSendProposalRoute
   '/deals/$dealId/sign': typeof AppDealsDealIdSignRoute
-  '/tasks/closeproject/$workItemId': typeof AppTasksCloseprojectWorkItemIdRoute
-  '/tasks/conductretro/$workItemId': typeof AppTasksConductretroWorkItemIdRoute
-  '/tasks/confirmbookings/$workItemId': typeof AppTasksConfirmbookingsWorkItemIdRoute
-  '/tasks/qualify/$workItemId': typeof AppTasksQualifyWorkItemIdRoute
-  '/tasks/setbudget/$workItemId': typeof AppTasksSetbudgetWorkItemIdRoute
+  '/tasks/closeproject/$projectId': typeof AppTasksCloseprojectProjectIdRoute
+  '/tasks/conductretro/$projectId': typeof AppTasksConductretroProjectIdRoute
+  '/tasks/confirmbookings/$projectId': typeof AppTasksConfirmbookingsProjectIdRoute
+  '/tasks/qualify/$dealId': typeof AppTasksQualifyDealIdRoute
+  '/tasks/setbudget/$projectId': typeof AppTasksSetbudgetProjectIdRoute
   '/admin/groups/': typeof AppAdminGroupsIndexRoute
   '/admin/roles/': typeof AppAdminRolesIndexRoute
   '/admin/users/': typeof AppAdminUsersIndexRoute
@@ -397,11 +396,11 @@ export interface FileRoutesByTo {
   '/deals/$dealId/qualify': typeof AppDealsDealIdQualifyRoute
   '/deals/$dealId/send-proposal': typeof AppDealsDealIdSendProposalRoute
   '/deals/$dealId/sign': typeof AppDealsDealIdSignRoute
-  '/tasks/closeproject/$workItemId': typeof AppTasksCloseprojectWorkItemIdRoute
-  '/tasks/conductretro/$workItemId': typeof AppTasksConductretroWorkItemIdRoute
-  '/tasks/confirmbookings/$workItemId': typeof AppTasksConfirmbookingsWorkItemIdRoute
-  '/tasks/qualify/$workItemId': typeof AppTasksQualifyWorkItemIdRoute
-  '/tasks/setbudget/$workItemId': typeof AppTasksSetbudgetWorkItemIdRoute
+  '/tasks/closeproject/$projectId': typeof AppTasksCloseprojectProjectIdRoute
+  '/tasks/conductretro/$projectId': typeof AppTasksConductretroProjectIdRoute
+  '/tasks/confirmbookings/$projectId': typeof AppTasksConfirmbookingsProjectIdRoute
+  '/tasks/qualify/$dealId': typeof AppTasksQualifyDealIdRoute
+  '/tasks/setbudget/$projectId': typeof AppTasksSetbudgetProjectIdRoute
   '/admin/groups': typeof AppAdminGroupsIndexRoute
   '/admin/roles': typeof AppAdminRolesIndexRoute
   '/admin/users': typeof AppAdminUsersIndexRoute
@@ -450,11 +449,11 @@ export interface FileRoutesById {
   '/_app/deals/$dealId/qualify': typeof AppDealsDealIdQualifyRoute
   '/_app/deals/$dealId/send-proposal': typeof AppDealsDealIdSendProposalRoute
   '/_app/deals/$dealId/sign': typeof AppDealsDealIdSignRoute
-  '/_app/tasks/closeproject/$workItemId': typeof AppTasksCloseprojectWorkItemIdRoute
-  '/_app/tasks/conductretro/$workItemId': typeof AppTasksConductretroWorkItemIdRoute
-  '/_app/tasks/confirmbookings/$workItemId': typeof AppTasksConfirmbookingsWorkItemIdRoute
-  '/_app/tasks/qualify/$workItemId': typeof AppTasksQualifyWorkItemIdRoute
-  '/_app/tasks/setbudget/$workItemId': typeof AppTasksSetbudgetWorkItemIdRoute
+  '/_app/tasks/closeproject/$projectId': typeof AppTasksCloseprojectProjectIdRoute
+  '/_app/tasks/conductretro/$projectId': typeof AppTasksConductretroProjectIdRoute
+  '/_app/tasks/confirmbookings/$projectId': typeof AppTasksConfirmbookingsProjectIdRoute
+  '/_app/tasks/qualify/$dealId': typeof AppTasksQualifyDealIdRoute
+  '/_app/tasks/setbudget/$projectId': typeof AppTasksSetbudgetProjectIdRoute
   '/_app/admin/groups/': typeof AppAdminGroupsIndexRoute
   '/_app/admin/roles/': typeof AppAdminRolesIndexRoute
   '/_app/admin/users/': typeof AppAdminUsersIndexRoute
@@ -503,11 +502,11 @@ export interface FileRouteTypes {
     | '/deals/$dealId/qualify'
     | '/deals/$dealId/send-proposal'
     | '/deals/$dealId/sign'
-    | '/tasks/closeproject/$workItemId'
-    | '/tasks/conductretro/$workItemId'
-    | '/tasks/confirmbookings/$workItemId'
-    | '/tasks/qualify/$workItemId'
-    | '/tasks/setbudget/$workItemId'
+    | '/tasks/closeproject/$projectId'
+    | '/tasks/conductretro/$projectId'
+    | '/tasks/confirmbookings/$projectId'
+    | '/tasks/qualify/$dealId'
+    | '/tasks/setbudget/$projectId'
     | '/admin/groups/'
     | '/admin/roles/'
     | '/admin/users/'
@@ -542,11 +541,11 @@ export interface FileRouteTypes {
     | '/deals/$dealId/qualify'
     | '/deals/$dealId/send-proposal'
     | '/deals/$dealId/sign'
-    | '/tasks/closeproject/$workItemId'
-    | '/tasks/conductretro/$workItemId'
-    | '/tasks/confirmbookings/$workItemId'
-    | '/tasks/qualify/$workItemId'
-    | '/tasks/setbudget/$workItemId'
+    | '/tasks/closeproject/$projectId'
+    | '/tasks/conductretro/$projectId'
+    | '/tasks/confirmbookings/$projectId'
+    | '/tasks/qualify/$dealId'
+    | '/tasks/setbudget/$projectId'
     | '/admin/groups'
     | '/admin/roles'
     | '/admin/users'
@@ -594,11 +593,11 @@ export interface FileRouteTypes {
     | '/_app/deals/$dealId/qualify'
     | '/_app/deals/$dealId/send-proposal'
     | '/_app/deals/$dealId/sign'
-    | '/_app/tasks/closeproject/$workItemId'
-    | '/_app/tasks/conductretro/$workItemId'
-    | '/_app/tasks/confirmbookings/$workItemId'
-    | '/_app/tasks/qualify/$workItemId'
-    | '/_app/tasks/setbudget/$workItemId'
+    | '/_app/tasks/closeproject/$projectId'
+    | '/_app/tasks/conductretro/$projectId'
+    | '/_app/tasks/confirmbookings/$projectId'
+    | '/_app/tasks/qualify/$dealId'
+    | '/_app/tasks/setbudget/$projectId'
     | '/_app/admin/groups/'
     | '/_app/admin/roles/'
     | '/_app/admin/users/'
@@ -626,7 +625,7 @@ declare module '@tanstack/react-router' {
     '/_app': {
       id: '/_app'
       path: ''
-      fullPath: ''
+      fullPath: '/'
       preLoaderRoute: typeof AppRouteImport
       parentRoute: typeof rootRouteImport
     }
@@ -854,39 +853,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAdminGroupsIndexRouteImport
       parentRoute: typeof AppAdminGroupsRoute
     }
-    '/_app/tasks/setbudget/$workItemId': {
-      id: '/_app/tasks/setbudget/$workItemId'
-      path: '/setbudget/$workItemId'
-      fullPath: '/tasks/setbudget/$workItemId'
-      preLoaderRoute: typeof AppTasksSetbudgetWorkItemIdRouteImport
+    '/_app/tasks/setbudget/$projectId': {
+      id: '/_app/tasks/setbudget/$projectId'
+      path: '/setbudget/$projectId'
+      fullPath: '/tasks/setbudget/$projectId'
+      preLoaderRoute: typeof AppTasksSetbudgetProjectIdRouteImport
       parentRoute: typeof AppTasksRoute
     }
-    '/_app/tasks/qualify/$workItemId': {
-      id: '/_app/tasks/qualify/$workItemId'
-      path: '/qualify/$workItemId'
-      fullPath: '/tasks/qualify/$workItemId'
-      preLoaderRoute: typeof AppTasksQualifyWorkItemIdRouteImport
+    '/_app/tasks/qualify/$dealId': {
+      id: '/_app/tasks/qualify/$dealId'
+      path: '/qualify/$dealId'
+      fullPath: '/tasks/qualify/$dealId'
+      preLoaderRoute: typeof AppTasksQualifyDealIdRouteImport
       parentRoute: typeof AppTasksRoute
     }
-    '/_app/tasks/confirmbookings/$workItemId': {
-      id: '/_app/tasks/confirmbookings/$workItemId'
-      path: '/confirmbookings/$workItemId'
-      fullPath: '/tasks/confirmbookings/$workItemId'
-      preLoaderRoute: typeof AppTasksConfirmbookingsWorkItemIdRouteImport
+    '/_app/tasks/confirmbookings/$projectId': {
+      id: '/_app/tasks/confirmbookings/$projectId'
+      path: '/confirmbookings/$projectId'
+      fullPath: '/tasks/confirmbookings/$projectId'
+      preLoaderRoute: typeof AppTasksConfirmbookingsProjectIdRouteImport
       parentRoute: typeof AppTasksRoute
     }
-    '/_app/tasks/conductretro/$workItemId': {
-      id: '/_app/tasks/conductretro/$workItemId'
-      path: '/conductretro/$workItemId'
-      fullPath: '/tasks/conductretro/$workItemId'
-      preLoaderRoute: typeof AppTasksConductretroWorkItemIdRouteImport
+    '/_app/tasks/conductretro/$projectId': {
+      id: '/_app/tasks/conductretro/$projectId'
+      path: '/conductretro/$projectId'
+      fullPath: '/tasks/conductretro/$projectId'
+      preLoaderRoute: typeof AppTasksConductretroProjectIdRouteImport
       parentRoute: typeof AppTasksRoute
     }
-    '/_app/tasks/closeproject/$workItemId': {
-      id: '/_app/tasks/closeproject/$workItemId'
-      path: '/closeproject/$workItemId'
-      fullPath: '/tasks/closeproject/$workItemId'
-      preLoaderRoute: typeof AppTasksCloseprojectWorkItemIdRouteImport
+    '/_app/tasks/closeproject/$projectId': {
+      id: '/_app/tasks/closeproject/$projectId'
+      path: '/closeproject/$projectId'
+      fullPath: '/tasks/closeproject/$projectId'
+      preLoaderRoute: typeof AppTasksCloseprojectProjectIdRouteImport
       parentRoute: typeof AppTasksRoute
     }
     '/_app/deals/$dealId/sign': {
@@ -1158,21 +1157,20 @@ const AppResourcesRouteWithChildren = AppResourcesRoute._addFileChildren(
 
 interface AppTasksRouteChildren {
   AppTasksIndexRoute: typeof AppTasksIndexRoute
-  AppTasksCloseprojectWorkItemIdRoute: typeof AppTasksCloseprojectWorkItemIdRoute
-  AppTasksConductretroWorkItemIdRoute: typeof AppTasksConductretroWorkItemIdRoute
-  AppTasksConfirmbookingsWorkItemIdRoute: typeof AppTasksConfirmbookingsWorkItemIdRoute
-  AppTasksQualifyWorkItemIdRoute: typeof AppTasksQualifyWorkItemIdRoute
-  AppTasksSetbudgetWorkItemIdRoute: typeof AppTasksSetbudgetWorkItemIdRoute
+  AppTasksCloseprojectProjectIdRoute: typeof AppTasksCloseprojectProjectIdRoute
+  AppTasksConductretroProjectIdRoute: typeof AppTasksConductretroProjectIdRoute
+  AppTasksConfirmbookingsProjectIdRoute: typeof AppTasksConfirmbookingsProjectIdRoute
+  AppTasksQualifyDealIdRoute: typeof AppTasksQualifyDealIdRoute
+  AppTasksSetbudgetProjectIdRoute: typeof AppTasksSetbudgetProjectIdRoute
 }
 
 const AppTasksRouteChildren: AppTasksRouteChildren = {
   AppTasksIndexRoute: AppTasksIndexRoute,
-  AppTasksCloseprojectWorkItemIdRoute: AppTasksCloseprojectWorkItemIdRoute,
-  AppTasksConductretroWorkItemIdRoute: AppTasksConductretroWorkItemIdRoute,
-  AppTasksConfirmbookingsWorkItemIdRoute:
-    AppTasksConfirmbookingsWorkItemIdRoute,
-  AppTasksQualifyWorkItemIdRoute: AppTasksQualifyWorkItemIdRoute,
-  AppTasksSetbudgetWorkItemIdRoute: AppTasksSetbudgetWorkItemIdRoute,
+  AppTasksCloseprojectProjectIdRoute: AppTasksCloseprojectProjectIdRoute,
+  AppTasksConductretroProjectIdRoute: AppTasksConductretroProjectIdRoute,
+  AppTasksConfirmbookingsProjectIdRoute: AppTasksConfirmbookingsProjectIdRoute,
+  AppTasksQualifyDealIdRoute: AppTasksQualifyDealIdRoute,
+  AppTasksSetbudgetProjectIdRoute: AppTasksSetbudgetProjectIdRoute,
 }
 
 const AppTasksRouteWithChildren = AppTasksRoute._addFileChildren(
@@ -1228,12 +1226,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-  }
-}

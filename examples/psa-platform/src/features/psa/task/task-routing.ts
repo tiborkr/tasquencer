@@ -3,45 +3,51 @@ import type { Id } from "@/convex/_generated/dataModel";
 /**
  * Configuration for routing to task completion forms.
  * Maps task types to their dedicated route paths.
+ *
+ * TENET-UI-DOMAIN: Routes use domain IDs (dealId, projectId) not workItemId.
+ * Workflow execution still uses workItemId internally.
  */
 export type TaskRouteConfig = {
-  /** The path pattern for the task form (e.g., "/tasks/qualify/$workItemId") */
+  /** The path pattern for the task form (e.g., "/tasks/qualify/$dealId") */
   path: string;
   /** Whether the task has a dedicated completion form */
   hasForm: boolean;
+  /** Domain ID type for routing: 'deal' for sales tasks, 'project' for project tasks */
+  domainIdType: 'deal' | 'project';
 };
 
 /**
  * Map of task types to their routing configuration.
  * Tasks with dedicated completion forms are routed to those forms.
  * Tasks without forms are routed to their domain pages.
+ *
+ * TENET-UI-DOMAIN: Routes use domain IDs for user-friendly, bookmark-safe navigation.
  */
 const TASK_ROUTES: Record<string, TaskRouteConfig> = {
-  // Sales tasks with forms
-  qualifyLead: { path: "/tasks/qualify", hasForm: true },
+  // Sales tasks with forms - use dealId
+  qualifyLead: { path: "/tasks/qualify", hasForm: true, domainIdType: 'deal' },
 
-  // Planning tasks with forms
-  setBudget: { path: "/tasks/setbudget", hasForm: true },
-
-  // Resource tasks with forms
-  confirmBookings: { path: "/tasks/confirmbookings", hasForm: true },
-
-  // Close tasks with forms
-  closeProject: { path: "/tasks/closeproject", hasForm: true },
-  conductRetro: { path: "/tasks/conductretro", hasForm: true },
+  // Planning/Resource/Close tasks with forms - use projectId
+  setBudget: { path: "/tasks/setbudget", hasForm: true, domainIdType: 'project' },
+  confirmBookings: { path: "/tasks/confirmbookings", hasForm: true, domainIdType: 'project' },
+  closeProject: { path: "/tasks/closeproject", hasForm: true, domainIdType: 'project' },
+  conductRetro: { path: "/tasks/conductretro", hasForm: true, domainIdType: 'project' },
 };
 
 /**
  * Gets the route for a specific task based on its type.
  *
+ * TENET-UI-DOMAIN: Routes use domain IDs (dealId, projectId) for navigation.
+ * The route components look up the workItemId from the domain ID.
+ *
  * @param taskType - The type of the task (e.g., "qualifyLead")
- * @param workItemId - The work item ID
- * @param aggregateId - The aggregate (deal/project) ID
+ * @param workItemId - The work item ID (kept for fallback)
+ * @param aggregateId - The aggregate (deal/project) ID - used as primary routing param
  * @returns Route configuration for navigation
  */
 export function getTaskRoute(
   taskType: string,
-  workItemId: Id<"tasquencerWorkItems">,
+  _workItemId: Id<"tasquencerWorkItems">, // Keep for API compatibility; domain IDs used for routing
   aggregateId: string
 ): {
   to: string;
@@ -51,9 +57,11 @@ export function getTaskRoute(
   const routeConfig = TASK_ROUTES[taskType];
 
   if (routeConfig?.hasForm) {
+    // Use domain-first routing: dealId for sales tasks, projectId for others
+    const paramKey = routeConfig.domainIdType === 'deal' ? 'dealId' : 'projectId';
     return {
-      to: `${routeConfig.path}/$workItemId`,
-      params: { workItemId },
+      to: `${routeConfig.path}/$${paramKey}`,
+      params: { [paramKey]: aggregateId },
       hasDirectForm: true,
     };
   }
