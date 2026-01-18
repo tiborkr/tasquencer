@@ -1,5 +1,7 @@
 /**
  * Database functions for projects
+ *
+ * Includes project closure verification per spec 13-workflow-close-phase.md
  */
 import type {
   DatabaseReader,
@@ -8,6 +10,13 @@ import type {
 import type { Doc, Id } from "../../../_generated/dataModel";
 import { EntityNotFoundError } from "@repo/tasquencer";
 import { helpers } from "../../../tasquencer";
+import { listTasksByProject } from "./tasks";
+import { listTimeEntriesByProject } from "./timeEntries";
+import { listExpensesByProject } from "./expenses";
+import { listInvoicesByProject, calculateInvoicePayments } from "./invoices";
+import { listBookingsByProject, deleteBooking } from "./bookings";
+import { getBudgetByProjectId } from "./budgets";
+import { getUser } from "./users";
 
 export type ProjectStatus = Doc<"projects">["status"];
 
@@ -118,4 +127,292 @@ export async function listProjectsByCompany(
     .withIndex("by_company", (q) => q.eq("companyId", companyId))
     .order("desc")
     .take(limit);
+}
+
+// =============================================================================
+// Project Closure Verification (spec 13-workflow-close-phase.md lines 204-217)
+// =============================================================================
+
+/**
+ * Project closure checklist result
+ */
+export interface ProjectClosureChecklist {
+  /** All tasks completed or cancelled */
+  allTasksComplete: boolean;
+  incompleteTasks: number;
+
+  /** All time entries approved (no Draft or Submitted) */
+  allTimeEntriesApproved: boolean;
+  unapprovedTimeEntries: number;
+
+  /** All expenses approved (no Draft or Submitted) */
+  allExpensesApproved: boolean;
+  unapprovedExpenses: number;
+
+  /** All billable items invoiced */
+  allItemsInvoiced: boolean;
+  uninvoicedTimeEntries: number;
+  uninvoicedExpenses: number;
+
+  /** All invoices paid (or marked uncollectible/void) */
+  allInvoicesPaid: boolean;
+  unpaidInvoices: number;
+  unpaidAmount: number;
+
+  /** Future bookings count (to be cancelled) */
+  futureBookings: number;
+
+  /** Overall closure eligibility */
+  canClose: boolean;
+  warnings: string[];
+}
+
+/**
+ * Get project closure checklist status
+ *
+ * Verifies all closure criteria per spec 13-workflow-close-phase.md:
+ * - All tasks completed or cancelled
+ * - All time entries approved
+ * - All expenses approved
+ * - All billable items invoiced
+ * - All invoices paid (or waived)
+ *
+ * @param db Database reader
+ * @param projectId Project to check
+ * @returns Closure checklist with status of each criterion
+ */
+export async function getProjectClosureChecklist(
+  db: DatabaseReader,
+  projectId: Id<"projects">
+): Promise<ProjectClosureChecklist> {
+  const warnings: string[] = [];
+  const now = Date.now();
+
+  // 1. Check tasks - must be Done or OnHold (no longer active)
+  // Per schema: taskStatus = Todo | InProgress | Review | Done | OnHold
+  // "Done" = completed, "OnHold" = effectively cancelled/deferred
+  const tasks = await listTasksByProject(db, projectId);
+  const incompleteTasks = tasks.filter(
+    (t) => t.status !== "Done" && t.status !== "OnHold"
+  );
+  const allTasksComplete = incompleteTasks.length === 0;
+  if (!allTasksComplete) {
+    warnings.push(`${incompleteTasks.length} task(s) not done or on hold`);
+  }
+
+  // 2. Check time entries - must be Approved or Locked
+  const timeEntries = await listTimeEntriesByProject(db, projectId);
+  const unapprovedTimeEntries = timeEntries.filter(
+    (t) => t.status === "Draft" || t.status === "Submitted" || t.status === "Rejected"
+  );
+  const allTimeEntriesApproved = unapprovedTimeEntries.length === 0;
+  if (!allTimeEntriesApproved) {
+    warnings.push(`${unapprovedTimeEntries.length} time entry(ies) not approved`);
+  }
+
+  // 3. Check expenses - must be Approved
+  const expenses = await listExpensesByProject(db, projectId);
+  const unapprovedExpenses = expenses.filter(
+    (e) => e.status === "Draft" || e.status === "Submitted" || e.status === "Rejected"
+  );
+  const allExpensesApproved = unapprovedExpenses.length === 0;
+  if (!allExpensesApproved) {
+    warnings.push(`${unapprovedExpenses.length} expense(s) not approved`);
+  }
+
+  // 4. Check billable items invoiced
+  const uninvoicedTimeEntryList = timeEntries.filter(
+    (t) => t.billable && (t.status === "Approved" || t.status === "Locked") && !t.invoiceId
+  );
+  const uninvoicedExpenseList = expenses.filter(
+    (e) => e.billable && e.status === "Approved" && !e.invoiceId
+  );
+  const allItemsInvoiced =
+    uninvoicedTimeEntryList.length === 0 && uninvoicedExpenseList.length === 0;
+  if (!allItemsInvoiced) {
+    const totalUninvoiced = uninvoicedTimeEntryList.length + uninvoicedExpenseList.length;
+    warnings.push(`${totalUninvoiced} billable item(s) not invoiced`);
+  }
+
+  // 5. Check invoices paid (Paid, Void, or uncollectible status = Void)
+  const invoices = await listInvoicesByProject(db, projectId);
+  const unpaidInvoiceList = invoices.filter(
+    (i) => i.status !== "Paid" && i.status !== "Void" && i.status !== "Draft"
+  );
+  const allInvoicesPaid = unpaidInvoiceList.length === 0;
+  let unpaidAmount = 0;
+  for (const invoice of unpaidInvoiceList) {
+    const paid = await calculateInvoicePayments(db, invoice._id);
+    unpaidAmount += invoice.total - paid;
+  }
+  if (!allInvoicesPaid) {
+    const amountStr = (unpaidAmount / 100).toFixed(2);
+    warnings.push(`${unpaidInvoiceList.length} invoice(s) unpaid ($${amountStr} outstanding)`);
+  }
+
+  // 6. Check future bookings (to be cancelled on close)
+  const bookings = await listBookingsByProject(db, projectId);
+  const futureBookingList = bookings.filter((b) => b.endDate > now);
+
+  // Determine if project can close
+  // Per spec: Can close with unpaid invoices but requires acknowledgment
+  // Hard blockers: unapproved time/expenses
+  const canClose = allTasksComplete && allTimeEntriesApproved && allExpensesApproved;
+
+  return {
+    allTasksComplete,
+    incompleteTasks: incompleteTasks.length,
+    allTimeEntriesApproved,
+    unapprovedTimeEntries: unapprovedTimeEntries.length,
+    allExpensesApproved,
+    unapprovedExpenses: unapprovedExpenses.length,
+    allItemsInvoiced,
+    uninvoicedTimeEntries: uninvoicedTimeEntryList.length,
+    uninvoicedExpenses: uninvoicedExpenseList.length,
+    allInvoicesPaid,
+    unpaidInvoices: unpaidInvoiceList.length,
+    unpaidAmount,
+    futureBookings: futureBookingList.length,
+    canClose,
+    warnings,
+  };
+}
+
+/**
+ * Project metrics calculated at closure
+ */
+export interface ProjectMetrics {
+  /** Total revenue from invoices (excluding Void) */
+  totalRevenue: number;
+  /** Total cost = time cost + expense cost */
+  totalCost: number;
+  /** Time cost using internal cost rates */
+  timeCost: number;
+  /** Expense cost */
+  expenseCost: number;
+  /** Profit = revenue - cost */
+  profit: number;
+  /** Profit margin = profit / revenue * 100 */
+  profitMargin: number;
+  /** Budget variance = totalCost / budgetAmount * 100 */
+  budgetVariance: number;
+  /** Actual duration in days */
+  durationDays: number;
+  /** Planned duration in days (if available) */
+  plannedDurationDays: number | null;
+  /** Total hours logged */
+  totalHours: number;
+  /** Total billable hours */
+  billableHours: number;
+}
+
+/**
+ * Calculate final project metrics
+ *
+ * Per spec 13-workflow-close-phase.md lines 222-253
+ *
+ * @param db Database reader
+ * @param projectId Project to calculate metrics for
+ * @param closeDate Official close date
+ * @returns Project metrics
+ */
+export async function calculateProjectMetrics(
+  db: DatabaseReader,
+  projectId: Id<"projects">,
+  closeDate: number
+): Promise<ProjectMetrics> {
+  const project = await getProject(db, projectId);
+  if (!project) {
+    throw new EntityNotFoundError("Project", { projectId });
+  }
+
+  // Get budget for variance calculation
+  const budget = await getBudgetByProjectId(db, projectId);
+  const budgetAmount = budget?.totalAmount ?? 0;
+
+  // Calculate revenue from invoices (exclude Void and Draft)
+  const invoices = await listInvoicesByProject(db, projectId);
+  const totalRevenue = invoices
+    .filter((i) => i.status !== "Void" && i.status !== "Draft")
+    .reduce((sum, i) => sum + i.total, 0);
+
+  // Calculate time cost using internal cost rates from user records
+  const timeEntries = await listTimeEntriesByProject(db, projectId);
+  let timeCost = 0;
+  let totalHours = 0;
+  let billableHours = 0;
+
+  // Cache user cost rates to avoid repeated lookups
+  const userCostRates = new Map<string, number>();
+
+  for (const entry of timeEntries) {
+    // Get cost rate from user record
+    let costRate = userCostRates.get(entry.userId);
+    if (costRate === undefined) {
+      const user = await getUser(db, entry.userId);
+      costRate = user?.costRate ?? 0;
+      userCostRates.set(entry.userId, costRate);
+    }
+    timeCost += entry.hours * costRate;
+    totalHours += entry.hours;
+    if (entry.billable) {
+      billableHours += entry.hours;
+    }
+  }
+
+  // Calculate expense cost
+  const expenses = await listExpensesByProject(db, projectId);
+  const expenseCost = expenses
+    .filter((e) => e.status === "Approved")
+    .reduce((sum, e) => sum + e.amount, 0);
+
+  const totalCost = timeCost + expenseCost;
+  const profit = totalRevenue - totalCost;
+  const profitMargin = totalRevenue > 0 ? (profit / totalRevenue) * 100 : 0;
+  const budgetVariance = budgetAmount > 0 ? (totalCost / budgetAmount) * 100 : 0;
+
+  // Calculate duration
+  const startDate = project.startDate;
+  const durationDays = Math.ceil((closeDate - startDate) / (24 * 60 * 60 * 1000));
+  const plannedDurationDays = project.endDate
+    ? Math.ceil((project.endDate - startDate) / (24 * 60 * 60 * 1000))
+    : null;
+
+  return {
+    totalRevenue,
+    totalCost,
+    timeCost,
+    expenseCost,
+    profit,
+    profitMargin: Math.round(profitMargin * 100) / 100, // Round to 2 decimals
+    budgetVariance: Math.round(budgetVariance * 100) / 100,
+    durationDays,
+    plannedDurationDays,
+    totalHours,
+    billableHours,
+  };
+}
+
+/**
+ * Cancel all future bookings for a project
+ *
+ * Per spec 13-workflow-close-phase.md: "Cancel pending bookings"
+ *
+ * @param db Database writer
+ * @param projectId Project to cancel bookings for
+ * @returns Number of bookings cancelled
+ */
+export async function cancelFutureBookings(
+  db: DatabaseWriter,
+  projectId: Id<"projects">
+): Promise<number> {
+  const now = Date.now();
+  const bookings = await listBookingsByProject(db, projectId);
+  const futureBookings = bookings.filter((b) => b.endDate > now);
+
+  for (const booking of futureBookings) {
+    await deleteBooking(db, booking._id);
+  }
+
+  return futureBookings.length;
 }

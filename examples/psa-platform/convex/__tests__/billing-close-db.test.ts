@@ -32,7 +32,22 @@ import {
 // Import invoice functions for milestone invoicing tests
 import {
   insertInvoice,
+  updateInvoiceStatus,
 } from '../workflows/dealToDelivery/db/invoices'
+
+// Import project closure verification functions
+import {
+  getProjectClosureChecklist,
+  calculateProjectMetrics,
+  cancelFutureBookings,
+} from '../workflows/dealToDelivery/db/projects'
+
+// Import functions needed for closure tests
+import { insertTask } from '../workflows/dealToDelivery/db/tasks'
+import { insertTimeEntry } from '../workflows/dealToDelivery/db/timeEntries'
+import { insertExpense } from '../workflows/dealToDelivery/db/expenses'
+import { insertBooking } from '../workflows/dealToDelivery/db/bookings'
+import { insertBudget } from '../workflows/dealToDelivery/db/budgets'
 
 // =============================================================================
 // Test Data Factories
@@ -651,5 +666,680 @@ describe('Invoice - Milestone Integration', () => {
       return await getMilestone(ctx.db, milestoneId)
     })
     expect(milestone!.invoiceId).toBe(invoiceId)
+  })
+})
+
+// =============================================================================
+// Project Closure Verification Tests (spec 13-workflow-close-phase.md)
+// =============================================================================
+
+describe('Project Closure Verification', () => {
+  describe('getProjectClosureChecklist', () => {
+    it('returns canClose=true for project with no items', async () => {
+      const t = setup()
+      const orgId = await createTestOrganization(t)
+      const userId = await createTestUser(t, orgId)
+      const companyId = await createTestCompany(t, orgId)
+      const contactId = await createTestContact(t, orgId, companyId)
+      const dealId = await createTestDeal(t, orgId, companyId, contactId, userId)
+      const projectId = await createTestProject(t, orgId, companyId, dealId, userId)
+
+      const checklist = await t.run(async (ctx) => {
+        return await getProjectClosureChecklist(ctx.db, projectId)
+      })
+
+      expect(checklist.canClose).toBe(true)
+      expect(checklist.allTasksComplete).toBe(true)
+      expect(checklist.allTimeEntriesApproved).toBe(true)
+      expect(checklist.allExpensesApproved).toBe(true)
+      expect(checklist.allItemsInvoiced).toBe(true)
+      expect(checklist.allInvoicesPaid).toBe(true)
+      expect(checklist.warnings).toHaveLength(0)
+    })
+
+    it('returns canClose=false when tasks are incomplete', async () => {
+      const t = setup()
+      const orgId = await createTestOrganization(t)
+      const userId = await createTestUser(t, orgId)
+      const companyId = await createTestCompany(t, orgId)
+      const contactId = await createTestContact(t, orgId, companyId)
+      const dealId = await createTestDeal(t, orgId, companyId, contactId, userId)
+      const projectId = await createTestProject(t, orgId, companyId, dealId, userId)
+
+      // Create incomplete task
+      await t.run(async (ctx) => {
+        await insertTask(ctx.db, {
+          projectId,
+          organizationId: orgId,
+          name: 'Incomplete Task',
+          description: 'Task in progress',
+          status: 'InProgress',
+          priority: 'Medium',
+          assigneeIds: [userId],
+          estimatedHours: 8,
+          dependencies: [],
+          sortOrder: 0,
+          createdAt: Date.now(),
+        })
+      })
+
+      const checklist = await t.run(async (ctx) => {
+        return await getProjectClosureChecklist(ctx.db, projectId)
+      })
+
+      expect(checklist.canClose).toBe(false)
+      expect(checklist.allTasksComplete).toBe(false)
+      expect(checklist.incompleteTasks).toBe(1)
+      expect(checklist.warnings.some((w) => w.includes('task'))).toBe(true)
+    })
+
+    it('allows closure when tasks are Done or OnHold', async () => {
+      const t = setup()
+      const orgId = await createTestOrganization(t)
+      const userId = await createTestUser(t, orgId)
+      const companyId = await createTestCompany(t, orgId)
+      const contactId = await createTestContact(t, orgId, companyId)
+      const dealId = await createTestDeal(t, orgId, companyId, contactId, userId)
+      const projectId = await createTestProject(t, orgId, companyId, dealId, userId)
+
+      // Create done and on-hold tasks
+      await t.run(async (ctx) => {
+        await insertTask(ctx.db, {
+          projectId,
+          organizationId: orgId,
+          name: 'Done Task',
+          description: 'Task completed',
+          status: 'Done',
+          priority: 'Medium',
+          assigneeIds: [userId],
+          estimatedHours: 8,
+          dependencies: [],
+          sortOrder: 0,
+          createdAt: Date.now(),
+        })
+        await insertTask(ctx.db, {
+          projectId,
+          organizationId: orgId,
+          name: 'OnHold Task',
+          description: 'Task on hold',
+          status: 'OnHold',
+          priority: 'Low',
+          assigneeIds: [],
+          estimatedHours: 4,
+          dependencies: [],
+          sortOrder: 1,
+          createdAt: Date.now(),
+        })
+      })
+
+      const checklist = await t.run(async (ctx) => {
+        return await getProjectClosureChecklist(ctx.db, projectId)
+      })
+
+      expect(checklist.canClose).toBe(true)
+      expect(checklist.allTasksComplete).toBe(true)
+      expect(checklist.incompleteTasks).toBe(0)
+    })
+
+    it('returns canClose=false when time entries are not approved', async () => {
+      const t = setup()
+      const orgId = await createTestOrganization(t)
+      const userId = await createTestUser(t, orgId)
+      const companyId = await createTestCompany(t, orgId)
+      const contactId = await createTestContact(t, orgId, companyId)
+      const dealId = await createTestDeal(t, orgId, companyId, contactId, userId)
+      const projectId = await createTestProject(t, orgId, companyId, dealId, userId)
+
+      // Create unapproved time entries
+      await t.run(async (ctx) => {
+        await insertTimeEntry(ctx.db, {
+          projectId,
+          organizationId: orgId,
+          userId,
+          date: Date.now(),
+          hours: 4,
+          notes: 'Draft entry',
+          status: 'Draft',
+          billable: true,
+          createdAt: Date.now(),
+        })
+        await insertTimeEntry(ctx.db, {
+          projectId,
+          organizationId: orgId,
+          userId,
+          date: Date.now(),
+          hours: 2,
+          notes: 'Submitted entry',
+          status: 'Submitted',
+          billable: true,
+          createdAt: Date.now(),
+        })
+      })
+
+      const checklist = await t.run(async (ctx) => {
+        return await getProjectClosureChecklist(ctx.db, projectId)
+      })
+
+      expect(checklist.canClose).toBe(false)
+      expect(checklist.allTimeEntriesApproved).toBe(false)
+      expect(checklist.unapprovedTimeEntries).toBe(2)
+      expect(checklist.warnings.some((w) => w.includes('time entry'))).toBe(true)
+    })
+
+    it('returns canClose=false when expenses are not approved', async () => {
+      const t = setup()
+      const orgId = await createTestOrganization(t)
+      const userId = await createTestUser(t, orgId)
+      const companyId = await createTestCompany(t, orgId)
+      const contactId = await createTestContact(t, orgId, companyId)
+      const dealId = await createTestDeal(t, orgId, companyId, contactId, userId)
+      const projectId = await createTestProject(t, orgId, companyId, dealId, userId)
+
+      // Create unapproved expense
+      await t.run(async (ctx) => {
+        await insertExpense(ctx.db, {
+          projectId,
+          organizationId: orgId,
+          userId,
+          date: Date.now(),
+          amount: 5000, // $50
+          currency: 'USD',
+          type: 'Other',
+          description: 'Test expense',
+          status: 'Submitted',
+          billable: false,
+          createdAt: Date.now(),
+        })
+      })
+
+      const checklist = await t.run(async (ctx) => {
+        return await getProjectClosureChecklist(ctx.db, projectId)
+      })
+
+      expect(checklist.canClose).toBe(false)
+      expect(checklist.allExpensesApproved).toBe(false)
+      expect(checklist.unapprovedExpenses).toBe(1)
+      expect(checklist.warnings.some((w) => w.includes('expense'))).toBe(true)
+    })
+
+    it('warns about uninvoiced billable items but allows closure', async () => {
+      const t = setup()
+      const orgId = await createTestOrganization(t)
+      const userId = await createTestUser(t, orgId)
+      const companyId = await createTestCompany(t, orgId)
+      const contactId = await createTestContact(t, orgId, companyId)
+      const dealId = await createTestDeal(t, orgId, companyId, contactId, userId)
+      const projectId = await createTestProject(t, orgId, companyId, dealId, userId)
+
+      // Create approved billable time entry without invoice
+      await t.run(async (ctx) => {
+        await insertTimeEntry(ctx.db, {
+          projectId,
+          organizationId: orgId,
+          userId,
+          date: Date.now(),
+          hours: 8,
+          notes: 'Approved billable entry',
+          status: 'Approved',
+          billable: true,
+          approvedBy: userId,
+          approvedAt: Date.now(),
+          createdAt: Date.now(),
+        })
+      })
+
+      const checklist = await t.run(async (ctx) => {
+        return await getProjectClosureChecklist(ctx.db, projectId)
+      })
+
+      // Can close (hard requirements met) but has warning
+      expect(checklist.canClose).toBe(true)
+      expect(checklist.allItemsInvoiced).toBe(false)
+      expect(checklist.uninvoicedTimeEntries).toBe(1)
+      expect(checklist.warnings.some((w) => w.includes('not invoiced'))).toBe(true)
+    })
+
+    it('warns about unpaid invoices but allows closure', async () => {
+      const t = setup()
+      const orgId = await createTestOrganization(t)
+      const userId = await createTestUser(t, orgId)
+      const companyId = await createTestCompany(t, orgId)
+      const contactId = await createTestContact(t, orgId, companyId)
+      const dealId = await createTestDeal(t, orgId, companyId, contactId, userId)
+      const projectId = await createTestProject(t, orgId, companyId, dealId, userId)
+
+      // Create unpaid finalized invoice
+      await t.run(async (ctx) => {
+        const invoiceId = await insertInvoice(ctx.db, {
+          projectId,
+          organizationId: orgId,
+          companyId,
+          status: 'Sent',
+          method: 'TimeAndMaterials',
+          subtotal: 100000, // $1,000
+          tax: 0,
+          total: 100000,
+          dueDate: Date.now() - 7 * 24 * 60 * 60 * 1000, // Past due
+          createdAt: Date.now(),
+        })
+        return invoiceId
+      })
+
+      const checklist = await t.run(async (ctx) => {
+        return await getProjectClosureChecklist(ctx.db, projectId)
+      })
+
+      // Can close (hard requirements met) but has warning
+      expect(checklist.canClose).toBe(true)
+      expect(checklist.allInvoicesPaid).toBe(false)
+      expect(checklist.unpaidInvoices).toBe(1)
+      expect(checklist.unpaidAmount).toBe(100000)
+      expect(checklist.warnings.some((w) => w.includes('unpaid'))).toBe(true)
+    })
+
+    it('counts future bookings to be cancelled', async () => {
+      const t = setup()
+      const orgId = await createTestOrganization(t)
+      const userId = await createTestUser(t, orgId)
+      const companyId = await createTestCompany(t, orgId)
+      const contactId = await createTestContact(t, orgId, companyId)
+      const dealId = await createTestDeal(t, orgId, companyId, contactId, userId)
+      const projectId = await createTestProject(t, orgId, companyId, dealId, userId)
+
+      // Create future booking
+      await t.run(async (ctx) => {
+        await insertBooking(ctx.db, {
+          projectId,
+          organizationId: orgId,
+          userId,
+          startDate: Date.now() + 7 * 24 * 60 * 60 * 1000, // Next week
+          endDate: Date.now() + 14 * 24 * 60 * 60 * 1000, // 2 weeks out
+          hoursPerDay: 8,
+          type: 'Confirmed',
+          createdAt: Date.now(),
+        })
+      })
+
+      const checklist = await t.run(async (ctx) => {
+        return await getProjectClosureChecklist(ctx.db, projectId)
+      })
+
+      expect(checklist.futureBookings).toBe(1)
+    })
+  })
+
+  describe('calculateProjectMetrics', () => {
+    it('calculates metrics for empty project', async () => {
+      const t = setup()
+      const orgId = await createTestOrganization(t)
+      const userId = await createTestUser(t, orgId)
+      const companyId = await createTestCompany(t, orgId)
+      const contactId = await createTestContact(t, orgId, companyId)
+      const dealId = await createTestDeal(t, orgId, companyId, contactId, userId)
+      const projectId = await createTestProject(t, orgId, companyId, dealId, userId)
+
+      const closeDate = Date.now()
+      const metrics = await t.run(async (ctx) => {
+        return await calculateProjectMetrics(ctx.db, projectId, closeDate)
+      })
+
+      expect(metrics.totalRevenue).toBe(0)
+      expect(metrics.totalCost).toBe(0)
+      expect(metrics.profit).toBe(0)
+      expect(metrics.profitMargin).toBe(0)
+      expect(metrics.totalHours).toBe(0)
+      expect(metrics.billableHours).toBe(0)
+    })
+
+    it('calculates revenue from paid invoices', async () => {
+      const t = setup()
+      const orgId = await createTestOrganization(t)
+      const userId = await createTestUser(t, orgId)
+      const companyId = await createTestCompany(t, orgId)
+      const contactId = await createTestContact(t, orgId, companyId)
+      const dealId = await createTestDeal(t, orgId, companyId, contactId, userId)
+      const projectId = await createTestProject(t, orgId, companyId, dealId, userId)
+
+      // Create paid invoice
+      await t.run(async (ctx) => {
+        await insertInvoice(ctx.db, {
+          projectId,
+          organizationId: orgId,
+          companyId,
+          status: 'Paid',
+          method: 'TimeAndMaterials',
+          subtotal: 500000, // $5,000
+          tax: 0,
+          total: 500000,
+          dueDate: Date.now(),
+          createdAt: Date.now(),
+        })
+      })
+
+      const closeDate = Date.now()
+      const metrics = await t.run(async (ctx) => {
+        return await calculateProjectMetrics(ctx.db, projectId, closeDate)
+      })
+
+      expect(metrics.totalRevenue).toBe(500000)
+    })
+
+    it('excludes void invoices from revenue', async () => {
+      const t = setup()
+      const orgId = await createTestOrganization(t)
+      const userId = await createTestUser(t, orgId)
+      const companyId = await createTestCompany(t, orgId)
+      const contactId = await createTestContact(t, orgId, companyId)
+      const dealId = await createTestDeal(t, orgId, companyId, contactId, userId)
+      const projectId = await createTestProject(t, orgId, companyId, dealId, userId)
+
+      // Create void invoice
+      const invoiceId = await t.run(async (ctx) => {
+        return await insertInvoice(ctx.db, {
+          projectId,
+          organizationId: orgId,
+          companyId,
+          status: 'Finalized',
+          method: 'TimeAndMaterials',
+          subtotal: 100000,
+          tax: 0,
+          total: 100000,
+          dueDate: Date.now(),
+          createdAt: Date.now(),
+        })
+      })
+
+      // Void the invoice
+      await t.run(async (ctx) => {
+        await updateInvoiceStatus(ctx.db, invoiceId, 'Void')
+      })
+
+      const closeDate = Date.now()
+      const metrics = await t.run(async (ctx) => {
+        return await calculateProjectMetrics(ctx.db, projectId, closeDate)
+      })
+
+      expect(metrics.totalRevenue).toBe(0)
+    })
+
+    it('calculates time cost using user cost rates', async () => {
+      const t = setup()
+      const orgId = await createTestOrganization(t)
+      const userId = await createTestUser(t, orgId, { costRate: 5000 }) // $50/hr cost
+      const companyId = await createTestCompany(t, orgId)
+      const contactId = await createTestContact(t, orgId, companyId)
+      const dealId = await createTestDeal(t, orgId, companyId, contactId, userId)
+      const projectId = await createTestProject(t, orgId, companyId, dealId, userId)
+
+      // Create time entries - cost rate comes from user record
+      await t.run(async (ctx) => {
+        await insertTimeEntry(ctx.db, {
+          projectId,
+          organizationId: orgId,
+          userId,
+          date: Date.now(),
+          hours: 10,
+          notes: 'Development work',
+          status: 'Approved',
+          billable: true,
+          createdAt: Date.now(),
+        })
+      })
+
+      const closeDate = Date.now()
+      const metrics = await t.run(async (ctx) => {
+        return await calculateProjectMetrics(ctx.db, projectId, closeDate)
+      })
+
+      expect(metrics.timeCost).toBe(50000) // 10 hours × $50 (from user costRate)
+      expect(metrics.totalHours).toBe(10)
+      expect(metrics.billableHours).toBe(10)
+    })
+
+    it('calculates expense cost', async () => {
+      const t = setup()
+      const orgId = await createTestOrganization(t)
+      const userId = await createTestUser(t, orgId)
+      const companyId = await createTestCompany(t, orgId)
+      const contactId = await createTestContact(t, orgId, companyId)
+      const dealId = await createTestDeal(t, orgId, companyId, contactId, userId)
+      const projectId = await createTestProject(t, orgId, companyId, dealId, userId)
+
+      // Create approved expenses
+      await t.run(async (ctx) => {
+        await insertExpense(ctx.db, {
+          projectId,
+          organizationId: orgId,
+          userId,
+          date: Date.now(),
+          amount: 15000, // $150
+          currency: 'USD',
+          type: 'Software',
+          description: 'Software license',
+          status: 'Approved',
+          billable: true,
+          createdAt: Date.now(),
+        })
+        await insertExpense(ctx.db, {
+          projectId,
+          organizationId: orgId,
+          userId,
+          date: Date.now(),
+          amount: 5000, // $50
+          currency: 'USD',
+          type: 'Other',
+          description: 'Supplies',
+          status: 'Approved',
+          billable: false,
+          createdAt: Date.now(),
+        })
+      })
+
+      const closeDate = Date.now()
+      const metrics = await t.run(async (ctx) => {
+        return await calculateProjectMetrics(ctx.db, projectId, closeDate)
+      })
+
+      expect(metrics.expenseCost).toBe(20000) // $150 + $50
+    })
+
+    it('calculates profit and margin correctly', async () => {
+      const t = setup()
+      const orgId = await createTestOrganization(t)
+      const userId = await createTestUser(t, orgId, { costRate: 5000 }) // $50/hr
+      const companyId = await createTestCompany(t, orgId)
+      const contactId = await createTestContact(t, orgId, companyId)
+      const dealId = await createTestDeal(t, orgId, companyId, contactId, userId)
+      const projectId = await createTestProject(t, orgId, companyId, dealId, userId)
+
+      // Create revenue (paid invoice)
+      await t.run(async (ctx) => {
+        await insertInvoice(ctx.db, {
+          projectId,
+          organizationId: orgId,
+          companyId,
+          status: 'Paid',
+          method: 'TimeAndMaterials',
+          subtotal: 100000, // $1,000
+          tax: 0,
+          total: 100000,
+          dueDate: Date.now(),
+          createdAt: Date.now(),
+        })
+      })
+
+      // Create cost (time entry - cost comes from user's costRate)
+      await t.run(async (ctx) => {
+        await insertTimeEntry(ctx.db, {
+          projectId,
+          organizationId: orgId,
+          userId,
+          date: Date.now(),
+          hours: 10,
+          notes: 'Work',
+          status: 'Approved',
+          billable: true,
+          createdAt: Date.now(),
+        })
+      })
+
+      const closeDate = Date.now()
+      const metrics = await t.run(async (ctx) => {
+        return await calculateProjectMetrics(ctx.db, projectId, closeDate)
+      })
+
+      expect(metrics.totalRevenue).toBe(100000) // $1,000
+      expect(metrics.totalCost).toBe(50000) // $500 (10h × $50 from user costRate)
+      expect(metrics.profit).toBe(50000) // $500
+      expect(metrics.profitMargin).toBe(50) // 50%
+    })
+
+    it('calculates budget variance correctly', async () => {
+      const t = setup()
+      const orgId = await createTestOrganization(t)
+      const userId = await createTestUser(t, orgId, { costRate: 5000 }) // $50/hr
+      const companyId = await createTestCompany(t, orgId)
+      const contactId = await createTestContact(t, orgId, companyId)
+      const dealId = await createTestDeal(t, orgId, companyId, contactId, userId)
+      const projectId = await createTestProject(t, orgId, companyId, dealId, userId)
+
+      // Create budget
+      await t.run(async (ctx) => {
+        await insertBudget(ctx.db, {
+          projectId,
+          organizationId: orgId,
+          type: 'TimeAndMaterials',
+          totalAmount: 100000, // $1,000 budget
+          createdAt: Date.now(),
+        })
+      })
+
+      // Create cost (80% of budget) - cost comes from user's costRate
+      await t.run(async (ctx) => {
+        await insertTimeEntry(ctx.db, {
+          projectId,
+          organizationId: orgId,
+          userId,
+          date: Date.now(),
+          hours: 16, // 16 × $50 = $800 = 80% of budget
+          notes: 'Work',
+          status: 'Approved',
+          billable: true,
+          createdAt: Date.now(),
+        })
+      })
+
+      const closeDate = Date.now()
+      const metrics = await t.run(async (ctx) => {
+        return await calculateProjectMetrics(ctx.db, projectId, closeDate)
+      })
+
+      expect(metrics.budgetVariance).toBe(80) // 80% of budget used
+    })
+
+    it('calculates duration in days', async () => {
+      const t = setup()
+      const orgId = await createTestOrganization(t)
+      const userId = await createTestUser(t, orgId)
+      const companyId = await createTestCompany(t, orgId)
+      const contactId = await createTestContact(t, orgId, companyId)
+      const dealId = await createTestDeal(t, orgId, companyId, contactId, userId)
+
+      // Create project with known start date
+      const startDate = Date.now() - 30 * 24 * 60 * 60 * 1000 // 30 days ago
+      const projectId = await t.run(async (ctx) => {
+        return await ctx.db.insert('projects', {
+          organizationId: orgId,
+          companyId,
+          dealId,
+          managerId: userId,
+          name: 'Test Project',
+          status: 'Active',
+          startDate,
+          endDate: startDate + 60 * 24 * 60 * 60 * 1000, // Planned 60 days
+          createdAt: Date.now(),
+        })
+      })
+
+      const closeDate = Date.now()
+      const metrics = await t.run(async (ctx) => {
+        return await calculateProjectMetrics(ctx.db, projectId, closeDate)
+      })
+
+      expect(metrics.durationDays).toBe(30)
+      expect(metrics.plannedDurationDays).toBe(60)
+    })
+  })
+
+  describe('cancelFutureBookings', () => {
+    it('cancels future bookings', async () => {
+      const t = setup()
+      const orgId = await createTestOrganization(t)
+      const userId = await createTestUser(t, orgId)
+      const companyId = await createTestCompany(t, orgId)
+      const contactId = await createTestContact(t, orgId, companyId)
+      const dealId = await createTestDeal(t, orgId, companyId, contactId, userId)
+      const projectId = await createTestProject(t, orgId, companyId, dealId, userId)
+
+      // Create future bookings
+      await t.run(async (ctx) => {
+        await insertBooking(ctx.db, {
+          projectId,
+          organizationId: orgId,
+          userId,
+          startDate: Date.now() + 7 * 24 * 60 * 60 * 1000,
+          endDate: Date.now() + 14 * 24 * 60 * 60 * 1000,
+          hoursPerDay: 8,
+          type: 'Confirmed',
+          createdAt: Date.now(),
+        })
+        await insertBooking(ctx.db, {
+          projectId,
+          organizationId: orgId,
+          userId,
+          startDate: Date.now() + 21 * 24 * 60 * 60 * 1000,
+          endDate: Date.now() + 28 * 24 * 60 * 60 * 1000,
+          hoursPerDay: 4,
+          type: 'Tentative',
+          createdAt: Date.now(),
+        })
+      })
+
+      const cancelled = await t.run(async (ctx) => {
+        return await cancelFutureBookings(ctx.db, projectId)
+      })
+
+      expect(cancelled).toBe(2)
+    })
+
+    it('does not cancel past bookings', async () => {
+      const t = setup()
+      const orgId = await createTestOrganization(t)
+      const userId = await createTestUser(t, orgId)
+      const companyId = await createTestCompany(t, orgId)
+      const contactId = await createTestContact(t, orgId, companyId)
+      const dealId = await createTestDeal(t, orgId, companyId, contactId, userId)
+      const projectId = await createTestProject(t, orgId, companyId, dealId, userId)
+
+      // Create past booking
+      await t.run(async (ctx) => {
+        await insertBooking(ctx.db, {
+          projectId,
+          organizationId: orgId,
+          userId,
+          startDate: Date.now() - 14 * 24 * 60 * 60 * 1000,
+          endDate: Date.now() - 7 * 24 * 60 * 60 * 1000,
+          hoursPerDay: 8,
+          type: 'Confirmed',
+          createdAt: Date.now(),
+        })
+      })
+
+      const cancelled = await t.run(async (ctx) => {
+        return await cancelFutureBookings(ctx.db, projectId)
+      })
+
+      expect(cancelled).toBe(0)
+    })
   })
 })
