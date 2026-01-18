@@ -472,6 +472,57 @@ const milestones = defineTable({
 })
   .index("by_project", ["projectId"]);
 
+// Lesson category for retrospectives
+const lessonCategory = v.union(
+  v.literal("timeline"),
+  v.literal("budget"),
+  v.literal("quality"),
+  v.literal("communication"),
+  v.literal("process"),
+  v.literal("other")
+);
+
+// Lesson impact for retrospectives
+const lessonImpact = v.union(
+  v.literal("high"),
+  v.literal("medium"),
+  v.literal("low")
+);
+
+// Lessons Learned - Project retrospective learnings (spec 13-workflow-close-phase.md)
+const lessonsLearned = defineTable({
+  projectId: v.id("projects"),
+  organizationId: v.id("organizations"),
+  category: lessonCategory,
+  type: v.union(v.literal("success"), v.literal("improvement")), // From successes or improvements
+  description: v.string(),
+  impact: lessonImpact,
+  recommendation: v.optional(v.string()), // For improvements
+  createdBy: v.id("users"),
+  createdAt: v.number(),
+})
+  .index("by_project", ["projectId"])
+  .index("by_category", ["organizationId", "category"]);
+
+// Project Scorecards - Summary of project performance at closure (spec 13-workflow-close-phase.md)
+const projectScorecards = defineTable({
+  projectId: v.id("projects"),
+  organizationId: v.id("organizations"),
+  onTime: v.boolean(), // actualEnd <= plannedEnd
+  onBudget: v.boolean(), // actualCost <= budgetedCost
+  clientSatisfied: v.boolean(), // satisfaction >= 4
+  profitable: v.boolean(), // profitMargin >= targetMargin
+  clientSatisfactionRating: v.optional(v.number()), // 1-5 scale
+  clientFeedback: v.optional(v.string()),
+  wouldRecommend: v.optional(v.boolean()),
+  testimonialProvided: v.optional(v.boolean()),
+  retroParticipants: v.optional(v.array(v.id("users"))),
+  keyLearnings: v.optional(v.array(v.string())),
+  recommendations: v.optional(v.array(v.string())),
+  createdAt: v.number(),
+})
+  .index("by_project", ["projectId"]);
+
 // =============================================================================
 // WORK ITEM METADATA TABLE
 // =============================================================================
@@ -974,6 +1025,8 @@ export default {
   rateCardItems,
   changeOrders,
   milestones,
+  lessonsLearned,
+  projectScorecards,
   // Work item metadata table
   dealToDeliveryWorkItems,
 };

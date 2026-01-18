@@ -42,6 +42,26 @@ import {
   cancelFutureBookings,
 } from '../workflows/dealToDelivery/db/projects'
 
+// Import lessons learned and scorecard functions
+import {
+  insertLessonLearned,
+  getLessonLearned,
+  updateLessonLearned,
+  deleteLessonLearned,
+  listLessonsLearnedByProject,
+  listSuccessesByProject,
+  listImprovementsByProject,
+  listHighImpactLessons,
+  insertLessonsFromRetrospective,
+  insertProjectScorecard,
+  getProjectScorecard,
+  getProjectScorecardByProject,
+  updateProjectScorecard,
+  deleteProjectScorecard,
+  createProjectScorecard,
+  getOrganizationScorecardSummary,
+} from '../workflows/dealToDelivery/db/lessonsLearned'
+
 // Import functions needed for closure tests
 import { insertTask } from '../workflows/dealToDelivery/db/tasks'
 import { insertTimeEntry } from '../workflows/dealToDelivery/db/timeEntries'
@@ -1340,6 +1360,801 @@ describe('Project Closure Verification', () => {
       })
 
       expect(cancelled).toBe(0)
+    })
+  })
+})
+
+// =============================================================================
+// Lessons Learned Tests (spec 13-workflow-close-phase.md)
+// =============================================================================
+
+describe('Lessons Learned DB Functions', () => {
+  describe('insertLessonLearned', () => {
+    it('should insert a success lesson', async () => {
+      const t = setup()
+      const orgId = await createTestOrganization(t)
+      const userId = await createTestUser(t, orgId)
+      const companyId = await createTestCompany(t, orgId)
+      const contactId = await createTestContact(t, orgId, companyId)
+      const dealId = await createTestDeal(t, orgId, companyId, contactId, userId)
+      const projectId = await createTestProject(t, orgId, companyId, dealId, userId)
+
+      const lessonId = await t.run(async (ctx) => {
+        return await insertLessonLearned(ctx.db, {
+          projectId,
+          organizationId: orgId,
+          category: 'timeline',
+          type: 'success',
+          description: 'Delivered ahead of schedule',
+          impact: 'high',
+          createdBy: userId,
+          createdAt: Date.now(),
+        })
+      })
+
+      expect(lessonId).toBeDefined()
+    })
+
+    it('should insert an improvement lesson with recommendation', async () => {
+      const t = setup()
+      const orgId = await createTestOrganization(t)
+      const userId = await createTestUser(t, orgId)
+      const companyId = await createTestCompany(t, orgId)
+      const contactId = await createTestContact(t, orgId, companyId)
+      const dealId = await createTestDeal(t, orgId, companyId, contactId, userId)
+      const projectId = await createTestProject(t, orgId, companyId, dealId, userId)
+
+      const lessonId = await t.run(async (ctx) => {
+        return await insertLessonLearned(ctx.db, {
+          projectId,
+          organizationId: orgId,
+          category: 'communication',
+          type: 'improvement',
+          description: 'Client stakeholders were not always available',
+          impact: 'medium',
+          recommendation: 'Schedule regular check-ins with all stakeholders',
+          createdBy: userId,
+          createdAt: Date.now(),
+        })
+      })
+
+      const lesson = await t.run(async (ctx) => {
+        return await getLessonLearned(ctx.db, lessonId)
+      })
+
+      expect(lesson?.type).toBe('improvement')
+      expect(lesson?.recommendation).toBe('Schedule regular check-ins with all stakeholders')
+    })
+  })
+
+  describe('getLessonLearned', () => {
+    it('should return lesson by ID', async () => {
+      const t = setup()
+      const orgId = await createTestOrganization(t)
+      const userId = await createTestUser(t, orgId)
+      const companyId = await createTestCompany(t, orgId)
+      const contactId = await createTestContact(t, orgId, companyId)
+      const dealId = await createTestDeal(t, orgId, companyId, contactId, userId)
+      const projectId = await createTestProject(t, orgId, companyId, dealId, userId)
+
+      const lessonId = await t.run(async (ctx) => {
+        return await insertLessonLearned(ctx.db, {
+          projectId,
+          organizationId: orgId,
+          category: 'budget',
+          type: 'success',
+          description: 'Came in under budget',
+          impact: 'high',
+          createdBy: userId,
+          createdAt: Date.now(),
+        })
+      })
+
+      const lesson = await t.run(async (ctx) => {
+        return await getLessonLearned(ctx.db, lessonId)
+      })
+
+      expect(lesson?.category).toBe('budget')
+      expect(lesson?.description).toBe('Came in under budget')
+    })
+  })
+
+  describe('updateLessonLearned', () => {
+    it('should update lesson description and impact', async () => {
+      const t = setup()
+      const orgId = await createTestOrganization(t)
+      const userId = await createTestUser(t, orgId)
+      const companyId = await createTestCompany(t, orgId)
+      const contactId = await createTestContact(t, orgId, companyId)
+      const dealId = await createTestDeal(t, orgId, companyId, contactId, userId)
+      const projectId = await createTestProject(t, orgId, companyId, dealId, userId)
+
+      const lessonId = await t.run(async (ctx) => {
+        return await insertLessonLearned(ctx.db, {
+          projectId,
+          organizationId: orgId,
+          category: 'process',
+          type: 'improvement',
+          description: 'Original description',
+          impact: 'low',
+          createdBy: userId,
+          createdAt: Date.now(),
+        })
+      })
+
+      await t.run(async (ctx) => {
+        await updateLessonLearned(ctx.db, lessonId, {
+          description: 'Updated description',
+          impact: 'medium',
+        })
+      })
+
+      const lesson = await t.run(async (ctx) => {
+        return await getLessonLearned(ctx.db, lessonId)
+      })
+
+      expect(lesson?.description).toBe('Updated description')
+      expect(lesson?.impact).toBe('medium')
+    })
+  })
+
+  describe('deleteLessonLearned', () => {
+    it('should delete a lesson', async () => {
+      const t = setup()
+      const orgId = await createTestOrganization(t)
+      const userId = await createTestUser(t, orgId)
+      const companyId = await createTestCompany(t, orgId)
+      const contactId = await createTestContact(t, orgId, companyId)
+      const dealId = await createTestDeal(t, orgId, companyId, contactId, userId)
+      const projectId = await createTestProject(t, orgId, companyId, dealId, userId)
+
+      const lessonId = await t.run(async (ctx) => {
+        return await insertLessonLearned(ctx.db, {
+          projectId,
+          organizationId: orgId,
+          category: 'other',
+          type: 'success',
+          description: 'To be deleted',
+          impact: 'low',
+          createdBy: userId,
+          createdAt: Date.now(),
+        })
+      })
+
+      await t.run(async (ctx) => {
+        await deleteLessonLearned(ctx.db, lessonId)
+      })
+
+      const lesson = await t.run(async (ctx) => {
+        return await getLessonLearned(ctx.db, lessonId)
+      })
+
+      expect(lesson).toBeNull()
+    })
+  })
+
+  describe('listLessonsLearnedByProject', () => {
+    it('should return all lessons for a project', async () => {
+      const t = setup()
+      const orgId = await createTestOrganization(t)
+      const userId = await createTestUser(t, orgId)
+      const companyId = await createTestCompany(t, orgId)
+      const contactId = await createTestContact(t, orgId, companyId)
+      const dealId = await createTestDeal(t, orgId, companyId, contactId, userId)
+      const projectId = await createTestProject(t, orgId, companyId, dealId, userId)
+
+      // Create multiple lessons
+      await t.run(async (ctx) => {
+        await insertLessonLearned(ctx.db, {
+          projectId,
+          organizationId: orgId,
+          category: 'timeline',
+          type: 'success',
+          description: 'Lesson 1',
+          impact: 'high',
+          createdBy: userId,
+          createdAt: Date.now(),
+        })
+        await insertLessonLearned(ctx.db, {
+          projectId,
+          organizationId: orgId,
+          category: 'budget',
+          type: 'improvement',
+          description: 'Lesson 2',
+          impact: 'medium',
+          createdBy: userId,
+          createdAt: Date.now(),
+        })
+        await insertLessonLearned(ctx.db, {
+          projectId,
+          organizationId: orgId,
+          category: 'quality',
+          type: 'success',
+          description: 'Lesson 3',
+          impact: 'low',
+          createdBy: userId,
+          createdAt: Date.now(),
+        })
+      })
+
+      const lessons = await t.run(async (ctx) => {
+        return await listLessonsLearnedByProject(ctx.db, projectId)
+      })
+
+      expect(lessons).toHaveLength(3)
+    })
+  })
+
+  describe('listSuccessesByProject', () => {
+    it('should return only success lessons', async () => {
+      const t = setup()
+      const orgId = await createTestOrganization(t)
+      const userId = await createTestUser(t, orgId)
+      const companyId = await createTestCompany(t, orgId)
+      const contactId = await createTestContact(t, orgId, companyId)
+      const dealId = await createTestDeal(t, orgId, companyId, contactId, userId)
+      const projectId = await createTestProject(t, orgId, companyId, dealId, userId)
+
+      // Create mixed lessons
+      await t.run(async (ctx) => {
+        await insertLessonLearned(ctx.db, {
+          projectId,
+          organizationId: orgId,
+          category: 'timeline',
+          type: 'success',
+          description: 'Success 1',
+          impact: 'high',
+          createdBy: userId,
+          createdAt: Date.now(),
+        })
+        await insertLessonLearned(ctx.db, {
+          projectId,
+          organizationId: orgId,
+          category: 'budget',
+          type: 'improvement',
+          description: 'Improvement 1',
+          impact: 'medium',
+          createdBy: userId,
+          createdAt: Date.now(),
+        })
+        await insertLessonLearned(ctx.db, {
+          projectId,
+          organizationId: orgId,
+          category: 'quality',
+          type: 'success',
+          description: 'Success 2',
+          impact: 'high',
+          createdBy: userId,
+          createdAt: Date.now(),
+        })
+      })
+
+      const successes = await t.run(async (ctx) => {
+        return await listSuccessesByProject(ctx.db, projectId)
+      })
+
+      expect(successes).toHaveLength(2)
+      expect(successes.every((l) => l.type === 'success')).toBe(true)
+    })
+  })
+
+  describe('listImprovementsByProject', () => {
+    it('should return only improvement lessons', async () => {
+      const t = setup()
+      const orgId = await createTestOrganization(t)
+      const userId = await createTestUser(t, orgId)
+      const companyId = await createTestCompany(t, orgId)
+      const contactId = await createTestContact(t, orgId, companyId)
+      const dealId = await createTestDeal(t, orgId, companyId, contactId, userId)
+      const projectId = await createTestProject(t, orgId, companyId, dealId, userId)
+
+      // Create mixed lessons
+      await t.run(async (ctx) => {
+        await insertLessonLearned(ctx.db, {
+          projectId,
+          organizationId: orgId,
+          category: 'communication',
+          type: 'improvement',
+          description: 'Improvement 1',
+          impact: 'high',
+          recommendation: 'Do X instead',
+          createdBy: userId,
+          createdAt: Date.now(),
+        })
+        await insertLessonLearned(ctx.db, {
+          projectId,
+          organizationId: orgId,
+          category: 'process',
+          type: 'success',
+          description: 'Success 1',
+          impact: 'medium',
+          createdBy: userId,
+          createdAt: Date.now(),
+        })
+      })
+
+      const improvements = await t.run(async (ctx) => {
+        return await listImprovementsByProject(ctx.db, projectId)
+      })
+
+      expect(improvements).toHaveLength(1)
+      expect(improvements[0].recommendation).toBe('Do X instead')
+    })
+  })
+
+  describe('listHighImpactLessons', () => {
+    it('should return only high impact lessons', async () => {
+      const t = setup()
+      const orgId = await createTestOrganization(t)
+      const userId = await createTestUser(t, orgId)
+      const companyId = await createTestCompany(t, orgId)
+      const contactId = await createTestContact(t, orgId, companyId)
+      const dealId = await createTestDeal(t, orgId, companyId, contactId, userId)
+      const projectId = await createTestProject(t, orgId, companyId, dealId, userId)
+
+      // Create lessons with different impacts
+      await t.run(async (ctx) => {
+        await insertLessonLearned(ctx.db, {
+          projectId,
+          organizationId: orgId,
+          category: 'timeline',
+          type: 'success',
+          description: 'High impact',
+          impact: 'high',
+          createdBy: userId,
+          createdAt: Date.now(),
+        })
+        await insertLessonLearned(ctx.db, {
+          projectId,
+          organizationId: orgId,
+          category: 'budget',
+          type: 'improvement',
+          description: 'Medium impact',
+          impact: 'medium',
+          createdBy: userId,
+          createdAt: Date.now(),
+        })
+        await insertLessonLearned(ctx.db, {
+          projectId,
+          organizationId: orgId,
+          category: 'quality',
+          type: 'success',
+          description: 'Low impact',
+          impact: 'low',
+          createdBy: userId,
+          createdAt: Date.now(),
+        })
+      })
+
+      const highImpact = await t.run(async (ctx) => {
+        return await listHighImpactLessons(ctx.db, projectId)
+      })
+
+      expect(highImpact).toHaveLength(1)
+      expect(highImpact[0].description).toBe('High impact')
+    })
+  })
+
+  describe('insertLessonsFromRetrospective', () => {
+    it('should batch insert successes and improvements', async () => {
+      const t = setup()
+      const orgId = await createTestOrganization(t)
+      const userId = await createTestUser(t, orgId)
+      const companyId = await createTestCompany(t, orgId)
+      const contactId = await createTestContact(t, orgId, companyId)
+      const dealId = await createTestDeal(t, orgId, companyId, contactId, userId)
+      const projectId = await createTestProject(t, orgId, companyId, dealId, userId)
+
+      const count = await t.run(async (ctx) => {
+        return await insertLessonsFromRetrospective(
+          ctx.db,
+          projectId,
+          orgId,
+          userId,
+          [
+            { category: 'timeline', description: 'Delivered on time', impact: 'high' },
+            { category: 'quality', description: 'High client satisfaction', impact: 'high' },
+          ],
+          [
+            {
+              category: 'communication',
+              description: 'Stakeholder alignment issues',
+              impact: 'medium',
+              recommendation: 'Weekly status calls',
+            },
+          ]
+        )
+      })
+
+      expect(count).toBe(3)
+
+      const allLessons = await t.run(async (ctx) => {
+        return await listLessonsLearnedByProject(ctx.db, projectId)
+      })
+
+      expect(allLessons).toHaveLength(3)
+      const successes = allLessons.filter((l) => l.type === 'success')
+      const improvements = allLessons.filter((l) => l.type === 'improvement')
+      expect(successes).toHaveLength(2)
+      expect(improvements).toHaveLength(1)
+    })
+  })
+})
+
+// =============================================================================
+// Project Scorecard Tests (spec 13-workflow-close-phase.md)
+// =============================================================================
+
+describe('Project Scorecards DB Functions', () => {
+  describe('insertProjectScorecard', () => {
+    it('should insert a project scorecard', async () => {
+      const t = setup()
+      const orgId = await createTestOrganization(t)
+      const userId = await createTestUser(t, orgId)
+      const companyId = await createTestCompany(t, orgId)
+      const contactId = await createTestContact(t, orgId, companyId)
+      const dealId = await createTestDeal(t, orgId, companyId, contactId, userId)
+      const projectId = await createTestProject(t, orgId, companyId, dealId, userId)
+
+      const scorecardId = await t.run(async (ctx) => {
+        return await insertProjectScorecard(ctx.db, {
+          projectId,
+          organizationId: orgId,
+          onTime: true,
+          onBudget: true,
+          clientSatisfied: true,
+          profitable: true,
+          clientSatisfactionRating: 5,
+          clientFeedback: 'Great project!',
+          wouldRecommend: true,
+          testimonialProvided: true,
+          keyLearnings: ['Always scope early', 'Client communication is key'],
+          recommendations: ['Continue weekly check-ins'],
+          createdAt: Date.now(),
+        })
+      })
+
+      expect(scorecardId).toBeDefined()
+    })
+  })
+
+  describe('getProjectScorecard', () => {
+    it('should return scorecard by ID', async () => {
+      const t = setup()
+      const orgId = await createTestOrganization(t)
+      const userId = await createTestUser(t, orgId)
+      const companyId = await createTestCompany(t, orgId)
+      const contactId = await createTestContact(t, orgId, companyId)
+      const dealId = await createTestDeal(t, orgId, companyId, contactId, userId)
+      const projectId = await createTestProject(t, orgId, companyId, dealId, userId)
+
+      const scorecardId = await t.run(async (ctx) => {
+        return await insertProjectScorecard(ctx.db, {
+          projectId,
+          organizationId: orgId,
+          onTime: false,
+          onBudget: true,
+          clientSatisfied: true,
+          profitable: false,
+          clientSatisfactionRating: 4,
+          createdAt: Date.now(),
+        })
+      })
+
+      const scorecard = await t.run(async (ctx) => {
+        return await getProjectScorecard(ctx.db, scorecardId)
+      })
+
+      expect(scorecard?.onTime).toBe(false)
+      expect(scorecard?.onBudget).toBe(true)
+      expect(scorecard?.profitable).toBe(false)
+    })
+  })
+
+  describe('getProjectScorecardByProject', () => {
+    it('should return scorecard by project ID', async () => {
+      const t = setup()
+      const orgId = await createTestOrganization(t)
+      const userId = await createTestUser(t, orgId)
+      const companyId = await createTestCompany(t, orgId)
+      const contactId = await createTestContact(t, orgId, companyId)
+      const dealId = await createTestDeal(t, orgId, companyId, contactId, userId)
+      const projectId = await createTestProject(t, orgId, companyId, dealId, userId)
+
+      await t.run(async (ctx) => {
+        return await insertProjectScorecard(ctx.db, {
+          projectId,
+          organizationId: orgId,
+          onTime: true,
+          onBudget: false,
+          clientSatisfied: true,
+          profitable: true,
+          createdAt: Date.now(),
+        })
+      })
+
+      const scorecard = await t.run(async (ctx) => {
+        return await getProjectScorecardByProject(ctx.db, projectId)
+      })
+
+      expect(scorecard).not.toBeNull()
+      expect(scorecard?.onBudget).toBe(false)
+    })
+  })
+
+  describe('updateProjectScorecard', () => {
+    it('should update scorecard fields', async () => {
+      const t = setup()
+      const orgId = await createTestOrganization(t)
+      const userId = await createTestUser(t, orgId)
+      const companyId = await createTestCompany(t, orgId)
+      const contactId = await createTestContact(t, orgId, companyId)
+      const dealId = await createTestDeal(t, orgId, companyId, contactId, userId)
+      const projectId = await createTestProject(t, orgId, companyId, dealId, userId)
+
+      const scorecardId = await t.run(async (ctx) => {
+        return await insertProjectScorecard(ctx.db, {
+          projectId,
+          organizationId: orgId,
+          onTime: true,
+          onBudget: true,
+          clientSatisfied: false,
+          profitable: true,
+          createdAt: Date.now(),
+        })
+      })
+
+      await t.run(async (ctx) => {
+        await updateProjectScorecard(ctx.db, scorecardId, {
+          clientSatisfied: true,
+          clientSatisfactionRating: 5,
+          clientFeedback: 'Updated feedback',
+        })
+      })
+
+      const scorecard = await t.run(async (ctx) => {
+        return await getProjectScorecard(ctx.db, scorecardId)
+      })
+
+      expect(scorecard?.clientSatisfied).toBe(true)
+      expect(scorecard?.clientSatisfactionRating).toBe(5)
+    })
+  })
+
+  describe('deleteProjectScorecard', () => {
+    it('should delete a scorecard', async () => {
+      const t = setup()
+      const orgId = await createTestOrganization(t)
+      const userId = await createTestUser(t, orgId)
+      const companyId = await createTestCompany(t, orgId)
+      const contactId = await createTestContact(t, orgId, companyId)
+      const dealId = await createTestDeal(t, orgId, companyId, contactId, userId)
+      const projectId = await createTestProject(t, orgId, companyId, dealId, userId)
+
+      const scorecardId = await t.run(async (ctx) => {
+        return await insertProjectScorecard(ctx.db, {
+          projectId,
+          organizationId: orgId,
+          onTime: true,
+          onBudget: true,
+          clientSatisfied: true,
+          profitable: true,
+          createdAt: Date.now(),
+        })
+      })
+
+      await t.run(async (ctx) => {
+        await deleteProjectScorecard(ctx.db, scorecardId)
+      })
+
+      const scorecard = await t.run(async (ctx) => {
+        return await getProjectScorecard(ctx.db, scorecardId)
+      })
+
+      expect(scorecard).toBeNull()
+    })
+  })
+
+  describe('createProjectScorecard', () => {
+    it('should calculate scorecard from metrics', async () => {
+      const t = setup()
+      const orgId = await createTestOrganization(t)
+      const userId = await createTestUser(t, orgId)
+      const companyId = await createTestCompany(t, orgId)
+      const contactId = await createTestContact(t, orgId, companyId)
+      const dealId = await createTestDeal(t, orgId, companyId, contactId, userId)
+      const projectId = await createTestProject(t, orgId, companyId, dealId, userId)
+
+      const now = Date.now()
+      const scorecardId = await t.run(async (ctx) => {
+        return await createProjectScorecard(ctx.db, projectId, orgId, {
+          actualEndDate: now - 1000, // Finished before planned
+          plannedEndDate: now,
+          actualCost: 80000, // Under budget
+          budgetedCost: 100000,
+          profitMargin: 25, // Above 20% default target
+          clientSatisfactionRating: 4, // Satisfied
+          clientFeedback: 'Good work',
+          wouldRecommend: true,
+        })
+      })
+
+      const scorecard = await t.run(async (ctx) => {
+        return await getProjectScorecard(ctx.db, scorecardId)
+      })
+
+      expect(scorecard?.onTime).toBe(true) // Finished before planned
+      expect(scorecard?.onBudget).toBe(true) // 80k <= 100k
+      expect(scorecard?.clientSatisfied).toBe(true) // Rating >= 4
+      expect(scorecard?.profitable).toBe(true) // Margin 25% >= 20%
+    })
+
+    it('should mark project as late when actual end is after planned', async () => {
+      const t = setup()
+      const orgId = await createTestOrganization(t)
+      const userId = await createTestUser(t, orgId)
+      const companyId = await createTestCompany(t, orgId)
+      const contactId = await createTestContact(t, orgId, companyId)
+      const dealId = await createTestDeal(t, orgId, companyId, contactId, userId)
+      const projectId = await createTestProject(t, orgId, companyId, dealId, userId)
+
+      const now = Date.now()
+      const scorecardId = await t.run(async (ctx) => {
+        return await createProjectScorecard(ctx.db, projectId, orgId, {
+          actualEndDate: now + 1000, // Finished after planned
+          plannedEndDate: now,
+          actualCost: 80000,
+          budgetedCost: 100000,
+          profitMargin: 25,
+        })
+      })
+
+      const scorecard = await t.run(async (ctx) => {
+        return await getProjectScorecard(ctx.db, scorecardId)
+      })
+
+      expect(scorecard?.onTime).toBe(false)
+    })
+
+    it('should mark project as over budget when actual cost exceeds budget', async () => {
+      const t = setup()
+      const orgId = await createTestOrganization(t)
+      const userId = await createTestUser(t, orgId)
+      const companyId = await createTestCompany(t, orgId)
+      const contactId = await createTestContact(t, orgId, companyId)
+      const dealId = await createTestDeal(t, orgId, companyId, contactId, userId)
+      const projectId = await createTestProject(t, orgId, companyId, dealId, userId)
+
+      const scorecardId = await t.run(async (ctx) => {
+        return await createProjectScorecard(ctx.db, projectId, orgId, {
+          actualEndDate: Date.now(),
+          plannedEndDate: Date.now(),
+          actualCost: 120000, // Over budget
+          budgetedCost: 100000,
+          profitMargin: 10,
+        })
+      })
+
+      const scorecard = await t.run(async (ctx) => {
+        return await getProjectScorecard(ctx.db, scorecardId)
+      })
+
+      expect(scorecard?.onBudget).toBe(false)
+    })
+
+    it('should mark client as unsatisfied when rating is below 4', async () => {
+      const t = setup()
+      const orgId = await createTestOrganization(t)
+      const userId = await createTestUser(t, orgId)
+      const companyId = await createTestCompany(t, orgId)
+      const contactId = await createTestContact(t, orgId, companyId)
+      const dealId = await createTestDeal(t, orgId, companyId, contactId, userId)
+      const projectId = await createTestProject(t, orgId, companyId, dealId, userId)
+
+      const scorecardId = await t.run(async (ctx) => {
+        return await createProjectScorecard(ctx.db, projectId, orgId, {
+          actualEndDate: Date.now(),
+          plannedEndDate: Date.now(),
+          actualCost: 100000,
+          budgetedCost: 100000,
+          profitMargin: 20,
+          clientSatisfactionRating: 3, // Below 4
+        })
+      })
+
+      const scorecard = await t.run(async (ctx) => {
+        return await getProjectScorecard(ctx.db, scorecardId)
+      })
+
+      expect(scorecard?.clientSatisfied).toBe(false)
+    })
+
+    it('should mark project as unprofitable when margin is below target', async () => {
+      const t = setup()
+      const orgId = await createTestOrganization(t)
+      const userId = await createTestUser(t, orgId)
+      const companyId = await createTestCompany(t, orgId)
+      const contactId = await createTestContact(t, orgId, companyId)
+      const dealId = await createTestDeal(t, orgId, companyId, contactId, userId)
+      const projectId = await createTestProject(t, orgId, companyId, dealId, userId)
+
+      const scorecardId = await t.run(async (ctx) => {
+        return await createProjectScorecard(ctx.db, projectId, orgId, {
+          actualEndDate: Date.now(),
+          plannedEndDate: Date.now(),
+          actualCost: 100000,
+          budgetedCost: 100000,
+          profitMargin: 15, // Below 20% default
+        })
+      })
+
+      const scorecard = await t.run(async (ctx) => {
+        return await getProjectScorecard(ctx.db, scorecardId)
+      })
+
+      expect(scorecard?.profitable).toBe(false)
+    })
+  })
+
+  describe('getOrganizationScorecardSummary', () => {
+    it('should return zero counts for organization with no scorecards', async () => {
+      const t = setup()
+      const orgId = await createTestOrganization(t)
+
+      const summary = await t.run(async (ctx) => {
+        return await getOrganizationScorecardSummary(ctx.db, orgId)
+      })
+
+      expect(summary.total).toBe(0)
+      expect(summary.onTimeCount).toBe(0)
+      expect(summary.averageClientSatisfaction).toBeNull()
+    })
+
+    it('should aggregate scorecard metrics across projects', async () => {
+      const t = setup()
+      const orgId = await createTestOrganization(t)
+      const userId = await createTestUser(t, orgId)
+      const companyId = await createTestCompany(t, orgId)
+      const contactId = await createTestContact(t, orgId, companyId)
+      const dealId1 = await createTestDeal(t, orgId, companyId, contactId, userId)
+      const projectId1 = await createTestProject(t, orgId, companyId, dealId1, userId)
+      const dealId2 = await createTestDeal(t, orgId, companyId, contactId, userId)
+      const projectId2 = await createTestProject(t, orgId, companyId, dealId2, userId)
+
+      // Create scorecards for two projects
+      await t.run(async (ctx) => {
+        await insertProjectScorecard(ctx.db, {
+          projectId: projectId1,
+          organizationId: orgId,
+          onTime: true,
+          onBudget: true,
+          clientSatisfied: true,
+          profitable: true,
+          clientSatisfactionRating: 5,
+          createdAt: Date.now(),
+        })
+        await insertProjectScorecard(ctx.db, {
+          projectId: projectId2,
+          organizationId: orgId,
+          onTime: false,
+          onBudget: true,
+          clientSatisfied: false,
+          profitable: true,
+          clientSatisfactionRating: 3,
+          createdAt: Date.now(),
+        })
+      })
+
+      const summary = await t.run(async (ctx) => {
+        return await getOrganizationScorecardSummary(ctx.db, orgId)
+      })
+
+      expect(summary.total).toBe(2)
+      expect(summary.onTimeCount).toBe(1)
+      expect(summary.onBudgetCount).toBe(2)
+      expect(summary.clientSatisfiedCount).toBe(1)
+      expect(summary.profitableCount).toBe(2)
+      expect(summary.averageClientSatisfaction).toBe(4) // (5 + 3) / 2
     })
   })
 })
