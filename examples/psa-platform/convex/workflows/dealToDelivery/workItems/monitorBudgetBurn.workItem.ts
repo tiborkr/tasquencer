@@ -22,6 +22,7 @@ import { listApprovedExpensesByProject } from "../db/expenses";
 import { getUser } from "../db/users";
 import { getRootWorkflowAndProjectForWorkItem } from "../db/workItemContext";
 import { assertProjectExists, assertBudgetExists } from "../exceptions";
+import { calculateTimeCostWithValidationSync } from "../db/costRateValidation";
 
 // Policy: Requires 'dealToDelivery:budgets:view:own' scope
 const budgetsViewPolicy = authService.policies.requireScope(
@@ -89,13 +90,27 @@ const monitorBudgetBurnWorkItemActions = authService.builders.workItemActions
         project._id
       );
 
-      // Calculate time cost: hours × user.costRate
-      let timeCost = 0;
+      // Build user cost rate map and calculate time cost with validation
+      const userCostRates = new Map<typeof timeEntries[0]["userId"], number>();
       for (const entry of timeEntries) {
-        const user = await getUser(mutationCtx.db, entry.userId);
-        if (user) {
-          timeCost += entry.hours * user.costRate;
+        if (!userCostRates.has(entry.userId)) {
+          const user = await getUser(mutationCtx.db, entry.userId);
+          userCostRates.set(entry.userId, user?.costRate ?? 0);
         }
+      }
+
+      // Calculate time cost with validation (warns about users with missing cost rates)
+      const timeCostResult = calculateTimeCostWithValidationSync(
+        timeEntries,
+        userCostRates
+      );
+      const timeCost = timeCostResult.timeCost;
+
+      // Log warning if any users have missing cost rates
+      if (timeCostResult.hasUsersWithMissingRates) {
+        console.warn(
+          `⚠️ Budget burn calculation for project ${project._id}: ${timeCostResult.warningMessage}`
+        );
       }
 
       // Get approved expenses
@@ -138,6 +153,11 @@ const monitorBudgetBurnWorkItemActions = authService.builders.workItemActions
         burnRate,
         totalCost,
         budgetRemaining,
+        // Include cost rate validation warning for audit trail
+        ...(timeCostResult.hasUsersWithMissingRates && {
+          costRateWarning: timeCostResult.warningMessage,
+          usersWithMissingRatesCount: timeCostResult.usersWithMissingRates.length,
+        }),
       });
 
       await workItem.complete();

@@ -1521,3 +1521,394 @@ describe('Duplicate Detection Validation', () => {
     })
   })
 })
+
+// =============================================================================
+// Cost Rate Validation Tests (spec 06-workflow-execution-phase.md lines 260-276,
+// spec 01-domain-model.md lines 278-307)
+// =============================================================================
+
+import {
+  MIN_VALID_COST_RATE,
+  isValidCostRate,
+  userHasValidCostRate,
+  getCostRateWarning,
+  validateUserCostRates,
+  getUsersWithMissingCostRates,
+  calculateTimeCostWithValidationSync,
+  formatCostRateValidationSummary,
+} from '../workflows/dealToDelivery/db/costRateValidation'
+
+describe('Cost Rate Validation', () => {
+  describe('MIN_VALID_COST_RATE constant', () => {
+    it('has minimum value of 1 cent per hour', () => {
+      expect(MIN_VALID_COST_RATE).toBe(1)
+    })
+  })
+
+  describe('isValidCostRate', () => {
+    it('returns true for positive cost rate', () => {
+      expect(isValidCostRate(10000)).toBe(true) // $100/hr
+    })
+
+    it('returns true for minimum valid rate (1 cent)', () => {
+      expect(isValidCostRate(1)).toBe(true)
+    })
+
+    it('returns false for zero cost rate', () => {
+      expect(isValidCostRate(0)).toBe(false)
+    })
+
+    it('returns false for negative cost rate', () => {
+      expect(isValidCostRate(-100)).toBe(false)
+    })
+
+    it('returns false for undefined', () => {
+      expect(isValidCostRate(undefined)).toBe(false)
+    })
+
+    it('returns false for null', () => {
+      expect(isValidCostRate(null)).toBe(false)
+    })
+  })
+
+  describe('userHasValidCostRate', () => {
+    it('returns true for user with valid cost rate', () => {
+      const user = { costRate: 8000 } // $80/hr
+      expect(userHasValidCostRate(user)).toBe(true)
+    })
+
+    it('returns false for user with zero cost rate', () => {
+      const user = { costRate: 0 }
+      expect(userHasValidCostRate(user)).toBe(false)
+    })
+
+    it('returns false for null user', () => {
+      expect(userHasValidCostRate(null)).toBe(false)
+    })
+
+    it('returns false for undefined user', () => {
+      expect(userHasValidCostRate(undefined)).toBe(false)
+    })
+  })
+
+  describe('getCostRateWarning', () => {
+    it('returns null for user with valid cost rate', () => {
+      const user = { _id: 'user1' as any, name: 'Test User', costRate: 10000 }
+      expect(getCostRateWarning(user)).toBeNull()
+    })
+
+    it('returns warning for user with zero cost rate', () => {
+      const user = { _id: 'user1' as any, name: 'John Doe', costRate: 0 }
+      const warning = getCostRateWarning(user)
+      expect(warning).not.toBeNull()
+      expect(warning).toContain('John Doe')
+      expect(warning).toContain('no cost rate configured')
+      expect(warning).toContain('Budget calculations will be inaccurate')
+    })
+
+    it('returns warning for null user', () => {
+      expect(getCostRateWarning(null)).toBe('User not found')
+    })
+  })
+
+  describe('validateUserCostRates', () => {
+    it('returns allValid true when all users have valid cost rates', () => {
+      const users = [
+        { _id: 'user1' as any, name: 'User 1', costRate: 10000 },
+        { _id: 'user2' as any, name: 'User 2', costRate: 8000 },
+        { _id: 'user3' as any, name: 'User 3', costRate: 12000 },
+      ]
+      const result = validateUserCostRates(users)
+      expect(result.allValid).toBe(true)
+      expect(result.validCount).toBe(3)
+      expect(result.missingCount).toBe(0)
+      expect(result.usersWithMissingRates).toHaveLength(0)
+      expect(result.warnings).toHaveLength(0)
+    })
+
+    it('returns allValid false when some users have zero cost rates', () => {
+      const users = [
+        { _id: 'user1' as any, name: 'User 1', costRate: 10000 },
+        { _id: 'user2' as any, name: 'User 2', costRate: 0 },
+        { _id: 'user3' as any, name: 'User 3', costRate: 8000 },
+      ]
+      const result = validateUserCostRates(users)
+      expect(result.allValid).toBe(false)
+      expect(result.validCount).toBe(2)
+      expect(result.missingCount).toBe(1)
+      expect(result.usersWithMissingRates).toHaveLength(1)
+      expect(result.warnings).toHaveLength(1)
+      expect(result.warnings[0]).toContain('User 2')
+    })
+
+    it('handles empty user array', () => {
+      const result = validateUserCostRates([])
+      expect(result.allValid).toBe(true)
+      expect(result.validCount).toBe(0)
+      expect(result.missingCount).toBe(0)
+    })
+
+    it('tracks multiple users with missing rates', () => {
+      const users = [
+        { _id: 'user1' as any, name: 'User 1', costRate: 0 },
+        { _id: 'user2' as any, name: 'User 2', costRate: 0 },
+        { _id: 'user3' as any, name: 'User 3', costRate: 0 },
+      ]
+      const result = validateUserCostRates(users)
+      expect(result.allValid).toBe(false)
+      expect(result.missingCount).toBe(3)
+      expect(result.usersWithMissingRates).toHaveLength(3)
+      expect(result.warnings).toHaveLength(3)
+    })
+  })
+
+  describe('getUsersWithMissingCostRates', () => {
+    it('returns empty array when all users have valid rates', () => {
+      const entries = [
+        { userId: 'user1' as any },
+        { userId: 'user2' as any },
+      ]
+      const costRates = new Map([
+        ['user1' as any, 10000],
+        ['user2' as any, 8000],
+      ])
+      const result = getUsersWithMissingCostRates(entries, costRates)
+      expect(result).toHaveLength(0)
+    })
+
+    it('returns user IDs with zero cost rates', () => {
+      const entries = [
+        { userId: 'user1' as any },
+        { userId: 'user2' as any },
+        { userId: 'user3' as any },
+      ]
+      const costRates = new Map([
+        ['user1' as any, 10000],
+        ['user2' as any, 0],
+        ['user3' as any, 8000],
+      ])
+      const result = getUsersWithMissingCostRates(entries, costRates)
+      expect(result).toHaveLength(1)
+      expect(result[0]).toBe('user2')
+    })
+
+    it('returns user IDs not in cost rate map', () => {
+      const entries = [
+        { userId: 'user1' as any },
+        { userId: 'user2' as any },
+      ]
+      const costRates = new Map([
+        ['user1' as any, 10000],
+        // user2 not in map
+      ])
+      const result = getUsersWithMissingCostRates(entries, costRates)
+      expect(result).toHaveLength(1)
+      expect(result[0]).toBe('user2')
+    })
+
+    it('handles duplicate user IDs in entries', () => {
+      const entries = [
+        { userId: 'user1' as any },
+        { userId: 'user1' as any },
+        { userId: 'user2' as any },
+      ]
+      const costRates = new Map([
+        ['user1' as any, 0],
+        ['user2' as any, 8000],
+      ])
+      const result = getUsersWithMissingCostRates(entries, costRates)
+      expect(result).toHaveLength(1)
+      expect(result[0]).toBe('user1')
+    })
+  })
+
+  describe('calculateTimeCostWithValidationSync', () => {
+    it('calculates correct time cost with all valid rates', () => {
+      const entries = [
+        { hours: 8, userId: 'user1' as any },
+        { hours: 4, userId: 'user2' as any },
+      ]
+      const costRates = new Map([
+        ['user1' as any, 10000], // $100/hr
+        ['user2' as any, 8000], // $80/hr
+      ])
+      const result = calculateTimeCostWithValidationSync(entries, costRates)
+
+      // 8 hours × $100/hr + 4 hours × $80/hr = $800 + $320 = $1,120
+      expect(result.timeCost).toBe(8 * 10000 + 4 * 8000) // 112000 cents
+      expect(result.totalHours).toBe(12)
+      expect(result.hasUsersWithMissingRates).toBe(false)
+      expect(result.usersWithMissingRates).toHaveLength(0)
+      expect(result.warningMessage).toBeNull()
+      expect(result.potentialUnderreporting).toBe(false)
+    })
+
+    it('detects users with missing cost rates', () => {
+      const entries = [
+        { hours: 8, userId: 'user1' as any },
+        { hours: 4, userId: 'user2' as any },
+      ]
+      const costRates = new Map([
+        ['user1' as any, 10000],
+        ['user2' as any, 0], // Missing rate
+      ])
+      const result = calculateTimeCostWithValidationSync(entries, costRates)
+
+      // Only user1 time is costed: 8 × $100 = $800
+      expect(result.timeCost).toBe(80000)
+      expect(result.totalHours).toBe(12)
+      expect(result.hasUsersWithMissingRates).toBe(true)
+      expect(result.usersWithMissingRates).toHaveLength(1)
+      expect(result.warningMessage).not.toBeNull()
+      expect(result.warningMessage).toContain('1 user(s) with missing cost rates')
+      expect(result.warningMessage).toContain('4.00 hours')
+      expect(result.potentialUnderreporting).toBe(true)
+    })
+
+    it('handles empty entries array', () => {
+      const result = calculateTimeCostWithValidationSync([], new Map())
+      expect(result.timeCost).toBe(0)
+      expect(result.totalHours).toBe(0)
+      expect(result.hasUsersWithMissingRates).toBe(false)
+      expect(result.warningMessage).toBeNull()
+    })
+
+    it('handles multiple entries from same user', () => {
+      const entries = [
+        { hours: 4, userId: 'user1' as any },
+        { hours: 4, userId: 'user1' as any },
+        { hours: 4, userId: 'user1' as any },
+      ]
+      const costRates = new Map([
+        ['user1' as any, 10000],
+      ])
+      const result = calculateTimeCostWithValidationSync(entries, costRates)
+
+      // 12 hours × $100/hr = $1,200
+      expect(result.timeCost).toBe(12 * 10000)
+      expect(result.totalHours).toBe(12)
+      expect(result.hasUsersWithMissingRates).toBe(false)
+    })
+
+    it('calculates correct percentage of hours with missing rates', () => {
+      const entries = [
+        { hours: 8, userId: 'user1' as any },
+        { hours: 2, userId: 'user2' as any }, // Missing rate - 20% of total hours
+      ]
+      const costRates = new Map([
+        ['user1' as any, 10000],
+        ['user2' as any, 0],
+      ])
+      const result = calculateTimeCostWithValidationSync(entries, costRates)
+
+      expect(result.warningMessage).toContain('20.0%')
+    })
+  })
+
+  describe('formatCostRateValidationSummary', () => {
+    it('formats clean validation result', () => {
+      const result = {
+        allValid: true,
+        usersWithMissingRates: [],
+        warnings: [],
+        validCount: 5,
+        missingCount: 0,
+      }
+      const summary = formatCostRateValidationSummary(result)
+      expect(summary).toContain('All 5 users have valid cost rates')
+    })
+
+    it('formats validation result with issues', () => {
+      const result = {
+        allValid: false,
+        usersWithMissingRates: ['user1' as any],
+        warnings: ['User 1 has no cost rate'],
+        validCount: 4,
+        missingCount: 1,
+      }
+      const summary = formatCostRateValidationSummary(result)
+      expect(summary).toContain('Cost rate issues found')
+      expect(summary).toContain('1 of 5 users')
+      expect(summary).toContain('User 1 has no cost rate')
+    })
+
+    it('formats time cost calculation result', () => {
+      const result = {
+        timeCost: 100000,
+        totalHours: 10,
+        hasUsersWithMissingRates: false,
+        usersWithMissingRates: [],
+        warningMessage: null,
+        adjustedCost: 100000,
+        potentialUnderreporting: false,
+      }
+      const summary = formatCostRateValidationSummary(result)
+      expect(summary).toContain('Time cost calculated: $1000.00')
+      expect(summary).toContain('10.00 hours')
+    })
+
+    it('formats time cost result with warnings', () => {
+      const result = {
+        timeCost: 80000,
+        totalHours: 10,
+        hasUsersWithMissingRates: true,
+        usersWithMissingRates: ['user1' as any],
+        warningMessage: 'Some users have missing rates',
+        adjustedCost: 80000,
+        potentialUnderreporting: true,
+      }
+      const summary = formatCostRateValidationSummary(result)
+      expect(summary).toContain('Time cost calculated: $800.00')
+      expect(summary).toContain('⚠️')
+      expect(summary).toContain('Some users have missing rates')
+    })
+  })
+
+  describe('Integration with budget burn calculations', () => {
+    it('correctly handles mixed valid and invalid cost rates', () => {
+      // Simulate a real scenario with multiple users
+      const entries = [
+        { hours: 8, userId: 'pm' as any },      // Project Manager - has rate
+        { hours: 4, userId: 'dev1' as any },    // Developer 1 - has rate
+        { hours: 4, userId: 'dev2' as any },    // Developer 2 - missing rate
+        { hours: 2, userId: 'intern' as any },  // Intern - missing rate (new user)
+      ]
+      const costRates = new Map([
+        ['pm' as any, 15000],    // $150/hr
+        ['dev1' as any, 10000],  // $100/hr
+        ['dev2' as any, 0],      // Not configured
+        ['intern' as any, 0],    // Not configured
+      ])
+
+      const result = calculateTimeCostWithValidationSync(entries, costRates)
+
+      // Expected: PM (8×$150=$1200) + Dev1 (4×$100=$400) = $1,600
+      // Missing: Dev2 (4 hours) + Intern (2 hours) = 6 hours at $0
+      expect(result.timeCost).toBe(8 * 15000 + 4 * 10000) // 160000 cents = $1,600
+      expect(result.totalHours).toBe(18)
+      expect(result.hasUsersWithMissingRates).toBe(true)
+      expect(result.usersWithMissingRates).toHaveLength(2)
+      expect(result.warningMessage).toContain('2 user(s) with missing cost rates')
+      expect(result.warningMessage).toContain('6.00 hours')
+      expect(result.warningMessage).toContain('33.3%') // 6/18 = 33.3%
+    })
+
+    it('reports accurate burn even with zero cost rates (conservative)', () => {
+      // When users have missing rates, the calculation still works
+      // but reports potential underreporting
+      const entries = [
+        { hours: 10, userId: 'user1' as any },
+      ]
+      const costRates = new Map([
+        ['user1' as any, 0], // Missing rate
+      ])
+
+      const result = calculateTimeCostWithValidationSync(entries, costRates)
+
+      // Cost is 0 but we flag it as potentially underreported
+      expect(result.timeCost).toBe(0)
+      expect(result.hasUsersWithMissingRates).toBe(true)
+      expect(result.potentialUnderreporting).toBe(true)
+    })
+  })
+})

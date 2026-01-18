@@ -40,6 +40,7 @@ import type * as workflows_dealToDelivery_db_budgets from "../workflows/dealToDe
 import type * as workflows_dealToDelivery_db_changeOrders from "../workflows/dealToDelivery/db/changeOrders.js";
 import type * as workflows_dealToDelivery_db_companies from "../workflows/dealToDelivery/db/companies.js";
 import type * as workflows_dealToDelivery_db_contacts from "../workflows/dealToDelivery/db/contacts.js";
+import type * as workflows_dealToDelivery_db_costRateValidation from "../workflows/dealToDelivery/db/costRateValidation.js";
 import type * as workflows_dealToDelivery_db_deals from "../workflows/dealToDelivery/db/deals.js";
 import type * as workflows_dealToDelivery_db_duplicateDetection from "../workflows/dealToDelivery/db/duplicateDetection.js";
 import type * as workflows_dealToDelivery_db_estimates from "../workflows/dealToDelivery/db/estimates.js";
@@ -107,6 +108,7 @@ declare const fullApi: ApiFromModules<{
   "workflows/dealToDelivery/db/changeOrders": typeof workflows_dealToDelivery_db_changeOrders;
   "workflows/dealToDelivery/db/companies": typeof workflows_dealToDelivery_db_companies;
   "workflows/dealToDelivery/db/contacts": typeof workflows_dealToDelivery_db_contacts;
+  "workflows/dealToDelivery/db/costRateValidation": typeof workflows_dealToDelivery_db_costRateValidation;
   "workflows/dealToDelivery/db/deals": typeof workflows_dealToDelivery_db_deals;
   "workflows/dealToDelivery/db/duplicateDetection": typeof workflows_dealToDelivery_db_duplicateDetection;
   "workflows/dealToDelivery/db/estimates": typeof workflows_dealToDelivery_db_estimates;
