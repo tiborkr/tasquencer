@@ -28,6 +28,9 @@ import { getRootWorkflowAndDealForWorkItem } from "../db/workItemContext";
 import { assertInvoiceExists, assertAuthenticatedUser } from "../exceptions";
 import type { Id } from "../../../_generated/dataModel";
 
+// Minimum invoice amount threshold (in cents) - per spec 11-workflow-invoice-generation.md line 441
+const INVOICE_MIN_AMOUNT_WARNING = 5000; // $50
+
 // Policy: Requires 'dealToDelivery:invoices:finalize' scope
 const invoicesFinalizePolicy = authService.policies.requireScope(
   "dealToDelivery:invoices:finalize"
@@ -101,6 +104,17 @@ const finalizeInvoiceWorkItemActions = authService.builders.workItemActions
 
       if (lineItems.length === 0) {
         throw new Error("Invoice must have at least one line item to finalize");
+      }
+
+      // Check for minimum invoice amount warning per spec 11-workflow-invoice-generation.md line 441
+      // "Minimum Amount: Warn if invoice total < $50 (configurable)"
+      if (invoice.total < INVOICE_MIN_AMOUNT_WARNING) {
+        console.warn(
+          `[finalizeInvoice] LOW AMOUNT WARNING: Invoice total of ${invoice.total} cents ` +
+          `is below the minimum recommended amount of ${INVOICE_MIN_AMOUNT_WARNING} cents ($${INVOICE_MIN_AMOUNT_WARNING / 100}). ` +
+          `Consider combining with other billable items. Invoice ID: ${payload.invoiceId}`
+        );
+        // Note: Per spec, we warn but still allow finalization to proceed
       }
 
       // Update invoice with optional fields before finalizing

@@ -27,6 +27,9 @@ import { getUser } from '../db/users'
 import { getProject } from '../db/projects'
 import { authComponent } from '../../../auth'
 
+// Receipt requirement threshold (in cents) - per spec 08-workflow-expense-tracking.md line 374
+const RECEIPT_REQUIRED_THRESHOLD = 2500 // $25
+
 // Expense type validator
 const expenseTypeValidator = v.union(
   v.literal('Software'),
@@ -304,6 +307,18 @@ export const submitExpense = mutation({
     }
     if (expense.amount <= 0) {
       throw new Error('Expense must have a positive amount before submission')
+    }
+
+    // Validate receipt requirement per spec 08-workflow-expense-tracking.md line 374
+    // Receipt is required for expenses > $25 or subcontractor expenses
+    const receiptRequired = expense.amount > RECEIPT_REQUIRED_THRESHOLD ||
+      expense.type === 'Subcontractor'
+
+    if (receiptRequired && !expense.receiptUrl) {
+      throw new Error(
+        `Receipt is required for expenses over $${RECEIPT_REQUIRED_THRESHOLD / 100}. ` +
+        `Please attach a receipt before submitting.`
+      )
     }
 
     // Update status to Submitted

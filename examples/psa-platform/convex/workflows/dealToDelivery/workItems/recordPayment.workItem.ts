@@ -91,12 +91,21 @@ const recordPaymentWorkItemActions = authService.builders.workItemActions
       const project = await getProject(mutationCtx.db, invoice.projectId);
       assertProjectExists(project, { projectId: invoice.projectId });
 
-      // Check for overpayment warning
+      // Check for overpayment warning per spec 12-workflow-billing-phase.md line 399
+      // "Overpayment: Warn if payment > remaining balance"
       const existingPayments = await calculateInvoicePayments(mutationCtx.db, payload.invoiceId);
       const remaining = invoice.total - existingPayments;
-      if (payload.amount > remaining) {
-        // In a real implementation, this might warn the user
-        // For now, we allow overpayment but it could be flagged
+      const overpaymentAmount = payload.amount - remaining;
+
+      if (overpaymentAmount > 0) {
+        // Log overpayment warning - this will be visible in audit trail
+        console.warn(
+          `[recordPayment] OVERPAYMENT WARNING: Payment of ${payload.amount} cents ` +
+          `exceeds remaining balance of ${remaining} cents by ${overpaymentAmount} cents. ` +
+          `Invoice ID: ${payload.invoiceId}`
+        );
+        // Note: Per spec, we warn but still allow the payment to proceed
+        // The overpayment will be recorded and can be handled as a credit
       }
 
       // Record the payment

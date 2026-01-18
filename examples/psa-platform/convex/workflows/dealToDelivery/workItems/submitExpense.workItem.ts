@@ -19,8 +19,12 @@ import { getExpense, updateExpenseStatus } from "../db/expenses";
 import { getRootWorkflowAndDealForWorkItem } from "../db/workItemContext";
 import { checkExpenseDateLimits } from "../db/dateLimits";
 import { assertExpenseExists, assertAuthenticatedUser } from "../exceptions";
+
 import { DealToDeliveryWorkItemHelpers } from "../helpers";
 import type { Id } from "../../../_generated/dataModel";
+
+// Receipt requirement threshold (in cents) - per spec 08-workflow-expense-tracking.md line 374
+const RECEIPT_REQUIRED_THRESHOLD = 2500; // $25
 
 // Policy: Requires 'dealToDelivery:expenses:submit' scope
 const expensesSubmitPolicy = authService.policies.requireScope(
@@ -102,6 +106,18 @@ const submitExpenseWorkItemActions = authService.builders.workItemActions
       if (expense.status !== "Draft") {
         throw new Error(
           `Expense must be in Draft status to submit. Current status: ${expense.status}`
+        );
+      }
+
+      // Validate receipt requirement per spec 08-workflow-expense-tracking.md line 374
+      // Receipt is required for expenses > $25
+      const receiptRequired = expense.amount > RECEIPT_REQUIRED_THRESHOLD ||
+        expense.type === "Subcontractor";
+
+      if (receiptRequired && !expense.receiptUrl) {
+        throw new Error(
+          `Receipt is required for expenses over $${RECEIPT_REQUIRED_THRESHOLD / 100}. ` +
+          `Please attach a receipt before submitting.`
         );
       }
 

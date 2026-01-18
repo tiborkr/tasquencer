@@ -617,14 +617,15 @@ describe('updateExpense', () => {
 // =============================================================================
 
 describe('submitExpense', () => {
-  it('submits draft expense', async () => {
+  it('submits draft expense under receipt threshold', async () => {
     const t = setup()
     const { userId, organizationId: orgId } = await setupUserWithRole(t, 'staff', STAFF_SCOPES)
     const { projectId } = await setupExpensePrerequisites(t, orgId, userId)
 
+    // Amount under $25 (2500 cents) - no receipt required
     const expenseId = await createExpenseDirectly(t, orgId, projectId, userId, {
-      description: 'Valid expense',
-      amount: 5000,
+      description: 'Valid expense under threshold',
+      amount: 2000, // $20 - below $25 receipt threshold
       status: 'Draft',
     })
 
@@ -634,6 +635,45 @@ describe('submitExpense', () => {
       expenseId,
     })
     expect(expense?.status).toBe('Submitted')
+  })
+
+  it('submits draft expense over threshold with receipt', async () => {
+    const t = setup()
+    const { userId, organizationId: orgId } = await setupUserWithRole(t, 'staff', STAFF_SCOPES)
+    const { projectId } = await setupExpensePrerequisites(t, orgId, userId)
+
+    // Amount over $25 (2500 cents) with receipt attached
+    const expenseId = await createExpenseDirectly(t, orgId, projectId, userId, {
+      description: 'Valid expense with receipt',
+      amount: 5000, // $50 - above $25 receipt threshold
+      receiptUrl: 'https://storage.example.com/receipt-123.pdf',
+      status: 'Draft',
+    })
+
+    await t.mutation(api.workflows.dealToDelivery.api.expenses.submitExpense, { expenseId })
+
+    const expense = await t.query(api.workflows.dealToDelivery.api.expenses.getExpense, {
+      expenseId,
+    })
+    expect(expense?.status).toBe('Submitted')
+  })
+
+  it('rejects submission without receipt for expenses over $25', async () => {
+    const t = setup()
+    const { userId, organizationId: orgId } = await setupUserWithRole(t, 'staff', STAFF_SCOPES)
+    const { projectId } = await setupExpensePrerequisites(t, orgId, userId)
+
+    // Amount over $25 (2500 cents) WITHOUT receipt - should fail
+    const expenseId = await createExpenseDirectly(t, orgId, projectId, userId, {
+      description: 'Expense over threshold without receipt',
+      amount: 5000, // $50 - above $25 receipt threshold
+      status: 'Draft',
+      // No receiptUrl
+    })
+
+    await expect(
+      t.mutation(api.workflows.dealToDelivery.api.expenses.submitExpense, { expenseId })
+    ).rejects.toThrow('Receipt is required for expenses over $25')
   })
 
   it('rejects submission of non-Draft expense', async () => {
@@ -1030,7 +1070,7 @@ describe('Expense Lifecycle', () => {
     const { userId, organizationId: orgId } = await setupUserWithRole(t, 'staff', STAFF_SCOPES)
     const { projectId } = await setupExpensePrerequisites(t, orgId, userId)
 
-    // Create
+    // Create expense with receipt (required for amounts > $25)
     const expenseId = await t.mutation(api.workflows.dealToDelivery.api.expenses.createExpense, {
       projectId,
       type: 'Travel',
@@ -1039,6 +1079,7 @@ describe('Expense Lifecycle', () => {
       description: 'Business trip',
       date: Date.now(),
       billable: true,
+      receiptUrl: 'https://storage.example.com/receipt-lifecycle.pdf',
     })
 
     let expense = await t.query(api.workflows.dealToDelivery.api.expenses.getExpense, { expenseId })
