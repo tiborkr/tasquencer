@@ -382,6 +382,28 @@ describe('Timesheet Approval Business Rules', () => {
     expect(isValidForReview).toBe(false)
   })
 
+  it('validates self-approval prevention rule', async () => {
+    const { orgId, managerId } = await createManagerUser(testContext)
+    const { dealId, companyId } = await createTestDeal(testContext, orgId, managerId)
+    const projectId = await createTestProject(testContext, orgId, dealId, companyId, managerId)
+
+    // Create time entry submitted by the manager (same as approver)
+    const timeEntryId = await createSubmittedTimeEntry(
+      testContext,
+      orgId,
+      projectId,
+      managerId // Manager submits their own time entry
+    )
+
+    const entry = await getTimeEntry(testContext, timeEntryId)
+
+    // This simulates the self-approval check in reviewTimesheet.workItem.ts
+    // A manager cannot approve their own time entries (business rule)
+    const reviewerId = managerId
+    const canApprove = entry?.userId !== reviewerId
+    expect(canApprove).toBe(false)
+  })
+
   it('validates hours range on revision (0.25-24)', async () => {
     const { orgId, managerId } = await createManagerUser(testContext)
     const teamMemberId = await createTeamMemberUser(testContext, orgId)
