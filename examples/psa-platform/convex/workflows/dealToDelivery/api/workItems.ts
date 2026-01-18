@@ -1,17 +1,18 @@
 /**
  * Work Items API
  *
- * Queries for discovering and viewing work items in the Deal to Delivery workflow.
- * These enable the work queue UI and task management features.
+ * Queries and mutations for discovering, claiming, and releasing work items
+ * in the Deal to Delivery workflow. These enable the work queue UI and task
+ * management features.
  *
- * TENET-AUTHZ: All queries are protected by scope-based authorization.
+ * TENET-AUTHZ: All endpoints are protected by scope-based authorization.
  * TENET-DOMAIN-BOUNDARY: Uses work item helpers for metadata access.
  *
  * Reference: .review/recipes/psa-platform/specs/26-api-endpoints.md
  * Pattern: examples/er/convex/workflows/er/api/workItems.ts
  */
 import { v } from 'convex/values'
-import { query } from '../../../_generated/server'
+import { query, mutation } from '../../../_generated/server'
 import type { Id } from '../../../_generated/dataModel'
 import { requirePsaStaffMember } from '../domain/services/authorizationService'
 import { DealToDeliveryWorkItemHelpers } from '../helpers'
@@ -280,5 +281,140 @@ export const getWorkItemMetadataByWorkItemId = query({
     return mapWorkItemToResponse(metadata, workItem, {
       includeWorkItemState: true,
     })
+  },
+})
+
+/**
+ * Claims a work item for the current user.
+ * The work item must be available (not already claimed) and the user must
+ * have the required scope/group permissions.
+ *
+ * @param args.workItemId - The work item to claim
+ * @returns The claimed work item metadata
+ * @throws Error if work item is already claimed or user cannot claim it
+ */
+export const claimWorkItem = mutation({
+  args: { workItemId: v.id('tasquencerWorkItems') },
+  handler: async (ctx, args) => {
+    const authUser = await authComponent.safeGetAuthUser(ctx)
+    if (!authUser || !authUser.userId) {
+      throw new Error('Not authenticated')
+    }
+
+    await requirePsaStaffMember(ctx)
+
+    const userId = authUser.userId as Id<'users'>
+
+    // Verify work item exists and is claimable
+    const metadata = await DealToDeliveryWorkItemHelpers.getWorkItemMetadata(
+      ctx.db,
+      args.workItemId,
+    )
+    if (!metadata) {
+      throw new Error('Work item not found')
+    }
+
+    // Check if already claimed
+    if (metadata.claim) {
+      throw new Error('Work item is already claimed')
+    }
+
+    // Check if user can claim
+    const canClaim = await DealToDeliveryWorkItemHelpers.canUserClaimWorkItem(
+      ctx,
+      userId,
+      args.workItemId,
+    )
+    if (!canClaim) {
+      throw new Error('You do not have permission to claim this work item')
+    }
+
+    // Claim the work item
+    await DealToDeliveryWorkItemHelpers.claimWorkItem(ctx, args.workItemId, userId)
+
+    // Return updated metadata
+    const updatedMetadata = await DealToDeliveryWorkItemHelpers.getWorkItemMetadata(
+      ctx.db,
+      args.workItemId,
+    )
+    const workItem = await ctx.db.get(args.workItemId)
+
+    return mapWorkItemToResponse(updatedMetadata!, workItem, {
+      includeWorkItemState: true,
+    })
+  },
+})
+
+/**
+ * Releases a previously claimed work item back to the available pool.
+ * Only the user who claimed the work item (or an admin) can release it.
+ *
+ * @param args.workItemId - The work item to release
+ * @returns Success status
+ * @throws Error if work item is not claimed or user cannot release it
+ */
+export const releaseWorkItem = mutation({
+  args: { workItemId: v.id('tasquencerWorkItems') },
+  handler: async (ctx, args) => {
+    const authUser = await authComponent.safeGetAuthUser(ctx)
+    if (!authUser || !authUser.userId) {
+      throw new Error('Not authenticated')
+    }
+
+    await requirePsaStaffMember(ctx)
+
+    const userId = authUser.userId as Id<'users'>
+
+    // Verify work item exists
+    const metadata = await DealToDeliveryWorkItemHelpers.getWorkItemMetadata(
+      ctx.db,
+      args.workItemId,
+    )
+    if (!metadata) {
+      throw new Error('Work item not found')
+    }
+
+    // Check if claimed
+    if (!metadata.claim) {
+      throw new Error('Work item is not claimed')
+    }
+
+    // Check if claimed by current user (or user is admin)
+    // For now, only allow the claiming user to release
+    // TODO: Add admin override check for scope 'psa:admin:write'
+    if (!isHumanClaim(metadata.claim) || metadata.claim.userId !== userId) {
+      throw new Error('You can only release work items you have claimed')
+    }
+
+    // Release the work item
+    await DealToDeliveryWorkItemHelpers.releaseWorkItem(ctx.db, args.workItemId)
+
+    return { success: true }
+  },
+})
+
+/**
+ * Checks if the current user can claim a specific work item.
+ *
+ * @param args.workItemId - The work item to check
+ * @returns Boolean indicating if the user can claim
+ */
+export const canClaimWorkItem = query({
+  args: { workItemId: v.id('tasquencerWorkItems') },
+  handler: async (ctx, args) => {
+    const authUser = await authComponent.safeGetAuthUser(ctx)
+    if (!authUser || !authUser.userId) {
+      return false
+    }
+
+    await requirePsaStaffMember(ctx)
+
+    const userId = authUser.userId as Id<'users'>
+
+    return DealToDeliveryWorkItemHelpers.canUserClaimWorkItem(
+      ctx,
+      userId,
+      args.workItemId,
+    )
   },
 })
