@@ -22,6 +22,7 @@ import { getRootWorkflowAndDealForWorkItem } from "../db/workItemContext";
 import { assertProjectExists, assertUserExists, assertAuthenticatedUser } from "../exceptions";
 import { DealToDeliveryWorkItemHelpers } from "../helpers";
 import { checkSoftwareExpensePolicyLimit } from "../db/expensePolicyLimits";
+import { checkExpenseDuplicates } from "../db/duplicateDetection";
 import type { Id } from "../../../_generated/dataModel";
 
 // Policy: Requires 'dealToDelivery:expenses:create' scope
@@ -102,6 +103,24 @@ const logSoftwareExpenseWorkItemActions = authService.builders.workItemActions
 
       // Check policy limits for software expenses ($500 limit, spec 10-workflow-expense-approval.md lines 293-304)
       const policyCheck = checkSoftwareExpensePolicyLimit(payload.amount);
+
+      // Check for potential duplicates (warn, don't block)
+      // Per spec 10-workflow-expense-approval.md line 275: "Not duplicate"
+      const duplicateCheck = await checkExpenseDuplicates(mutationCtx.db, {
+        userId,
+        projectId: payload.projectId,
+        date: payload.date,
+        amount: payload.amount,
+        type: "Software",
+        description: payload.vendor,
+      });
+
+      if (duplicateCheck.hasPotentialDuplicates) {
+        console.warn(
+          `[logSoftwareExpense] Duplicate warning: ${duplicateCheck.warningMessage} ` +
+          `(confidence: ${duplicateCheck.confidence}, duplicateIds: ${duplicateCheck.duplicateIds.join(", ")})`
+        );
+      }
 
       // Create expense record with policy limit flag
       const expenseId = await insertExpense(mutationCtx.db, {

@@ -22,6 +22,7 @@ import { getRootWorkflowAndDealForWorkItem } from "../db/workItemContext";
 import { assertProjectExists, assertUserExists, assertAuthenticatedUser } from "../exceptions";
 import { DealToDeliveryWorkItemHelpers } from "../helpers";
 import { checkTravelExpensePolicyLimit } from "../db/expensePolicyLimits";
+import { checkExpenseDuplicates } from "../db/duplicateDetection";
 import type { Id } from "../../../_generated/dataModel";
 
 // Policy: Requires 'dealToDelivery:expenses:create' scope
@@ -114,6 +115,24 @@ const logTravelExpenseWorkItemActions = authService.builders.workItemActions
         finalAmount,
         payload.travelCategory
       );
+
+      // Check for potential duplicates (warn, don't block)
+      // Per spec 10-workflow-expense-approval.md line 275: "Not duplicate"
+      const duplicateCheck = await checkExpenseDuplicates(mutationCtx.db, {
+        userId,
+        projectId: payload.projectId,
+        date: payload.date,
+        amount: payload.amount,
+        type: "Travel",
+        description: payload.travelCategory,
+      });
+
+      if (duplicateCheck.hasPotentialDuplicates) {
+        console.warn(
+          `[logTravelExpense] Duplicate warning: ${duplicateCheck.warningMessage} ` +
+          `(confidence: ${duplicateCheck.confidence}, duplicateIds: ${duplicateCheck.duplicateIds.join(", ")})`
+        );
+      }
 
       // Create expense record with policy limit flag
       const expenseId = await insertExpense(mutationCtx.db, {

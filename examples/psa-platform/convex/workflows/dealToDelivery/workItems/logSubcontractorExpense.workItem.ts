@@ -16,6 +16,7 @@ import { initializeDealWorkItemAuth, updateWorkItemMetadataPayload } from "./hel
 import { authService } from "../../../authorization";
 import { authComponent } from "../../../auth";
 import { insertExpense } from "../db/expenses";
+import { checkExpenseDuplicates } from "../db/duplicateDetection";
 import { getUser } from "../db/users";
 import { getProject } from "../db/projects";
 import { getRootWorkflowAndDealForWorkItem } from "../db/workItemContext";
@@ -101,6 +102,24 @@ const logSubcontractorExpenseWorkItemActions = authService.builders.workItemActi
       // Validate project exists
       const project = await getProject(mutationCtx.db, payload.projectId);
       assertProjectExists(project, { projectId: payload.projectId });
+
+      // Check for potential duplicates (warn, don't block)
+      // Per spec 10-workflow-expense-approval.md line 275: "Not duplicate"
+      const duplicateCheck = await checkExpenseDuplicates(mutationCtx.db, {
+        userId,
+        projectId: payload.projectId,
+        date: payload.date,
+        amount: payload.amount,
+        type: "Subcontractor",
+        description: payload.vendorName,
+      });
+
+      if (duplicateCheck.hasPotentialDuplicates) {
+        console.warn(
+          `[logSubcontractorExpense] Duplicate warning: ${duplicateCheck.warningMessage} ` +
+          `(confidence: ${duplicateCheck.confidence}, duplicateIds: ${duplicateCheck.duplicateIds.join(", ")})`
+        );
+      }
 
       // Create expense record with vendor info
       const expenseId = await insertExpense(mutationCtx.db, {

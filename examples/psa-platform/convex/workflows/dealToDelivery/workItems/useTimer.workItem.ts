@@ -18,6 +18,7 @@ import { authComponent } from "../../../auth";
 import { getProject } from "../db/projects";
 import { insertTimeEntry } from "../db/timeEntries";
 import { getRootWorkflowAndDealForWorkItem } from "../db/workItemContext";
+import { checkTimeEntryDuplicates } from "../db/duplicateDetection";
 import { assertProjectExists, assertAuthenticatedUser } from "../exceptions";
 import type { Id } from "../../../_generated/dataModel";
 
@@ -103,6 +104,24 @@ const useTimerWorkItemActions = authService.builders.workItemActions
       }
       if (hours > 24) {
         throw new Error("Timer duration cannot exceed 24 hours");
+      }
+
+      // Check for potential duplicates (warn, don't block)
+      // Per spec 07-workflow-time-tracking.md line 287: "Warn if entry exists for same project/date"
+      const duplicateCheck = await checkTimeEntryDuplicates(mutationCtx.db, {
+        userId,
+        projectId: payload.projectId,
+        date: now,
+        taskId: payload.taskId,
+        hours,
+      });
+
+      if (duplicateCheck.hasPotentialDuplicates) {
+        // Log warning for audit trail - duplicates are warnings, not blockers
+        console.warn(
+          `[useTimer] Duplicate warning: ${duplicateCheck.warningMessage} ` +
+          `(confidence: ${duplicateCheck.confidence}, duplicateIds: ${duplicateCheck.duplicateIds.join(", ")})`
+        );
       }
 
       // Create time entry with status = "Draft"

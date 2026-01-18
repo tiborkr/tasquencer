@@ -19,6 +19,7 @@ import { insertExpense } from "../db/expenses";
 import { getUser } from "../db/users";
 import { getProject } from "../db/projects";
 import { getRootWorkflowAndDealForWorkItem } from "../db/workItemContext";
+import { checkExpenseDuplicates } from "../db/duplicateDetection";
 import { assertProjectExists, assertUserExists, assertAuthenticatedUser } from "../exceptions";
 import { DealToDeliveryWorkItemHelpers } from "../helpers";
 import { checkOtherExpensePolicyLimit } from "../db/expensePolicyLimits";
@@ -99,6 +100,25 @@ const logOtherExpenseWorkItemActions = authService.builders.workItemActions
 
       // Check policy limits for other expenses ($250 limit, spec 10-workflow-expense-approval.md lines 293-304)
       const policyCheck = checkOtherExpensePolicyLimit(payload.amount);
+
+      // Check for potential duplicates (warn, don't block)
+      // Per spec 10-workflow-expense-approval.md line 275: "Not duplicate: No existing expense for same item"
+      const duplicateCheck = await checkExpenseDuplicates(mutationCtx.db, {
+        userId,
+        projectId: payload.projectId,
+        date: payload.date,
+        amount: payload.amount,
+        type: "Other",
+        description: payload.description,
+      });
+
+      if (duplicateCheck.hasPotentialDuplicates) {
+        // Log warning for audit trail - duplicates are warnings, not blockers
+        console.warn(
+          `[logOtherExpense] Duplicate warning: ${duplicateCheck.warningMessage} ` +
+          `(confidence: ${duplicateCheck.confidence}, duplicateIds: ${duplicateCheck.duplicateIds.join(", ")})`
+        );
+      }
 
       // Create expense record with policy limit flag
       const expenseId = await insertExpense(mutationCtx.db, {
