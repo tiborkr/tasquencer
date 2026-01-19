@@ -47,12 +47,25 @@ export {
   getDeal,
   getDealByWorkflowId,
   updateDealStage,
+  canTransitionDealStage,
   updateDeal,
   listDealsByOrganization,
   listDealsByStage,
   listDealsByOwner,
 } from "./db/deals";
 export type { DealStage } from "./db/deals";
+
+// Deal Stage Transitions (business rule validation)
+export {
+  VALID_STAGE_TRANSITIONS,
+  TERMINAL_STAGES,
+  DealStages,
+  isValidStageTransition,
+  getValidNextStages,
+  isTerminalStage,
+  assertValidStageTransition,
+  getTransitionErrorReason,
+} from "./db/dealStageTransitions";
 
 // Estimates
 export {
