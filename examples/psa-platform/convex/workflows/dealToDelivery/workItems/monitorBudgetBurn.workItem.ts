@@ -30,6 +30,15 @@ const budgetsViewPolicy = authService.policies.requireScope(
 );
 
 /**
+ * Budget burn thresholds per spec 06-workflow-execution-phase.md lines 278-284:
+ * - 0-75%: Green - Normal operations
+ * - 75-90%: Yellow - Warning, increased monitoring
+ * - 90%+: Red - Budget overrun, pause work
+ */
+export const WARNING_THRESHOLD = 0.75;
+export const OVERRUN_THRESHOLD = 0.9;
+
+/**
  * Actions for the monitorBudgetBurn work item.
  *
  * - initialize: Sets up work item metadata with project context
@@ -131,20 +140,34 @@ const monitorBudgetBurnWorkItemActions = authService.builders.workItemActions
       const burnRate = budgetTotal > 0 ? totalCost / budgetTotal : 0;
       const budgetRemaining = budgetTotal - totalCost;
 
-      // Overrun threshold is 90%
-      const OVERRUN_THRESHOLD = 0.9;
+      // Use module-level threshold constants (exported for testing)
       const budgetOk = burnRate <= OVERRUN_THRESHOLD;
+
+      // Determine warning level based on thresholds
+      const warningLevel: "green" | "yellow" | "red" =
+        burnRate > OVERRUN_THRESHOLD ? "red" :
+        burnRate > WARNING_THRESHOLD ? "yellow" : "green";
+
+      // Log warning at yellow threshold (75-90%)
+      if (warningLevel === "yellow") {
+        console.warn(
+          `⚠️ Budget warning for project ${project._id}: ` +
+            `${(burnRate * 100).toFixed(1)}% burned - approaching overrun threshold. ` +
+            `Increased monitoring recommended.`
+        );
+      }
 
       // Log the metrics for audit
       console.log(
         `Budget burn for project ${project._id}: ` +
-          `${(burnRate * 100).toFixed(1)}% burned ` +
+          `${(burnRate * 100).toFixed(1)}% burned [${warningLevel.toUpperCase()}] ` +
           `(${totalCost} of ${budgetTotal} cents, ` +
           `${budgetRemaining} remaining, budgetOk: ${budgetOk})`
       );
 
       // Store the budget burn result in work item metadata for routing
       // The workflow router will read this to determine the next task (continue vs pause)
+      // warningLevel is stored for UI display and increased monitoring triggers
       await updateWorkItemMetadataPayload(mutationCtx, workItem.id, {
         type: "monitorBudgetBurn",
         taskName: "Monitor Budget Burn",
@@ -153,6 +176,7 @@ const monitorBudgetBurnWorkItemActions = authService.builders.workItemActions
         burnRate,
         totalCost,
         budgetRemaining,
+        warningLevel,
         // Include cost rate validation warning for audit trail
         ...(timeCostResult.hasUsersWithMissingRates && {
           costRateWarning: timeCostResult.warningMessage,

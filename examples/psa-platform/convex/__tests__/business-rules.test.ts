@@ -38,8 +38,19 @@ const MAX_HOURS_PER_ENTRY = 24 // Full day
 // Receipt threshold per spec 08-workflow-expense-tracking.md
 const RECEIPT_REQUIRED_THRESHOLD_CENTS = 2500 // $25
 
-// Budget overrun threshold per spec 06-workflow-execution-phase.md
+// Budget thresholds per spec 06-workflow-execution-phase.md lines 278-284:
+// 0-75%: Green - Normal operations
+// 75-90%: Yellow - Warning, increased monitoring
+// 90%+: Red - Budget overrun, pause work
+const BUDGET_WARNING_THRESHOLD = 0.75 // 75%
 const BUDGET_OVERRUN_THRESHOLD = 0.9 // 90%
+
+// Helper function to determine warning level based on burn rate
+function getBudgetWarningLevel(burnRate: number): "green" | "yellow" | "red" {
+  if (burnRate > BUDGET_OVERRUN_THRESHOLD) return "red"
+  if (burnRate > BUDGET_WARNING_THRESHOLD) return "yellow"
+  return "green"
+}
 
 // =============================================================================
 // Zod Schema Definitions (matching work items)
@@ -308,6 +319,88 @@ describe('Budget Overrun Threshold', () => {
 
   it('budget overrun threshold is 90%', () => {
     expect(BUDGET_OVERRUN_THRESHOLD).toBe(0.9)
+  })
+})
+
+// =============================================================================
+// Budget Warning Level Tests (per spec 06-workflow-execution-phase.md lines 278-284)
+// =============================================================================
+
+describe('Budget Warning Level (75%/90% Thresholds)', () => {
+  describe('threshold constants', () => {
+    it('warning threshold is 75%', () => {
+      expect(BUDGET_WARNING_THRESHOLD).toBe(0.75)
+    })
+
+    it('overrun threshold is 90%', () => {
+      expect(BUDGET_OVERRUN_THRESHOLD).toBe(0.9)
+    })
+  })
+
+  describe('green zone (0-75%)', () => {
+    it('returns green at 0% burn rate', () => {
+      expect(getBudgetWarningLevel(0)).toBe("green")
+    })
+
+    it('returns green at 50% burn rate', () => {
+      expect(getBudgetWarningLevel(0.5)).toBe("green")
+    })
+
+    it('returns green at 74% burn rate', () => {
+      expect(getBudgetWarningLevel(0.74)).toBe("green")
+    })
+
+    it('returns green at exactly 75% burn rate', () => {
+      expect(getBudgetWarningLevel(0.75)).toBe("green")
+    })
+  })
+
+  describe('yellow zone (75-90%)', () => {
+    it('returns yellow at 76% burn rate', () => {
+      expect(getBudgetWarningLevel(0.76)).toBe("yellow")
+    })
+
+    it('returns yellow at 80% burn rate', () => {
+      expect(getBudgetWarningLevel(0.80)).toBe("yellow")
+    })
+
+    it('returns yellow at 85% burn rate', () => {
+      expect(getBudgetWarningLevel(0.85)).toBe("yellow")
+    })
+
+    it('returns yellow at 89% burn rate', () => {
+      expect(getBudgetWarningLevel(0.89)).toBe("yellow")
+    })
+
+    it('returns yellow at exactly 90% burn rate', () => {
+      expect(getBudgetWarningLevel(0.90)).toBe("yellow")
+    })
+  })
+
+  describe('red zone (90%+)', () => {
+    it('returns red at 91% burn rate', () => {
+      expect(getBudgetWarningLevel(0.91)).toBe("red")
+    })
+
+    it('returns red at 100% burn rate', () => {
+      expect(getBudgetWarningLevel(1.0)).toBe("red")
+    })
+
+    it('returns red at 110% burn rate (over budget)', () => {
+      expect(getBudgetWarningLevel(1.1)).toBe("red")
+    })
+  })
+
+  describe('boundary transitions', () => {
+    it('transitions from green to yellow just above 75%', () => {
+      expect(getBudgetWarningLevel(0.75)).toBe("green")
+      expect(getBudgetWarningLevel(0.7500001)).toBe("yellow")
+    })
+
+    it('transitions from yellow to red just above 90%', () => {
+      expect(getBudgetWarningLevel(0.90)).toBe("yellow")
+      expect(getBudgetWarningLevel(0.9000001)).toBe("red")
+    })
   })
 })
 

@@ -685,10 +685,13 @@ const dealToDeliveryWorkItems = defineWorkItemMetadataTable("deals").withPayload
       taskName: v.string(),
       priority: workItemPriority,
       // Budget burn calculation result (set on complete)
+      // Per spec 06-workflow-execution-phase.md lines 278-284:
+      // 0-75%: Green, 75-90%: Yellow (warning), 90%+: Red (overrun)
       budgetOk: v.optional(v.boolean()), // true if burnRate <= 90%
       burnRate: v.optional(v.number()), // 0-1 percentage
       totalCost: v.optional(v.number()), // In cents
       budgetRemaining: v.optional(v.number()), // In cents
+      warningLevel: v.optional(v.union(v.literal("green"), v.literal("yellow"), v.literal("red"))),
     }),
     v.object({
       type: v.literal("pauseWork"),
