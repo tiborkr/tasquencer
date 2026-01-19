@@ -1559,13 +1559,21 @@ describe('Invoices DB Functions', () => {
   })
 
   describe('markInvoiceSent', () => {
-    it('should mark invoice as sent', async () => {
+    it('should mark finalized invoice as sent', async () => {
       const t = setup()
       const { orgId, userId, companyId, contactId } = await createBaseTestData(t)
       const { id: dealId } = await createTestDeal(t, orgId, companyId, userId, contactId)
       const { id: projectId } = await createTestProject(t, orgId, companyId, dealId, userId)
-      const { id: invoiceId } = await createTestInvoice(t, orgId, projectId, companyId)
+      const { id: invoiceId } = await createTestInvoice(t, orgId, projectId, companyId, {
+        status: 'Draft',
+      })
 
+      // First finalize the invoice
+      await t.run(async (ctx) => {
+        await finalizeInvoice(ctx.db, invoiceId, userId)
+      })
+
+      // Then mark as sent
       await t.run(async (ctx) => {
         await markInvoiceSent(ctx.db, invoiceId)
       })
@@ -1575,6 +1583,58 @@ describe('Invoices DB Functions', () => {
       })
       expect(invoice?.status).toBe('Sent')
       expect(invoice?.sentAt).toBeDefined()
+    })
+
+    // Send-once rule per spec 12-workflow-billing-phase.md line 397
+    it('should reject re-sending already sent invoice (send-once rule)', async () => {
+      const t = setup()
+      const { orgId, userId, companyId, contactId } = await createBaseTestData(t)
+      const { id: dealId } = await createTestDeal(t, orgId, companyId, userId, contactId)
+      const { id: projectId } = await createTestProject(t, orgId, companyId, dealId, userId)
+      const { id: invoiceId } = await createTestInvoice(t, orgId, projectId, companyId, {
+        status: 'Draft',
+      })
+
+      // Finalize and send once
+      await t.run(async (ctx) => {
+        await finalizeInvoice(ctx.db, invoiceId, userId)
+        await markInvoiceSent(ctx.db, invoiceId)
+      })
+
+      // Try to send again - should fail
+      await expect(
+        t.run(async (ctx) => {
+          await markInvoiceSent(ctx.db, invoiceId)
+        })
+      ).rejects.toThrow(/already been sent/)
+    })
+
+    it('should reject sending Draft invoice', async () => {
+      const t = setup()
+      const { orgId, userId, companyId, contactId } = await createBaseTestData(t)
+      const { id: dealId } = await createTestDeal(t, orgId, companyId, userId, contactId)
+      const { id: projectId } = await createTestProject(t, orgId, companyId, dealId, userId)
+      const { id: invoiceId } = await createTestInvoice(t, orgId, projectId, companyId, {
+        status: 'Draft',
+      })
+
+      // Try to send without finalizing - should fail
+      await expect(
+        t.run(async (ctx) => {
+          await markInvoiceSent(ctx.db, invoiceId)
+        })
+      ).rejects.toThrow(/Invoice must be finalized first/)
+    })
+
+    it('should throw EntityNotFoundError for non-existent invoice', async () => {
+      const t = setup()
+      const fakeInvoiceId = 'jd77k1a1111111111111111' as Id<'invoices'>
+
+      await expect(
+        t.run(async (ctx) => {
+          await markInvoiceSent(ctx.db, fakeInvoiceId)
+        })
+      ).rejects.toThrow(/Invoice/)
     })
   })
 

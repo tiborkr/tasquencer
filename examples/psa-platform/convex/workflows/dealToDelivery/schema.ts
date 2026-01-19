@@ -536,6 +536,33 @@ const projectScorecards = defineTable({
 })
   .index("by_project", ["projectId"]);
 
+// Project Metrics - Immutable financial snapshot at project closure (spec 13-workflow-close-phase.md line 273)
+// "Metrics Snapshot: Final metrics captured at close, immutable"
+const projectMetrics = defineTable({
+  projectId: v.id("projects"),
+  organizationId: v.id("organizations"),
+  snapshotDate: v.number(), // When metrics were captured (closure date)
+  closedBy: v.id("users"), // Who closed the project
+  // Financial metrics (all amounts in cents)
+  totalRevenue: v.number(), // sum(invoices.total) where status != 'Void'
+  totalCost: v.number(), // timeCost + expenseCost
+  timeCost: v.number(), // sum(timeEntries.hours * user.costRate)
+  expenseCost: v.number(), // sum(expenses.amount)
+  profit: v.number(), // totalRevenue - totalCost
+  profitMargin: v.number(), // (profit / totalRevenue) * 100, or 0 if no revenue
+  budgetVariance: v.number(), // (totalCost / budgetTotal) * 100
+  // Time metrics
+  durationDays: v.number(), // endDate - startDate in days
+  plannedDurationDays: v.optional(v.number()), // originalEndDate - startDate in days
+  totalHours: v.number(), // Total logged hours
+  billableHours: v.number(), // Hours marked as billable
+  // Budget reference
+  budgetTotal: v.number(), // Budget amount at time of closure
+  createdAt: v.number(),
+})
+  .index("by_project", ["projectId"])
+  .index("by_organization", ["organizationId"]);
+
 // =============================================================================
 // WORK ITEM METADATA TABLE
 // =============================================================================
@@ -1052,6 +1079,7 @@ export default {
   milestones,
   lessonsLearned,
   projectScorecards,
+  projectMetrics,
   // Work item metadata table
   dealToDeliveryWorkItems,
 };

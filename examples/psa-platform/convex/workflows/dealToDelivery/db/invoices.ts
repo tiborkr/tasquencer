@@ -139,10 +139,40 @@ export async function finalizeInvoice(
   return invoiceNumber;
 }
 
+/**
+ * Mark an invoice as sent.
+ *
+ * Per spec 12-workflow-billing-phase.md line 397: "Send Once: Cannot re-send same invoice (must void and recreate)"
+ * This function enforces the send-once rule by rejecting invoices that have already been sent.
+ *
+ * @param db - Database writer
+ * @param invoiceId - The invoice to mark as sent
+ * @throws Error if invoice has already been sent or is not in Finalized status
+ */
 export async function markInvoiceSent(
   db: DatabaseWriter,
   invoiceId: Id<"invoices">
 ): Promise<void> {
+  const invoice = await getInvoice(db, invoiceId);
+  if (!invoice) {
+    throw new EntityNotFoundError("Invoice", { invoiceId });
+  }
+
+  // Enforce send-once rule per spec 12-workflow-billing-phase.md line 397
+  if (invoice.sentAt) {
+    throw new Error(
+      `Invoice ${invoice.number || invoiceId} has already been sent. ` +
+        `To re-send, void this invoice and create a new one.`
+    );
+  }
+
+  // Only finalized invoices can be sent
+  if (invoice.status !== "Finalized") {
+    throw new Error(
+      `Cannot send invoice in ${invoice.status} status. Invoice must be finalized first.`
+    );
+  }
+
   await updateInvoice(db, invoiceId, {
     status: "Sent",
     sentAt: Date.now(),

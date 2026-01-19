@@ -35,6 +35,9 @@ import {
   calculateProjectMetrics,
   cancelFutureBookings,
   updateProjectStatus,
+  createProjectMetricsSnapshot,
+  getProjectMetricsSnapshot,
+  listProjectMetricsByOrganization,
 } from '../workflows/dealToDelivery/db/projects'
 
 // Import domain functions for retrospective
@@ -1304,5 +1307,187 @@ describe('CloseProject Work Item - Project Status Update', () => {
     })
 
     expect(project?.status).toBe('OnHold')
+  })
+})
+
+// =============================================================================
+// Project Metrics Snapshot Tests
+// Per spec 13-workflow-close-phase.md line 273:
+// "Metrics Snapshot: Final metrics captured at close, immutable"
+// =============================================================================
+
+describe('Project Metrics Snapshot', () => {
+  it('creates immutable metrics snapshot at project closure', async () => {
+    const { orgId, userId, projectId } = await createBaseTestData(testContext)
+
+    // Add some billable data for metrics
+    await testContext.run(async (ctx) => {
+      await insertTimeEntry(ctx.db, {
+        organizationId: orgId,
+        userId,
+        projectId,
+        taskId: undefined,
+        serviceId: undefined,
+        date: Date.now() - 24 * 60 * 60 * 1000, // Yesterday
+        hours: 8,
+        billable: true,
+        notes: 'Development work',
+        status: 'Approved',
+        createdAt: Date.now(),
+      })
+    })
+
+    const closeDate = Date.now()
+    const snapshotId = await testContext.run(async (ctx) => {
+      return await createProjectMetricsSnapshot(ctx.db, projectId, userId, closeDate)
+    })
+
+    expect(snapshotId).toBeDefined()
+
+    const snapshot = await testContext.run(async (ctx) => {
+      return await ctx.db.get(snapshotId)
+    })
+
+    expect(snapshot).toBeDefined()
+    expect(snapshot?.projectId).toBe(projectId)
+    expect(snapshot?.organizationId).toBe(orgId)
+    expect(snapshot?.closedBy).toBe(userId)
+    expect(snapshot?.snapshotDate).toBe(closeDate)
+    expect(snapshot?.totalHours).toBe(8)
+    expect(snapshot?.billableHours).toBe(8)
+  })
+
+  it('is idempotent - returns existing snapshot on duplicate call', async () => {
+    const { userId, projectId } = await createBaseTestData(testContext)
+
+    const closeDate = Date.now()
+
+    // Create first snapshot
+    const snapshotId1 = await testContext.run(async (ctx) => {
+      return await createProjectMetricsSnapshot(ctx.db, projectId, userId, closeDate)
+    })
+
+    // Try to create duplicate - should return same ID
+    const snapshotId2 = await testContext.run(async (ctx) => {
+      return await createProjectMetricsSnapshot(ctx.db, projectId, userId, closeDate + 1000)
+    })
+
+    expect(snapshotId1).toBe(snapshotId2)
+  })
+
+  it('retrieves metrics snapshot by project ID', async () => {
+    const { userId, projectId } = await createBaseTestData(testContext)
+
+    // Initially no snapshot
+    const noSnapshot = await testContext.run(async (ctx) => {
+      return await getProjectMetricsSnapshot(ctx.db, projectId)
+    })
+    expect(noSnapshot).toBeNull()
+
+    // Create snapshot
+    await testContext.run(async (ctx) => {
+      return await createProjectMetricsSnapshot(ctx.db, projectId, userId, Date.now())
+    })
+
+    // Now should find it
+    const snapshot = await testContext.run(async (ctx) => {
+      return await getProjectMetricsSnapshot(ctx.db, projectId)
+    })
+    expect(snapshot).toBeDefined()
+    expect(snapshot?.projectId).toBe(projectId)
+  })
+
+  it('lists metrics snapshots by organization', async () => {
+    const { orgId, userId, projectId, companyId } = await createBaseTestData(testContext)
+
+    // Create second project
+    const projectId2 = await testContext.run(async (ctx) => {
+      return await ctx.db.insert('projects', {
+        organizationId: orgId,
+        companyId,
+        managerId: userId,
+        name: 'Second Project',
+        status: 'Active',
+        startDate: Date.now(),
+        createdAt: Date.now(),
+      })
+    })
+
+    // Create snapshots for both projects
+    await testContext.run(async (ctx) => {
+      await createProjectMetricsSnapshot(ctx.db, projectId, userId, Date.now())
+    })
+    await testContext.run(async (ctx) => {
+      await createProjectMetricsSnapshot(ctx.db, projectId2, userId, Date.now() + 1000)
+    })
+
+    const snapshots = await testContext.run(async (ctx) => {
+      return await listProjectMetricsByOrganization(ctx.db, orgId)
+    })
+
+    expect(snapshots.length).toBe(2)
+  })
+
+  it('calculates financial metrics correctly', async () => {
+    const { orgId, userId, projectId, companyId } = await createBaseTestData(testContext)
+
+    // Add approved time entries (8 hours at $80/hr cost = $640 cost, $150/hr bill = $1200 revenue)
+    await testContext.run(async (ctx) => {
+      await insertTimeEntry(ctx.db, {
+        organizationId: orgId,
+        userId,
+        projectId,
+        taskId: undefined,
+        serviceId: undefined,
+        date: Date.now() - 24 * 60 * 60 * 1000,
+        hours: 8,
+        billable: true,
+        notes: 'Billable work',
+        status: 'Approved',
+        createdAt: Date.now(),
+      })
+    })
+
+    // Add a paid invoice
+    await testContext.run(async (ctx) => {
+      return await ctx.db.insert('invoices', {
+        organizationId: orgId,
+        projectId,
+        companyId,
+        status: 'Paid',
+        method: 'TimeAndMaterials',
+        subtotal: 120000, // $1,200
+        tax: 0,
+        total: 120000,
+        dueDate: Date.now() + 30 * 24 * 60 * 60 * 1000,
+        paidAt: Date.now(),
+        createdAt: Date.now(),
+      })
+    })
+
+    const snapshotId = await testContext.run(async (ctx) => {
+      return await createProjectMetricsSnapshot(ctx.db, projectId, userId, Date.now())
+    })
+
+    const snapshot = await testContext.run(async (ctx) => {
+      return await ctx.db.get(snapshotId)
+    })
+
+    expect(snapshot?.totalHours).toBe(8)
+    expect(snapshot?.billableHours).toBe(8)
+    expect(snapshot?.totalRevenue).toBe(120000) // $1,200 from paid invoice
+    expect(snapshot?.timeCost).toBeGreaterThan(0) // Cost depends on user's cost rate
+    expect(snapshot?.profit).toBe(snapshot!.totalRevenue - snapshot!.totalCost)
+  })
+
+  it('throws error for non-existent project', async () => {
+    const { userId } = await createBaseTestData(testContext)
+    const fakeProjectId = 'jd77k1a1111111111111111' as Id<'projects'>
+
+    await expect(
+      testContext.run(async (ctx) => {
+        await createProjectMetricsSnapshot(ctx.db, fakeProjectId, userId, Date.now())
+      })
+    ).rejects.toThrow(/Project/)
   })
 })

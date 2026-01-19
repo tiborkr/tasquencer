@@ -416,3 +416,106 @@ export async function cancelFutureBookings(
 
   return futureBookings.length;
 }
+
+/**
+ * Create an immutable project metrics snapshot at project closure
+ *
+ * Per spec 13-workflow-close-phase.md line 273:
+ * "Metrics Snapshot: Final metrics captured at close, immutable"
+ *
+ * This creates a permanent record of project financial and time metrics
+ * that cannot be modified after creation.
+ *
+ * @param db Database writer
+ * @param projectId Project to snapshot
+ * @param closedBy User who closed the project
+ * @param closeDate Official close date
+ * @returns ID of the created metrics snapshot
+ */
+export async function createProjectMetricsSnapshot(
+  db: DatabaseWriter,
+  projectId: Id<"projects">,
+  closedBy: Id<"users">,
+  closeDate: number
+): Promise<Id<"projectMetrics">> {
+  const project = await getProject(db, projectId);
+  if (!project) {
+    throw new EntityNotFoundError("Project", { projectId });
+  }
+
+  // Check if snapshot already exists (idempotent - don't create duplicate)
+  const existing = await getProjectMetricsSnapshot(db, projectId);
+  if (existing) {
+    // Return existing snapshot ID rather than creating duplicate
+    return existing._id;
+  }
+
+  // Calculate the metrics
+  const metrics = await calculateProjectMetrics(db, projectId, closeDate);
+
+  // Get budget for reference
+  const budget = await getBudgetByProjectId(db, projectId);
+  const budgetTotal = budget?.totalAmount ?? 0;
+
+  // Create the immutable snapshot
+  const snapshotId = await db.insert("projectMetrics", {
+    projectId,
+    organizationId: project.organizationId,
+    snapshotDate: closeDate,
+    closedBy,
+    totalRevenue: metrics.totalRevenue,
+    totalCost: metrics.totalCost,
+    timeCost: metrics.timeCost,
+    expenseCost: metrics.expenseCost,
+    profit: metrics.profit,
+    profitMargin: metrics.profitMargin,
+    budgetVariance: metrics.budgetVariance,
+    durationDays: metrics.durationDays,
+    plannedDurationDays: metrics.plannedDurationDays ?? undefined,
+    totalHours: metrics.totalHours,
+    billableHours: metrics.billableHours,
+    budgetTotal,
+    createdAt: Date.now(),
+  });
+
+  return snapshotId;
+}
+
+/**
+ * Get the project metrics snapshot for a project
+ *
+ * @param db Database reader
+ * @param projectId Project to get metrics for
+ * @returns The metrics snapshot if exists, null otherwise
+ */
+export async function getProjectMetricsSnapshot(
+  db: DatabaseReader,
+  projectId: Id<"projects">
+): Promise<Doc<"projectMetrics"> | null> {
+  return await db
+    .query("projectMetrics")
+    .withIndex("by_project", (q) => q.eq("projectId", projectId))
+    .unique();
+}
+
+/**
+ * List all project metrics snapshots for an organization
+ *
+ * Useful for reporting on closed project performance
+ *
+ * @param db Database reader
+ * @param organizationId Organization to list metrics for
+ * @param limit Maximum number to return
+ * @returns Array of project metrics snapshots
+ */
+export async function listProjectMetricsByOrganization(
+  db: DatabaseReader,
+  organizationId: Id<"organizations">,
+  limit = 100
+): Promise<Array<Doc<"projectMetrics">>> {
+  return await db
+    .query("projectMetrics")
+    .withIndex("by_organization", (q) => q.eq("organizationId", organizationId))
+    .order("desc")
+    .take(limit);
+}
