@@ -1264,4 +1264,193 @@ describe('Estimates API', () => {
       expect(estimate!.organizationId).not.toBe(org2)
     })
   })
+
+  // =============================================================================
+  // Deal Value Sync Tests
+  // Per spec 03-workflow-sales-phase.md line 391: "Deal value always reflects current estimate total"
+  // =============================================================================
+
+  describe('Deal Value Sync', () => {
+    it('syncs deal value when adding a service', async () => {
+      const t = setup()
+      const { userId, organizationId } = await setupUserWithRole(
+        t,
+        'staff-user',
+        STAFF_SCOPES
+      )
+      const { dealId } = await createTestDeal(t, organizationId, userId)
+
+      // Create estimate with initial service
+      const estimateId = await t.mutation(
+        api.workflows.dealToDelivery.api.estimates.createEstimate,
+        {
+          dealId,
+          services: [{ name: 'Initial Service', rate: 100_00, hours: 10 }], // $100/hr * 10hrs = $1,000
+        }
+      )
+
+      // Verify initial deal value matches estimate
+      let deal = await t.run(async (ctx) => ctx.db.get(dealId))
+      expect(deal!.value).toBe(1000_00) // $1,000
+
+      // Add another service
+      await t.mutation(api.workflows.dealToDelivery.api.estimates.addEstimateService, {
+        estimateId,
+        name: 'Additional Service',
+        rate: 150_00, // $150/hr
+        hours: 20, // 20 hours = $3,000
+      })
+
+      // Verify deal value is updated to new estimate total
+      deal = await t.run(async (ctx) => ctx.db.get(dealId))
+      expect(deal!.value).toBe(4000_00) // $1,000 + $3,000 = $4,000
+    })
+
+    it('syncs deal value when updating a service', async () => {
+      const t = setup()
+      const { userId, organizationId } = await setupUserWithRole(
+        t,
+        'staff-user',
+        STAFF_SCOPES
+      )
+      const { dealId } = await createTestDeal(t, organizationId, userId)
+
+      // Create estimate
+      const estimateId = await t.mutation(
+        api.workflows.dealToDelivery.api.estimates.createEstimate,
+        {
+          dealId,
+          services: [{ name: 'Service A', rate: 100_00, hours: 10 }], // $1,000
+        }
+      )
+
+      // Get the service ID
+      const estimate = await t.query(
+        api.workflows.dealToDelivery.api.estimates.getEstimate,
+        { estimateId }
+      )
+      const serviceId = estimate!.services[0]._id
+
+      // Update the service hours
+      await t.mutation(api.workflows.dealToDelivery.api.estimates.updateEstimateService, {
+        serviceId,
+        hours: 20, // Change from 10 to 20 hours
+      })
+
+      // Verify deal value is updated ($100 * 20 = $2,000)
+      const deal = await t.run(async (ctx) => ctx.db.get(dealId))
+      expect(deal!.value).toBe(2000_00)
+    })
+
+    it('syncs deal value when updating service rate', async () => {
+      const t = setup()
+      const { userId, organizationId } = await setupUserWithRole(
+        t,
+        'staff-user',
+        STAFF_SCOPES
+      )
+      const { dealId } = await createTestDeal(t, organizationId, userId)
+
+      // Create estimate
+      const estimateId = await t.mutation(
+        api.workflows.dealToDelivery.api.estimates.createEstimate,
+        {
+          dealId,
+          services: [{ name: 'Service A', rate: 100_00, hours: 10 }], // $1,000
+        }
+      )
+
+      // Get the service ID
+      const estimate = await t.query(
+        api.workflows.dealToDelivery.api.estimates.getEstimate,
+        { estimateId }
+      )
+      const serviceId = estimate!.services[0]._id
+
+      // Update the service rate
+      await t.mutation(api.workflows.dealToDelivery.api.estimates.updateEstimateService, {
+        serviceId,
+        rate: 200_00, // Change from $100 to $200/hr
+      })
+
+      // Verify deal value is updated ($200 * 10 = $2,000)
+      const deal = await t.run(async (ctx) => ctx.db.get(dealId))
+      expect(deal!.value).toBe(2000_00)
+    })
+
+    it('syncs deal value when deleting a service', async () => {
+      const t = setup()
+      const { userId, organizationId } = await setupUserWithRole(
+        t,
+        'staff-user',
+        STAFF_SCOPES
+      )
+      const { dealId } = await createTestDeal(t, organizationId, userId)
+
+      // Create estimate with two services
+      const estimateId = await t.mutation(
+        api.workflows.dealToDelivery.api.estimates.createEstimate,
+        {
+          dealId,
+          services: [
+            { name: 'Service A', rate: 100_00, hours: 10 }, // $1,000
+            { name: 'Service B', rate: 150_00, hours: 20 }, // $3,000
+          ],
+        }
+      )
+
+      // Verify initial deal value
+      let deal = await t.run(async (ctx) => ctx.db.get(dealId))
+      expect(deal!.value).toBe(4000_00) // $4,000 total
+
+      // Get service IDs and delete Service B
+      const estimate = await t.query(
+        api.workflows.dealToDelivery.api.estimates.getEstimate,
+        { estimateId }
+      )
+      const serviceBId = estimate!.services.find((s) => s.name === 'Service B')!._id
+
+      await t.mutation(api.workflows.dealToDelivery.api.estimates.deleteEstimateService, {
+        serviceId: serviceBId,
+      })
+
+      // Verify deal value is updated (only Service A remains: $1,000)
+      deal = await t.run(async (ctx) => ctx.db.get(dealId))
+      expect(deal!.value).toBe(1000_00)
+    })
+
+    it('syncs deal value to zero when all services deleted', async () => {
+      const t = setup()
+      const { userId, organizationId } = await setupUserWithRole(
+        t,
+        'staff-user',
+        STAFF_SCOPES
+      )
+      const { dealId } = await createTestDeal(t, organizationId, userId)
+
+      // Create estimate with one service
+      const estimateId = await t.mutation(
+        api.workflows.dealToDelivery.api.estimates.createEstimate,
+        {
+          dealId,
+          services: [{ name: 'Service A', rate: 100_00, hours: 10 }],
+        }
+      )
+
+      // Get service ID and delete it
+      const estimate = await t.query(
+        api.workflows.dealToDelivery.api.estimates.getEstimate,
+        { estimateId }
+      )
+      const serviceId = estimate!.services[0]._id
+
+      await t.mutation(api.workflows.dealToDelivery.api.estimates.deleteEstimateService, {
+        serviceId,
+      })
+
+      // Verify deal value is now zero
+      const deal = await t.run(async (ctx) => ctx.db.get(dealId))
+      expect(deal!.value).toBe(0)
+    })
+  })
 })

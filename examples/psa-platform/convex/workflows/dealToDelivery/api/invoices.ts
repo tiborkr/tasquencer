@@ -33,6 +33,7 @@ import {
   recalculateInvoiceTotals,
   finalizeInvoice as finalizeInvoiceDb,
   markInvoiceSent,
+  markInvoiceViewed as markInvoiceViewedDb,
   canVoidInvoice,
 } from '../db'
 
@@ -622,5 +623,44 @@ export const checkCanVoidInvoice = query({
     }
 
     return { canVoid: false, reason: `Invoice in ${invoice.status} status cannot be voided` }
+  },
+})
+
+/**
+ * Marks an invoice as viewed by the client.
+ * Per spec 12-workflow-billing-phase.md lines 386-391: "When client views invoice,
+ * update viewedAt timestamp and status to 'Viewed'."
+ *
+ * This mutation is designed for use when clients view invoices via email links or portal.
+ * If the invoice has already been viewed, this is a no-op (idempotent).
+ *
+ * Note: This endpoint requires staff scope for internal tracking.
+ * For external client view tracking, a separate unauthenticated endpoint
+ * with tracking token would be needed.
+ *
+ * Authorization: Requires dealToDelivery:staff scope.
+ *
+ * @param args.invoiceId - The invoice ID that was viewed
+ * @returns Object with viewed status and timestamp
+ */
+export const markInvoiceViewed = mutation({
+  args: { invoiceId: v.id('invoices') },
+  handler: async (ctx, args): Promise<{ viewed: boolean; viewedAt: number | null }> => {
+    await requirePsaStaffMember(ctx)
+
+    const invoice = await getInvoiceFromDb(ctx.db, args.invoiceId)
+    if (!invoice) {
+      throw new Error(`Invoice not found: ${args.invoiceId}`)
+    }
+
+    // Only mark as viewed if it's in Sent status
+    // Don't change status if already Viewed, Paid, or Void
+    if (invoice.status === 'Sent') {
+      await markInvoiceViewedDb(ctx.db, args.invoiceId)
+      return { viewed: true, viewedAt: Date.now() }
+    }
+
+    // Already viewed or in another status - return current state (idempotent)
+    return { viewed: invoice.status === 'Viewed', viewedAt: invoice.viewedAt ?? null }
   },
 })

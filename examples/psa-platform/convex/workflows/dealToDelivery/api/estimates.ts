@@ -27,6 +27,7 @@ import {
   deleteEstimateService as deleteEstimateServiceFromDb,
   recalculateEstimateTotal,
   getDeal,
+  updateDeal,
 } from '../db'
 
 // =============================================================================
@@ -195,6 +196,10 @@ export const createEstimate = mutation({
       })
     }
 
+    // Sync deal value with estimate total
+    // Per spec 03-workflow-sales-phase.md line 391: "Deal value always reflects current estimate total"
+    await updateDeal(ctx.db, args.dealId, { value: total })
+
     return estimateId
   },
 })
@@ -246,8 +251,10 @@ export const addEstimateService = mutation({
       total,
     })
 
-    // Recalculate estimate total
-    await recalculateEstimateTotal(ctx.db, args.estimateId)
+    // Recalculate estimate total and sync deal value
+    // Per spec 03-workflow-sales-phase.md line 391: "Deal value always reflects current estimate total"
+    const newTotal = await recalculateEstimateTotal(ctx.db, args.estimateId)
+    await updateDeal(ctx.db, estimate.dealId, { value: newTotal })
 
     return serviceId
   },
@@ -318,8 +325,13 @@ export const updateEstimateService = mutation({
     if (Object.keys(updates).length > 0) {
       await updateEstimateServiceInDb(ctx.db, args.serviceId, updates)
 
-      // Recalculate estimate total
-      await recalculateEstimateTotal(ctx.db, service.estimateId)
+      // Recalculate estimate total and sync deal value
+      // Per spec 03-workflow-sales-phase.md line 391: "Deal value always reflects current estimate total"
+      const newTotal = await recalculateEstimateTotal(ctx.db, service.estimateId)
+      const estimate = await getEstimateFromDb(ctx.db, service.estimateId)
+      if (estimate) {
+        await updateDeal(ctx.db, estimate.dealId, { value: newTotal })
+      }
     }
   },
 })
@@ -346,10 +358,18 @@ export const deleteEstimateService = mutation({
 
     const { estimateId } = service
 
+    // Get the estimate to sync deal value later
+    const estimate = await getEstimateFromDb(ctx.db, estimateId)
+    if (!estimate) {
+      throw new Error(`Estimate not found: ${estimateId}`)
+    }
+
     // Delete the service
     await deleteEstimateServiceFromDb(ctx.db, args.serviceId)
 
-    // Recalculate estimate total
-    await recalculateEstimateTotal(ctx.db, estimateId)
+    // Recalculate estimate total and sync deal value
+    // Per spec 03-workflow-sales-phase.md line 391: "Deal value always reflects current estimate total"
+    const newTotal = await recalculateEstimateTotal(ctx.db, estimateId)
+    await updateDeal(ctx.db, estimate.dealId, { value: newTotal })
   },
 })

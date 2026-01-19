@@ -114,6 +114,9 @@ async function createInvoiceDirectly(
     tax: number
     total: number
     number: string
+    sentAt: number
+    viewedAt: number
+    paidAt: number
   }> = {}
 ) {
   return await t.run(async (ctx) => {
@@ -129,6 +132,9 @@ async function createInvoiceDirectly(
       dueDate: Date.now() + 30 * 24 * 60 * 60 * 1000, // 30 days from now
       createdAt: Date.now(),
       number: overrides.number,
+      sentAt: overrides.sentAt,
+      viewedAt: overrides.viewedAt,
+      paidAt: overrides.paidAt,
     })
   })
 }
@@ -1527,6 +1533,145 @@ describe('Invoices API', () => {
 
       expect(result.canVoid).toBe(false)
       expect(result.reason).toContain('already voided')
+    })
+  })
+
+  // =============================================================================
+  // markInvoiceViewed Tests
+  // Per spec 12-workflow-billing-phase.md lines 386-391: "When client views invoice,
+  // update viewedAt timestamp and status to 'Viewed'."
+  // =============================================================================
+
+  describe('markInvoiceViewed', () => {
+    it('should transition Sent invoice to Viewed status', async () => {
+      const t = setup()
+      const { organizationId: orgId, userId } = await setupUserWithRole(
+        t,
+        'staff-user',
+        STAFF_SCOPES
+      )
+      const { companyId, projectId } = await setupInvoicePrerequisites(t, orgId, userId)
+
+      const invoiceId = await createInvoiceDirectly(t, orgId, projectId, companyId, {
+        status: 'Sent',
+        sentAt: Date.now() - 1000,
+      })
+
+      const result = await t.mutation(api.workflows.dealToDelivery.api.invoices.markInvoiceViewed, {
+        invoiceId,
+      })
+
+      expect(result.viewed).toBe(true)
+      expect(result.viewedAt).toBeDefined()
+      expect(result.viewedAt).toBeGreaterThan(0)
+
+      // Verify the invoice status changed
+      const invoice = await t.run(async (ctx) => ctx.db.get(invoiceId))
+      expect(invoice!.status).toBe('Viewed')
+      expect(invoice!.viewedAt).toBeDefined()
+    })
+
+    it('should be idempotent for already Viewed invoice', async () => {
+      const t = setup()
+      const { organizationId: orgId, userId } = await setupUserWithRole(
+        t,
+        'staff-user',
+        STAFF_SCOPES
+      )
+      const { companyId, projectId } = await setupInvoicePrerequisites(t, orgId, userId)
+
+      const originalViewedAt = Date.now() - 5000
+      const invoiceId = await createInvoiceDirectly(t, orgId, projectId, companyId, {
+        status: 'Viewed',
+        viewedAt: originalViewedAt,
+      })
+
+      const result = await t.mutation(api.workflows.dealToDelivery.api.invoices.markInvoiceViewed, {
+        invoiceId,
+      })
+
+      // Should return viewed=true but with original timestamp (idempotent)
+      expect(result.viewed).toBe(true)
+      expect(result.viewedAt).toBe(originalViewedAt)
+
+      // Verify the timestamp wasn't updated
+      const invoice = await t.run(async (ctx) => ctx.db.get(invoiceId))
+      expect(invoice!.viewedAt).toBe(originalViewedAt)
+    })
+
+    it('should not change status for Paid invoice', async () => {
+      const t = setup()
+      const { organizationId: orgId, userId } = await setupUserWithRole(
+        t,
+        'staff-user',
+        STAFF_SCOPES
+      )
+      const { companyId, projectId } = await setupInvoicePrerequisites(t, orgId, userId)
+
+      const invoiceId = await createInvoiceDirectly(t, orgId, projectId, companyId, {
+        status: 'Paid',
+        paidAt: Date.now(),
+      })
+
+      const result = await t.mutation(api.workflows.dealToDelivery.api.invoices.markInvoiceViewed, {
+        invoiceId,
+      })
+
+      // Should return viewed=false since it's not in Viewed status
+      expect(result.viewed).toBe(false)
+      expect(result.viewedAt).toBeNull()
+
+      // Verify status unchanged
+      const invoice = await t.run(async (ctx) => ctx.db.get(invoiceId))
+      expect(invoice!.status).toBe('Paid')
+    })
+
+    it('should not change status for Draft invoice', async () => {
+      const t = setup()
+      const { organizationId: orgId, userId } = await setupUserWithRole(
+        t,
+        'staff-user',
+        STAFF_SCOPES
+      )
+      const { companyId, projectId } = await setupInvoicePrerequisites(t, orgId, userId)
+
+      const invoiceId = await createInvoiceDirectly(t, orgId, projectId, companyId, {
+        status: 'Draft',
+      })
+
+      const result = await t.mutation(api.workflows.dealToDelivery.api.invoices.markInvoiceViewed, {
+        invoiceId,
+      })
+
+      // Should return viewed=false since Draft can't be viewed
+      expect(result.viewed).toBe(false)
+
+      // Verify status unchanged
+      const invoice = await t.run(async (ctx) => ctx.db.get(invoiceId))
+      expect(invoice!.status).toBe('Draft')
+    })
+
+    it('should require authorization', async () => {
+      const t = setup()
+      const { organizationId: orgId, userId } = await setupUserWithRole(
+        t,
+        'staff-user',
+        STAFF_SCOPES
+      )
+      const { companyId, projectId } = await setupInvoicePrerequisites(t, orgId, userId)
+
+      const invoiceId = await createInvoiceDirectly(t, orgId, projectId, companyId, {
+        status: 'Sent',
+      })
+
+      // Setup user without scopes
+      await setupUserWithRole(t, 'no-scopes-user', [])
+
+      await expect(
+        t.mutation(api.workflows.dealToDelivery.api.invoices.markInvoiceViewed, {
+          invoiceId,
+        })
+      ).rejects.toThrow()
     })
   })
 })
